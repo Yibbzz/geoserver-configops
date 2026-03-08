@@ -1,0 +1,15 @@
+<layer>
+  <name>world_points</name>
+  <id>LayerInfo-01KK73XZ4KS3ESA0TD3BPP162C</id>
+  <type>VECTOR</type>
+  <defaultStyle>
+    <id>StyleInfo-01KK73CB1R2Q8NZQEQ46VMFSW4</id>
+  </defaultStyle>
+  <resource class="featureType">
+    <id>FeatureTypeInfo-01KK73XZ39VRBB7GY1Q88MEWHC</id>
+  </resource>
+  <attribution>
+    <logoWidth>0</logoWidth>
+    <logoHeight>0</logoHeight>
+  </attribution>
+</layer>

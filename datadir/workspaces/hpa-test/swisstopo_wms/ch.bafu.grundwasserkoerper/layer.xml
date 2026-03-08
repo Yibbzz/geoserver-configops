@@ -1,0 +1,15 @@
+<layer>
+  <name>ch.bafu.grundwasserkoerper</name>
+  <id>LayerInfo-01KK73TEFQRSPWARWS890TB1QN</id>
+  <type>WMS</type>
+  <defaultStyle>
+    <id>StyleInfo-01KK73CBAK3GVAQRW537KJK1DW</id>
+  </defaultStyle>
+  <resource class="wmsLayer">
+    <id>WMSLayerInfo-01KK73TEBXYRDVARS43J83MFZY</id>
+  </resource>
+  <attribution>
+    <logoWidth>0</logoWidth>
+    <logoHeight>0</logoHeight>
+  </attribution>
+</layer>

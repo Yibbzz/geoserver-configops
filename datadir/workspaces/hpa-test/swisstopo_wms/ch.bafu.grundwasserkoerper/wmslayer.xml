@@ -1,0 +1,61 @@
+<wmsLayer>
+  <id>WMSLayerInfo-01KK73TEBXYRDVARS43J83MFZY</id>
+  <name>ch.bafu.grundwasserkoerper</name>
+  <nativeName>ch.bafu.grundwasserkoerper</nativeName>
+  <namespace>
+    <id>NamespaceInfo-01KK73TBY5Z7Y6T1RH9T4WJE80</id>
+  </namespace>
+  <title>Grundwasserkörper</title>
+  <description>Der Layer Grundwasserkörper zeigt eine vereinfachte und flächendeckende Unterteilung von hydrogeologischen Übersichtseinheiten für die Schweiz.. Die Grundwasserkörper sind dabei nicht als Bewirtschaftungseinheiten, sondern als fachtechnische Elemente der Umweltberichterstattung entwickelt worden, herausgegeben durch das Bundesamt für Umwelt BAFU. Sie dienen derzeit als räumlicher Bezug für die nationale Datenlieferung zum landesweiten Zustand des Grundwassers an die europäische Umweltagentur. Die Bemessung der Grundwasserkörper erfolgte GIS-basiert unter Berücksichtigung der Hauptkriterien Flussgebiete und dominierender Grundwasserleitertyp sowie spezifischer Grössenkriterien. Alle herangezogenen Parameter stammen aus schweizweit vorliegenden Datensätzen, insbesondere aus dem Layer Grundwasservorkommen 500. &lt;a href=&apos;https://www.bafu.admin.ch/dam/bafu/de/dokumente/wasser/geodaten/2023%20Grundwasserk%C3%B6rper%20der%20Schweiz.pdf.download.pdf/2023%20Grundwasserk%C3%B6rper%20der%20Schweiz.pdf?approved=true&apos; target=&apos;_blank&apos;&gt;Grundwasserkörper der Schweiz - Aqua &amp; Gass&lt;/a&gt;</description>
+  <abstract>Der Layer Grundwasserkörper zeigt eine vereinfachte und flächendeckende Unterteilung von hydrogeologischen Übersichtseinheiten für die Schweiz.. Die Grundwasserkörper sind dabei nicht als Bewirtschaftungseinheiten, sondern als fachtechnische Elemente der Umweltberichterstattung entwickelt worden, herausgegeben durch das Bundesamt für Umwelt BAFU. Sie dienen derzeit als räumlicher Bezug für die nationale Datenlieferung zum landesweiten Zustand des Grundwassers an die europäische Umweltagentur. Die Bemessung der Grundwasserkörper erfolgte GIS-basiert unter Berücksichtigung der Hauptkriterien Flussgebiete und dominierender Grundwasserleitertyp sowie spezifischer Grössenkriterien. Alle herangezogenen Parameter stammen aus schweizweit vorliegenden Datensätzen, insbesondere aus dem Layer Grundwasservorkommen 500. &lt;a href=&apos;https://www.bafu.admin.ch/dam/bafu/de/dokumente/wasser/geodaten/2023%20Grundwasserk%C3%B6rper%20der%20Schweiz.pdf.download.pdf/2023%20Grundwasserk%C3%B6rper%20der%20Schweiz.pdf?approved=true&apos; target=&apos;_blank&apos;&gt;Grundwasserkörper der Schweiz - Aqua &amp; Gass&lt;/a&gt;</abstract>
+  <keywords>
+    <string>ch.bafu.grundwasserkoerper.wms_ows_keywordlist</string>
+  </keywords>
+  <nativeCRS class="projected">PROJCS[&quot;CH1903+ / LV95&quot;, 
+  GEOGCS[&quot;CH1903+&quot;, 
+    DATUM[&quot;CH1903+&quot;, 
+      SPHEROID[&quot;Bessel 1841&quot;, 6377397.155, 299.1528128, AUTHORITY[&quot;EPSG&quot;,&quot;7004&quot;]], 
+      TOWGS84[674.374, 15.056, 405.346, 0.0, 0.0, 0.0, 0.0], 
+      AUTHORITY[&quot;EPSG&quot;,&quot;6150&quot;]], 
+    PRIMEM[&quot;Greenwich&quot;, 0.0, AUTHORITY[&quot;EPSG&quot;,&quot;8901&quot;]], 
+    UNIT[&quot;degree&quot;, 0.017453292519943295], 
+    AXIS[&quot;Geodetic longitude&quot;, EAST], 
+    AXIS[&quot;Geodetic latitude&quot;, NORTH], 
+    AUTHORITY[&quot;EPSG&quot;,&quot;4150&quot;]], 
+  PROJECTION[&quot;Oblique_Mercator&quot;, AUTHORITY[&quot;EPSG&quot;,&quot;9815&quot;]], 
+  PARAMETER[&quot;longitude_of_center&quot;, 7.439583333333333], 
+  PARAMETER[&quot;latitude_of_center&quot;, 46.952405555555565], 
+  PARAMETER[&quot;azimuth&quot;, 90.0], 
+  PARAMETER[&quot;scale_factor&quot;, 1.0], 
+  PARAMETER[&quot;false_easting&quot;, 2600000.0], 
+  PARAMETER[&quot;false_northing&quot;, 1200000.0], 
+  PARAMETER[&quot;rectified_grid_angle&quot;, 90.0], 
+  UNIT[&quot;m&quot;, 1.0], 
+  AXIS[&quot;Easting&quot;, EAST], 
+  AXIS[&quot;Northing&quot;, NORTH], 
+  AUTHORITY[&quot;EPSG&quot;,&quot;2056&quot;]]</nativeCRS>
+  <srs>EPSG:2056</srs>
+  <nativeBoundingBox>
+    <minx>2300000.0</minx>
+    <maxx>3100000.0</maxx>
+    <miny>900000.0</miny>
+    <maxy>1450000.0</maxy>
+    <crs class="projected">EPSG:2056</crs>
+  </nativeBoundingBox>
+  <latLonBoundingBox>
+    <minx>3.329595</minx>
+    <maxx>14.278255</maxx>
+    <miny>44.074747</miny>
+    <maxy>49.200438</maxy>
+    <crs>EPSG:4326</crs>
+  </latLonBoundingBox>
+  <projectionPolicy>FORCE_DECLARED</projectionPolicy>
+  <enabled>true</enabled>
+  <store class="wmsStore">
+    <id>WMSStoreInfo-01KK73TCA96N18N7MR4JGWN872</id>
+  </store>
+  <serviceConfiguration>false</serviceConfiguration>
+  <forcedRemoteStyle></forcedRemoteStyle>
+  <preferredFormat>image/png</preferredFormat>
+  <metadataBBoxRespected>false</metadataBBoxRespected>
+</wmsLayer>

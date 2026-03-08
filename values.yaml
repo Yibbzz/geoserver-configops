@@ -20,9 +20,8 @@ volumes: &common-volumes
   tmp-empty-dir:
     emptyDir: {}
   vol-data-dir:
-    hostPath:
-      path: /home/nathan/helm-geoserver-cloud/datadir  # your git-tracked dir
-      type: DirectoryOrCreate
+    persistentVolumeClaim:
+      claimName: geoserver-datadir-pvc
 
 volumeMounts: &common-volume-mounts
   /etc/localconfig:

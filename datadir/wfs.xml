@@ -1,5 +1,5 @@
 <wfs>
-  <id>WFSInfoImpl-5303b281:19ccde09f77:-8000</id>
+  <id>WFSInfoImpl--37dd77b1:19cce362f6f:-8000</id>
   <enabled>true</enabled>
   <name>WFS</name>
   <versions>
@@ -25,16 +25,16 @@
       </gml>
     </entry>
     <entry>
-      <version>V_20</version>
+      <version>V_11</version>
       <gml>
-        <srsNameStyle>URN2</srsNameStyle>
+        <srsNameStyle>URN</srsNameStyle>
         <overrideGMLAttributes>false</overrideGMLAttributes>
       </gml>
     </entry>
     <entry>
-      <version>V_11</version>
+      <version>V_20</version>
       <gml>
-        <srsNameStyle>URN</srsNameStyle>
+        <srsNameStyle>URN2</srsNameStyle>
         <overrideGMLAttributes>false</overrideGMLAttributes>
       </gml>
     </entry>
