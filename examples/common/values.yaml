@@ -1,0 +1,40 @@
+nfsserver: 'not-set'
+nfsenabled: true
+nfs:
+  raster:
+    pvcname: gs-cloud-raster-nfs-claim
+    pvname: gs-cloud-raster-nfs
+    path: /nfs/raster
+    storage: 10Gi
+  config:
+    pvcname: gs-cloud-datadir-nfs-claim
+    pvname: gs-cloud-datadir-nfs
+    path: /nfs/datadir
+    storage: 10Gi
+  cache:
+    pvcname: gs-cloud-gwc-cache-nfs-claim
+    pvname: gs-cloud-gwc-cache-nfs
+    path: /nfs/tiles
+    storage: 10Gi
+
+rabbitmq:
+  enabled: true
+  resources:
+    limits:
+      cpu: 2
+      memory: 2Gi
+    requests:
+      cpu: 0.1
+      memory: 512Mi
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/rabbitmq
+    #tag: 3.13.3-debian-12-r0
+
+  auth:
+    username: geoserver
+    password: password
+    erlangCookie: cookie
+
+  persistence:
+    enabled: false

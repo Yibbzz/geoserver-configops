@@ -1,0 +1,176 @@
+name: Continuous integration
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  actions: write
+  contents: write
+
+env:
+  HAS_SECRETS: ${{ secrets.HAS_SECRETS }}
+
+jobs:
+  main:
+    name: Continuous integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    if: "!startsWith(github.event.head_commit.message, '[skip ci] ')"
+
+    strategy:
+      fail-fast: true
+      matrix:
+        helm:
+          - latest
+          - 3.11.0
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - uses: camptocamp/initialise-gopass-summon-action@v2
+        with:
+          ci-gpg-private-key: ${{secrets.CI_GPG_PRIVATE_KEY}}
+          github-gopass-ci-token: ${{secrets.GOPASS_CI_GITHUB_TOKEN}}
+        if: env.HAS_SECRETS == 'HAS_SECRETS'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 -m pip install --requirement=ci/requirements.txt
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: "pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}\npre-commit-"
+      - run: pre-commit run --all-files --color=always
+      - run: git diff --exit-code --patch > /tmp/pre-commit.patch; git diff --color; git reset --hard || true
+        if: failure()
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Apply pre-commit fix.patch
+          path: /tmp/pre-commit.patch
+          retention-days: 1
+        if: failure()
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Expected
+          path: tests/
+          if-no-files-found: ignore
+          retention-days: 5
+        if: failure()
+      - run: git reset --hard
+        if: failure()
+
+      - name: Print environment information
+        run: c2cciutils-env
+        env:
+          GITHUB_EVENT: ${{ toJson(github) }}
+
+      - name: Install helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ matrix.helm }}
+      - run: helm dependency update .
+      - run: helm lint .
+
+      - run: helm dependency update .
+      - run: helm dependency update examples/common
+      - run: helm lint examples/common
+      - run: helm template --namespace=default gs-cloud-common examples/common > tests/actual-common.yaml
+      - run:
+          diff -Naur -I 'checksum/secret:' -I 'rabbitmq-password:' -I 'rabbitmq-erlang-cookie:' --ignore-trailing-space
+          tests/expected-common.yaml tests/actual-common.yaml
+
+      - run: helm dependency update examples/datadir
+      - run: helm lint examples/datadir
+      - run: helm template --namespace=default gs-cloud-datadir examples/datadir > tests/actual-datadir.yaml
+      - run: diff -Naur --ignore-trailing-space tests/expected-datadir.yaml tests/actual-datadir.yaml
+
+      - run: helm dependency update examples/jdbc
+      - run: helm lint examples/jdbc
+      - run: helm template --namespace=default gs-cloud-jdbc examples/jdbc > tests/actual-jdbc.yaml
+      - run: diff -Naur --ignore-trailing-space tests/expected-jdbc.yaml tests/actual-jdbc.yaml
+
+      - name: Setup k3s/k3d
+        run: c2cciutils-k8s-install
+
+      - name: Install prometheus CRD
+        run: |
+          curl https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/jsonnet/prometheus-operator/podmonitors-crd.json --output /tmp/podmonitors-crd.json
+          kubectl apply -f /tmp/podmonitors-crd.json
+      - name: Install external-secret CRD
+        run: |
+          curl https://raw.githubusercontent.com/external-secrets/external-secrets/main/deploy/crds/bundle.yaml --output /tmp/external-secrets-crd.yaml
+          kubectl apply --server-side -f /tmp/external-secrets-crd.yaml
+      - name: Apply
+        run: make example-pgconfig-acl
+
+      - name: Wait that the application is ready
+        run: c2cciutils-k8s-wait
+
+      - name: Print the application status and logs
+        run: c2cciutils-k8s-logs
+        if: always()
+
+      - name: Uninstall the application
+        run: make examples-clean
+
+      - name: Check if release already exists for current tag
+        id: check_release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |-
+            const tag = process.env.GITHUB_REF_NAME;
+
+            try {
+              const {data: release} = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+
+              core.info(`Release ${release.id} already exists for tag ${tag}; skipping publish`);
+              core.setOutput('release_exists', 'true');
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`No existing release found for tag ${tag}`);
+                core.setOutput('release_exists', 'false');
+                return;
+              }
+              throw error;
+            }
+        if: github.ref_type == 'tag' && matrix.helm == 'latest' && env.HAS_SECRETS == 'HAS_SECRETS'
+      - name: Publish
+        run: tag-publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: matrix.helm == 'latest' && env.HAS_SECRETS == 'HAS_SECRETS' && (github.ref_type != 'tag' || steps.check_release.outputs.release_exists != 'true')
+      - run: git diff --exit-code --patch > /tmp/dpkg-versions.patch; git diff --color; git reset --hard || true
+        if: failure()
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Update dpkg versions list.patch
+          path: /tmp/dpkg-versions.patch
+          retention-days: 1
+        if: failure()
+      - name: Trigger changelog workflow
+        uses: actions/github-script@v7
+        with:
+          script: |-
+            if (process.env.GITHUB_REF_TYPE == 'tag') {
+                console.log('Trigger changelog');
+                await github.rest.repos.createDispatchEvent({
+                    owner: 'camptocamp',
+                    repo: 'helm-geoserver-cloud',
+                    event_type: 'changelog',
+                });
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: matrix.helm == 'latest' && env.HAS_SECRETS == 'HAS_SECRETS'

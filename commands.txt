@@ -1,0 +1,1 @@
+kubectl cp geoserver-gsc-webui-5f446f64bd-kspnt:/opt/app/data_directory ./datadir

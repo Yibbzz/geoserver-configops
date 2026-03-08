@@ -1,0 +1,10 @@
+apiVersion: v2
+appVersion: '1.0'
+description: Common dependencies for gscloud
+name: examples-common
+version: 0.1.0
+dependencies:
+  - name: 'rabbitmq'
+    version: 14.4.0
+    repository: 'oci://ghcr.io/georchestra/bitnami-helm-charts'
+    condition: rabbitmq.enabled
