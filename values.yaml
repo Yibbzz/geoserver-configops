@@ -279,7 +279,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: geoservercloud/geoserver-cloud-gateway
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-gateway
             sha: ''
     webui:
       enabled: true
@@ -299,7 +299,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: geoservercloud/geoserver-cloud-webui
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-webui
             sha: ''
     rest:
       enabled: true
@@ -319,7 +319,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: geoservercloud/geoserver-cloud-rest
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-rest
             sha: ''
     wfs:
       enabled: true
@@ -339,21 +339,21 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: geoservercloud/geoserver-cloud-wfs
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wfs
             sha: ''
     wms:
       enabled: true
-      # hpa:
-      #   enabled: true
-      #   minReplicas: 1
-      #   maxReplicas: 16
-      #   metrics:
-      #     - type: Resource
-      #       resource:
-      #         name: cpu
-      #         target:
-      #           type: Utilization
-      #           averageUtilization: 70
+      hpa:
+        enabled: false
+        minReplicas: 1
+        maxReplicas: 16
+        metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 70
       ingress:
         enabled: false
       <<: *common-generic-stuff
@@ -370,7 +370,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: geoservercloud/geoserver-cloud-wms
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wms
             sha: ''
     wcs:
       enabled: true
@@ -390,7 +390,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: geoservercloud/geoserver-cloud-wcs
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wcs
             sha: ''
     wps:
       enabled: false
@@ -410,7 +410,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: geoservercloud/geoserver-cloud-wps
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wps
             sha: ''
     gwc:
       enabled: true
@@ -430,7 +430,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: geoservercloud/geoserver-cloud-gwc
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-gwc
             sha: ''
     acl:
       enabled: false
@@ -459,5 +459,5 @@ geoserver:
               value: 'acl'
           image:
             tag: '2.4.0'
-            repository: geoservercloud/geoserver-acl
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-acl
             sha: ''

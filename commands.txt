@@ -1,1 +1,7 @@
 kubectl cp geoserver-gsc-webui-748786677c-qh8mw:/opt/app/data_directory ./datadir
+
+kubectl port-forward svc/geoserver-gsc-gateway 8080:8080
+curl -L http://localhost:8080/geoserver-cloud/
+
+
+helm upgrade -f values.yaml geoserver .

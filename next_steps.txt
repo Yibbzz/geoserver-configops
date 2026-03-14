@@ -1,6 +1,9 @@
 postgres with geoserver cloud, config in file -- working
-- create registry and link to pods
-- secrets for all passwords
+- create registry and link to pods - done with image pulling script
+
+- deploy config server and use postgres config
+
+- secrets for all passwords - change geoserver creds
 - oidc integration - try free keycloak?
 
 - migrate to gcp
