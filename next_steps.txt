@@ -1,0 +1,11 @@
+postgres with geoserver cloud, config in file -- working
+- create registry and link to pods
+- secrets for all passwords
+- oidc integration - try free keycloak?
+
+- migrate to gcp
+- create postres managed service and connect pods
+- gcp secrets
+- gcp pvc storage and mount pods
+- gcp ingress and ser
+- figure out config mount on pvc 

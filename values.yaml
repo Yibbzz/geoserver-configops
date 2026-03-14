@@ -343,6 +343,17 @@ geoserver:
             sha: ''
     wms:
       enabled: true
+      # hpa:
+      #   enabled: true
+      #   minReplicas: 1
+      #   maxReplicas: 16
+      #   metrics:
+      #     - type: Resource
+      #       resource:
+      #         name: cpu
+      #         target:
+      #           type: Utilization
+      #           averageUtilization: 70
       ingress:
         enabled: false
       <<: *common-generic-stuff
