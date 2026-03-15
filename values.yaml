@@ -45,7 +45,7 @@ rabbitmq:
   enabled: true
   auth:
     username: user
-    password: 'guest'
+    existingPasswordSecret: geoserver-rabbitmq-secret 
   resources:
     limits:
       cpu: 1
@@ -65,7 +65,9 @@ postgresql:
   global:
     postgresql:
       auth:
-        postgresPassword: g30s3rv3r
+        existingSecret: geoserver-pgconfig-secret
+        secretKeys:
+          adminPasswordKey: password
   primary:
     initdb:
       scriptsConfigMap: install-postgis-configmap
@@ -222,9 +224,17 @@ env: &common-env
   SPRING_RABBITMQ_PORT:
     value: '5672'
   SPRING_RABBITMQ_USERNAME:
-    value: 'user'
+    type: 'valueFrom'
+    valueFrom:
+      secretKeyRef:
+        name: geoserver-rabbitmq-secret
+        key: username
   SPRING_RABBITMQ_PASSWORD:
-    value: 'guest'
+    type: 'valueFrom'
+    valueFrom:
+      secretKeyRef:
+        name: geoserver-rabbitmq-secret
+        key: password
 
 common-spring-container-stuff: &common-spring-container-stuff
   resources:
