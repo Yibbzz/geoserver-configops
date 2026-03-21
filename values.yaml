@@ -310,7 +310,6 @@ geoserver:
     gateway:
       enabled: true
       ingress:
-        # NB: if .Values.gscloud.ingress.enabled=true put true here as well
         enabled: true
         path: /geoserver-cloud/
       <<: *common-generic-stuff
