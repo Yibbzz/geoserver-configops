@@ -1,7 +1,7 @@
 postgres with geoserver cloud, config in file -- working
 - create registry and link to pods - done with image pulling script
 
-- use postgres config -done, new development needed for workflow
+- use postgres config -done, new development needed for workflow for config loading into database
 
 - secrets for all passwords - change geoserver creds
 
@@ -13,3 +13,26 @@ postgres with geoserver cloud, config in file -- working
 - gcp pvc storage and mount pods
 - gcp ingress and ser
 - figure out config mount on pvc 
+
+
+
+GeoServer Cloud Auth — Final Solution
+Problem
+IQGeo serves a map UI where users log in via Okta. The map renders tiles by making WMS requests to GeoServer Cloud. GeoServer had no authentication — any request from any IP would get tiles back.
+Solution — VPC-level Network Isolation (GCP)
+Since both IQGeo and GeoServer Cloud run in GCP on the same VPC, authentication is handled at the network layer rather than the application layer.
+How it works:
+
+IQGeo is configured to use proxy tunnelling for WMS requests — meaning the IQGeo server pod makes the GeoServer request, not the browser
+GeoServer Cloud is locked down via GCP VPC firewall rules to only accept traffic from IQGeo's node pool CIDR range
+No public internet access to GeoServer is possible — requests must originate from within the VPC
+
+Request flow:
+User browser → IQGeo server (GCP/GKE) → GeoServer Cloud (GCP/GKE)
+                                          ↑
+                              VPC firewall only allows
+                              traffic from IQGeo node pool
+What was built but is no longer needed in production
+The JWT auth sidecar (FastAPI + Traefik ForwardAuth) was built and proved during the PoC on the local k3d cluster. It validated Okta JWTs and enforced per-group layer access policies. This approach would still be needed if per-user/per-group layer restrictions are required in future.
+If per-user layer restrictions are needed later
+Revisit the sidecar approach — but token injection becomes simpler in GCP since IQGeo's server can hold a static service token rather than the browser needing to carry the user's JWT.
