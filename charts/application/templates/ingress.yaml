@@ -1,0 +1,61 @@
+{{- if and ( hasKey $.Values "ingress" ) ( or ( not ( hasKey $.Values.ingress "enabled" ) ) $.Values.ingress.enabled ) }}
+{{- $fullName := include "common.fullname" ( dict "root" $ "service" $.Values ) }}
+{{- range $hostGroupName, $hostGroupDefinition := $.Values.ingress.hostGroups }}
+{{- if or ( not ( hasKey $hostGroupDefinition "enabled" ) ) $hostGroupDefinition.enabled }}
+{{- if eq ( $hostGroupDefinition.type | default "ingress" ) "ingress" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "common.fullname" ( dict "root" $ "service" $.Values.ingress "serviceName" $hostGroupName ) }}
+  {{- include "common.metadata" ( dict "root" $ "service" $.Values.ingress "serviceName" $hostGroupName ) | nindent 2 }}
+  {{- with $middleware := $.Values.ingress.traefikMiddleware }}
+  {{- if or ( not ( hasKey $middleware "enabled" ) ) $middleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-{{ include "common.fullname" ( dict "root" $ "service" $.Values.ingress ) }}@kubernetescrd
+  {{- end }}
+  {{- end }}
+spec:
+{{- with $.Values.ingress.ingressClassName }}
+  ingressClassName: {{ . }}
+{{- end }}
+# Add tls only if ingress.tls.enabled is set to true and the other fields are complete.
+{{- if and ( hasKey $hostGroupDefinition "tls" ) ( or ( not ( hasKey $hostGroupDefinition.tls "enabled" ) ) $hostGroupDefinition.tls.enabled ) }}
+  tls:
+    - hosts:
+        {{- range $hostGroupDefinition.hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- if $hostGroupDefinition.tls.secretName }}
+      secretName: {{ $hostGroupDefinition.tls.secretName }}
+      {{- else }}
+
+      {{- if eq ( default false ( default ( dict ) $.Values.global.ingress ).noSecretName ) false }}
+      secretName: {{ include "common.fullname" ( dict "root" $ "service" $.Values.ingress "serviceName" $hostGroupName ) }}
+      {{- end }}
+      {{- end }}
+{{- end }}
+  rules:
+    {{- range $hostGroupDefinition.hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+        {{- range $serviceName, $serviceDefinition := $.Values.services }}
+        {{- if and ( or ( not ( hasKey $serviceDefinition "enabled" ) ) $serviceDefinition.enabled ) ( hasKey $serviceDefinition "ingress") ( or ( not ( hasKey $serviceDefinition.ingress "enabled" ) ) $serviceDefinition.ingress.enabled ) }}
+          - path: "{{ $serviceDefinition.ingress.path }}"
+            pathType: Prefix
+            backend:
+              service:
+              {{- if hasKey $serviceDefinition.service "name" }}
+                name: {{ $serviceDefinition.service.name }}
+              {{- else }}
+                name: {{ include "common.fullname" ( dict "root" $ "service" $serviceDefinition "serviceName" $serviceName ) }}
+              {{- end }}
+                port:
+                  number: {{ $serviceDefinition.service.servicePort | default 80 }}
+        {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

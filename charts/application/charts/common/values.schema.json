@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/camptocamp/tilecloud-chain/master/tilecloud_chain/schema.json",
+  "type": "object",
+  "title": "HELM common",
+  "additionalProperties": false,
+  "definitions": {
+    "nameOverride": {
+      "type": "string",
+      "description": "[helm-common] Override the name (can be in the service or values)"
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "description": "[helm-common] Override the fullname (can be in the service or values)"
+    },
+    "releaseNameOverride": {
+      "type": "string",
+      "description": "[helm-common] Override the the release name (can be in the service, values or global)"
+    },
+    "releaseTrunc": {
+      "type": "integer",
+      "description": "[helm-common] The release name trunk length (can be in the service, values or global)",
+      "default": 20
+    },
+    "nameTrunc": {
+      "type": "integer",
+      "description": "[helm-common] The chart name trunk length (can be in the service, values or global)",
+      "default": 63
+    },
+    "prefixTrunc": {
+      "type": "integer",
+      "description": "[helm-common] The prefix trunk length (release and chart name) (can be in the service, values or global)",
+      "default": 40
+    },
+    "labels": {
+      "type": "object",
+      "description": "[helm-common] Labels",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "description": "[helm-common] Annotations",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "serviceName": {
+      "type": "string",
+      "description": "[helm-common] The name of the service (not Kubernetes service), this will postfix the name"
+    }
+  },
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "nameOverride": {
+      "$ref": "#/definitions/nameOverride"
+    },
+    "fullnameOverride": {
+      "$ref": "#/definitions/fullnameOverride"
+    },
+    "releaseTrunc": {
+      "$ref": "#/definitions/releaseTrunc"
+    },
+    "prefixTrunc": {
+      "$ref": "#/definitions/prefixTrunc"
+    },
+    "labels": {
+      "$ref": "#/definitions/labels"
+    },
+    "annotations": {
+      "$ref": "#/definitions/annotations"
+    },
+    "serviceName": {
+      "$ref": "#/definitions/serviceName"
+    }
+  }
+}

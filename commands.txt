@@ -6,9 +6,17 @@ curl -L http://localhost:8080/geoserver-cloud/
 
 helm upgrade -f values.yaml geoserver .
 
-docker build -t k3d-k3d-registry.localhost:5000/geoserver-auth-sidecar:latest -f auth_sidecar.dockerfile .
-docker push k3d-k3d-registry.localhost:5000/geoserver-auth-sidecar:latest
+-- update charts --
 
-kubectl rollout restart deployment/geoserver-auth-sidecar
-kubectl rollout status deployment/geoserver-auth-sidecar
-kubectl get pods
+helm dependency update
+cd charts
+tar -xzf application-2.19.0.tgz
+tar -xzf rabbitmq-14.4.0.tgz
+tar -xzf postgresql-15.5.2.tgz
+rm *.tgz
+
+-- update specific chart --
+
+rm -rf charts/application
+helm pull camptocamp/application --version 2.20.0 --untar -d charts
+git diff

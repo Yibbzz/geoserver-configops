@@ -1,0 +1,43 @@
+{{- if .Values.metadata.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.fullname" ( dict "root" $ "service" $.Values.metadata "serviceName" "metadata" ) }}
+  {{- include "common.metadata" ( dict "root" $ "service" $.Values.metadata ) | nindent 2 }}
+data:
+  CHART_NAME: {{ .Chart.Name }}
+  RELEASE_NAME: {{ .Release.Name }}
+  RELEASE_NAMESPACE: {{ .Release.Namespace }}
+{{- if and ( hasKey $.Values "ingress" ) ( or ( not ( hasKey $.Values.ingress "enabled" ) ) $.Values.ingress.enabled ) }}
+{{- if .Values.ingress.hostsGroups }}
+  WEB_HOST: {{ ( index ( index .Values.ingress.hostsGroups 0 ).hosts 0 ) }}
+{{- end }}
+{{- end }}
+{{- range $serviceName, $serviceDefinition := .Values.services }}
+{{- if or ( or ( not ( hasKey $serviceDefinition "enabled" ) ) $serviceDefinition.enabled ) ( and ( hasKey $serviceDefinition "template" ) $serviceDefinition.template ) }}
+{{- if ( default ( dict ) $serviceDefinition.service ).name }}
+  SERVICE_{{ $serviceName | upper }}_NAME: {{ $serviceDefinition.service.name }}
+{{- else }}
+  SERVICE_{{ $serviceName | upper }}_NAME: {{ include "common.fullname" ( dict "root" $ "service" $serviceDefinition "serviceName" $serviceName ) }}
+{{- end }}
+{{- range $containerName, $containerDefinition := ( default ( dict ) $serviceDefinition.initContainers ) }}
+{{- if or ( not ( hasKey $containerDefinition "enabled" ) ) $containerDefinition.enabled }}
+{{- if $containerDefinition.image.tag }}
+  SERVICE_{{ $serviceName | upper }}_CONTAINER_{{ $containerName | upper }}_IMAGE_TAG: {{ regexReplaceAll "@sha256:[0-9a-f]+$" $containerDefinition.image.tag "" | quote }}
+{{- else }}
+  SERVICE_{{ $serviceName | upper }}_CONTAINER_{{ $containerName | upper }}_IMAGE_TAG: {{ $containerDefinition.image.sha | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $containerName, $containerDefinition := ( default ( dict ) $serviceDefinition.containers ) }}
+{{- if or ( not ( hasKey $containerDefinition "enabled" ) ) $containerDefinition.enabled }}
+{{- if $containerDefinition.image.tag }}
+  SERVICE_{{ $serviceName | upper }}_CONTAINER_{{ $containerName | upper }}_IMAGE_TAG: {{ regexReplaceAll "@sha256:[0-9a-f]+$" $containerDefinition.image.tag "" | quote }}
+{{- else }}
+  SERVICE_{{ $serviceName | upper }}_CONTAINER_{{ $containerName | upper }}_IMAGE_TAG: {{ $containerDefinition.image.sha | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
