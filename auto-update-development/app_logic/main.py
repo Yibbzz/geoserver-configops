@@ -223,7 +223,7 @@ def load_staging(dataset_id: str, extract_dir: Path, fmt: str, conn) -> str:
     """Load data into staging schema, return staging table name."""
 
     staging_schema = "staging"
-    staging_table  = f"{dataset_id.lower()}"
+    staging_table  = dataset_id.lower().replace("-", "_")
 
     # pick the right file extension
     ext_map = {
@@ -317,7 +317,7 @@ def validate(conn, table: str) -> int:
 
 def backup_production(conn, dataset_id: str):
     prod_schema    = "public"
-    prod_table     = dataset_id.lower()
+    prod_table     = dataset_id.lower().replace("-", "_")
     backup_schema  = "backup"
     backup_table   = f"{prod_table}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -345,7 +345,7 @@ def backup_production(conn, dataset_id: str):
 # ---------------------------------------------------------------------------
 
 def promote(conn, staging_table: str, dataset_id: str):
-    prod_table     = dataset_id.lower()
+    prod_table     = dataset_id.lower().replace("-", "_")
     staging_schema, staging_tbl = staging_table.split(".")
 
     with conn.cursor() as cur:
