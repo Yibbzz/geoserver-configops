@@ -1,0 +1,5 @@
+DROP SCHEMA IF EXISTS staging CASCADE;
+DROP SCHEMA IF EXISTS backup CASCADE;
+DROP TABLE IF EXISTS public.os_ingest_log CASCADE;
+
+psql -h db -U postgres -d gis

@@ -6,15 +6,6 @@ postgres with geoserver cloud, config in file -- working
 - secrets for all passwords - change geoserver creds - done
 
 geoserver cloud auto updates
- --
- - vendor the captocamp chart
- helm pull camptocamp/geoserver-cloud --untar
- charts/
- geoserver-cloud/ - lives in repo
- 
- updates then look like
- helm pull camptocamp/geoserver-cloud --untar --version X.Y.Z
- --
  
  - open data updates from os
  - have a cronjob that runs based on an image that uses various open data apis, like os api free data

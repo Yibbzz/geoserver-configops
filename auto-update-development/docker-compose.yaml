@@ -1,0 +1,30 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: updater-dev
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: updater-db
+    environment:
+      POSTGRES_DB: gis
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
