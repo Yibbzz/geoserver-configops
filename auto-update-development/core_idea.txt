@@ -8,3 +8,7 @@
 8. Backup production tables
 9. Promote staging -> live
 10. Record success in metadata table
+
+
+check what table geoserver uses for main
+create the container into image and store and reference in the cluster

@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: geoserver-jndi-config
+data:
+  jndi.yml: |
+    jndi:
+      datasources:
+        mypostgis:
+          enabled: true
+          wait-for-it: true
+          wait-timeout: 60
+          url: jdbc:postgresql://${PGCONFIG_HOST}:${PGCONFIG_PORT}/${PGCONFIG_DATABASE}
+          username: ${PGCONFIG_USERNAME}
+          password: ${PGCONFIG_PASSWORD}
+          connection-timeout: 250
+          idle-timeout: 60000
+        pgconfig:
+          enabled: true
+          wait-for-it: true
+          wait-timeout: 60
+          url: jdbc:postgresql://${PGCONFIG_HOST}:${PGCONFIG_PORT}/${PGCONFIG_DATABASE}
+          username: ${PGCONFIG_USERNAME}
+          password: ${PGCONFIG_PASSWORD}
+          connection-timeout: 250
+          idle-timeout: 60000

@@ -6,3 +6,7 @@
 .venv/
 /.github/changelog-generator-cache/
 .project
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class

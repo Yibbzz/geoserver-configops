@@ -21,6 +21,9 @@ volumes: &common-volumes
     emptyDir: {}
   vol-gwc-cache:
     emptyDir: {}
+  vol-jndi-config:                    
+    configMap:
+      name: geoserver-jndi-config
 
 volumeMounts: &common-volume-mounts
   /etc/localconfig:
@@ -29,6 +32,9 @@ volumeMounts: &common-volume-mounts
     name: 'tmp-empty-dir'
   /opt/app/data_directory:
     name: vol-gwc-cache
+  /etc/geoserver/jndi.yml:            
+    name: vol-jndi-config
+    subPath: jndi.yml
 
 GEOWEBCACHE_CACHE_DIR:
   value: '/tmp/gwc'
@@ -36,10 +42,8 @@ GEOWEBCACHE_CACHE_DIR:
 ports: &common-ports
   http:
     containerPort: 8080
-    hostIP: 127.0.0.1
   health:
     containerPort: 8081
-    hostIP: 127.0.0.1
 
 rabbitmq:
   enabled: true
@@ -81,6 +85,8 @@ resources: &common-resources
     cpu: 4.0
 
 env: &common-env
+  SPRING_CONFIG_ADDITIONAL_LOCATION:
+    value: 'file:/etc/geoserver/jndi.yml'
   GEOSERVER_BASE_PATH:
     value: '/geoserver-cloud'
   SPRING_PROFILES_ACTIVE:

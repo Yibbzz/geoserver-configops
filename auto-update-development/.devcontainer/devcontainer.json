@@ -1,0 +1,51 @@
+{
+  "name": "Auto Update Development",
+  "dockerComposeFile": "../docker-compose.yaml",
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Python
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "ms-python.flake8",
+
+        // PostgreSQL / PostGIS
+        "cweijan.vscode-postgresql-client2",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+
+        // General dev quality of life
+        "ms-azuretools.vscode-docker",
+        "eamodio.gitlens",
+        "EditorConfig.EditorConfig",
+        "streetsidesoftware.code-spell-checker"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter"
+        },
+        "sqltools.connections": [
+          {
+            "name": "updater-db",
+            "driver": "PostgreSQL",
+            "host": "db",
+            "port": 5432,
+            "database": "gis",
+            "username": "postgres",
+            "password": "postgres"
+          }
+        ]
+      }
+    }
+  },
+
+  "remoteUser": "root"
+}
