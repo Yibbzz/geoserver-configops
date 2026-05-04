@@ -41,7 +41,11 @@ from datetime import datetime
 # Config
 # ---------------------------------------------------------------------------
 
-WORK_DIR = Path("/tmp/os_ingest")
+DOWNLOAD_DIR = Path("/tmp/os_ingest")
+
+PROD_SCHEMA = os.environ.get("PROD_SCHEMA", "data_layers")
+STAGING_SCHEMA = os.environ.get("STAGING_SCHEMA", "staging")
+BACKUP_SCHEMA = os.environ.get("BACKUP_SCHEMA", "backup")
 
 DB = dict(
     dbname=os.environ.get("DB_NAME", "gis"),
@@ -292,12 +296,10 @@ def validate(conn, table: str) -> tuple[int, int]:
     if geom_col:
         with conn.cursor() as cur:
             try:
-                cur.execute(
-                    f"""
+                cur.execute(f"""
                     SELECT COUNT(*) FROM {schema}."{tbl}"
                     WHERE NOT ST_IsValid("{geom_col}")
-                    """
-                )
+                    """)
                 invalid = cur.fetchone()[0]
                 if invalid > 0:
                     log(
@@ -319,13 +321,11 @@ def validate(conn, table: str) -> tuple[int, int]:
 
 
 def backup_production(conn, dataset_id: str):
-    prod_schema = "public"
     prod_table = dataset_id.lower().replace("-", "_")
-    backup_schema = "backup"
     backup_table = f"{prod_table}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     with conn.cursor() as cur:
-        ensure_schema(cur, backup_schema)
+        ensure_schema(cur, BACKUP_SCHEMA)
         cur.execute(
             """
             SELECT EXISTS (
@@ -333,18 +333,14 @@ def backup_production(conn, dataset_id: str):
                 WHERE table_schema = %s AND table_name = %s
             )
             """,
-            (prod_schema, prod_table),
+            (PROD_SCHEMA, prod_table),  # was hardcoded "public"
         )
         exists = cur.fetchone()[0]
-
         if exists:
-            cur.execute(
-                f"""
-                CREATE TABLE {backup_schema}."{backup_table}"
-                AS SELECT * FROM {prod_schema}."{prod_table}"
-                """
-            )
-            log(8, f"Backed up to {backup_schema}.{backup_table}")
+            cur.execute(f"""
+                CREATE TABLE {BACKUP_SCHEMA}."{backup_table}"
+                AS SELECT * FROM {PROD_SCHEMA}."{prod_table}"
+                """)
     conn.commit()
 
 
@@ -354,32 +350,28 @@ def backup_production(conn, dataset_id: str):
 
 
 def promote(conn, staging_table: str, dataset_id: str) -> int:
-    """Returns count of rows excluded due to invalid geometry."""
     prod_table = dataset_id.lower().replace("-", "_")
     staging_schema, staging_tbl = staging_table.split(".")
-
     geom_col = get_geometry_column(conn, staging_schema, staging_tbl)
 
     with conn.cursor() as cur:
-        cur.execute(f'DROP TABLE IF EXISTS public."{prod_table}" CASCADE')
+        ensure_schema(cur, PROD_SCHEMA)  # make sure schema exists
+        cur.execute(f'DROP TABLE IF EXISTS {PROD_SCHEMA}."{prod_table}" CASCADE')
 
         if geom_col:
-            cur.execute(
-                f"""
-                CREATE TABLE public."{prod_table}"
+            cur.execute(f"""
+                CREATE TABLE {PROD_SCHEMA}."{prod_table}"
                 AS SELECT * FROM {staging_schema}."{staging_tbl}"
                 WHERE ST_IsValid("{geom_col}")
-                """
-            )
+                """)
         else:
             cur.execute(
-                f'ALTER TABLE {staging_schema}."{staging_tbl}" SET SCHEMA public'
+                f'ALTER TABLE {staging_schema}."{staging_tbl}" SET SCHEMA {PROD_SCHEMA}'
             )
             if staging_tbl != prod_table:
                 cur.execute(
-                    f'ALTER TABLE public."{staging_tbl}" RENAME TO "{prod_table}"'
+                    f'ALTER TABLE {PROD_SCHEMA}."{staging_tbl}" RENAME TO "{prod_table}"'
                 )
-
     conn.commit()
 
     if geom_col:
@@ -401,7 +393,7 @@ def promote(conn, staging_table: str, dataset_id: str) -> int:
 
 def create_spatial_index(conn, dataset_id: str):
     prod_table = dataset_id.lower().replace("-", "_")
-    geom_col = get_geometry_column(conn, "public", prod_table)
+    geom_col = get_geometry_column(conn, PROD_SCHEMA, prod_table)
 
     if geom_col is None:
         log("9.5", f"No geometry column found for public.{prod_table} — skipping index")
@@ -410,13 +402,11 @@ def create_spatial_index(conn, dataset_id: str):
     index_name = f"{prod_table}_geom_idx"
 
     with conn.cursor() as cur:
-        cur.execute(
-            f"""
+        cur.execute(f"""
             CREATE INDEX IF NOT EXISTS "{index_name}"
             ON public."{prod_table}"
             USING GIST ("{geom_col}")
-            """
-        )
+            """)
     conn.commit()
     log("9.5", f"Created GIST index '{index_name}' on column '{geom_col}'")
 
@@ -482,7 +472,7 @@ def process_dataset(conn, dataset: dict):
     url = dataset["url"]
     started_at = datetime.now()
 
-    work = WORK_DIR / dataset_id
+    work = DOWNLOAD_DIR / dataset_id
     work.mkdir(parents=True, exist_ok=True)
 
     print(f"\n{'='*60}")
@@ -570,7 +560,7 @@ def process_dataset(conn, dataset: dict):
 
 
 def run_pipeline(datasets: list[dict]):
-    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
     conn = get_conn()
     bootstrap(conn)
 
