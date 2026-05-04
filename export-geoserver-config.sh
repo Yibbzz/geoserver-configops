@@ -1,5 +1,8 @@
 #!/bin/bash
 # export-geoserver-config.sh
+
+# !!RUN THIS BEFORE RUNNING THIS SCRIPT!! - kubectl port-forward deployment/geoserver-gsc-rest 9090:8080 & sleep 2
+
 BASE_URL="http://localhost:9090/rest"
 AUTH="admin:geoserver"
 OUT_DIR="./geoserver-config"

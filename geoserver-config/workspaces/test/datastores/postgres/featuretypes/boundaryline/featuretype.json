@@ -1,0 +1,182 @@
+{
+  "featureType": {
+    "name": "boundaryline",
+    "nativeName": "boundaryline",
+    "namespace": {
+      "name": "test",
+      "href": "http://localhost:9090/rest/namespaces/test.json"
+    },
+    "title": "boundaryline",
+    "keywords": {
+      "string": [
+        "features",
+        "boundaryline"
+      ]
+    },
+    "nativeCRS": {
+      "@class": "projected",
+      "$": "PROJCS[\"OSGB36 / British National Grid\", \n  GEOGCS[\"OSGB36\", \n    DATUM[\"Ordnance Survey of Great Britain 1936\", \n      SPHEROID[\"Airy 1830\", 6377563.396, 299.3249646, AUTHORITY[\"EPSG\",\"7001\"]], \n      TOWGS84[446.448, -125.157, 542.06, 0.15, 0.247, 0.842, -20.489], \n      AUTHORITY[\"EPSG\",\"6277\"]], \n    PRIMEM[\"Greenwich\", 0.0, AUTHORITY[\"EPSG\",\"8901\"]], \n    UNIT[\"degree\", 0.017453292519943295], \n    AXIS[\"Geodetic longitude\", EAST], \n    AXIS[\"Geodetic latitude\", NORTH], \n    AUTHORITY[\"EPSG\",\"4277\"]], \n  PROJECTION[\"Transverse_Mercator\", AUTHORITY[\"EPSG\",\"9807\"]], \n  PARAMETER[\"central_meridian\", -2.0], \n  PARAMETER[\"latitude_of_origin\", 49.0], \n  PARAMETER[\"scale_factor\", 0.9996012717], \n  PARAMETER[\"false_easting\", 400000.0], \n  PARAMETER[\"false_northing\", -100000.0], \n  UNIT[\"m\", 1.0], \n  AXIS[\"Easting\", EAST], \n  AXIS[\"Northing\", NORTH], \n  AUTHORITY[\"EPSG\",\"27700\"]]"
+    },
+    "srs": "EPSG:27700",
+    "nativeBoundingBox": {
+      "minx": 5512.9985,
+      "maxx": 655992.75,
+      "miny": 5333.81,
+      "maxy": 1220309.8808,
+      "crs": {
+        "@class": "projected",
+        "$": "EPSG:27700"
+      }
+    },
+    "latLonBoundingBox": {
+      "minx": -9.2306536638591,
+      "maxx": 2.701860791919936,
+      "miny": 49.81820127241489,
+      "maxy": 60.86363335783247,
+      "crs": "EPSG:4326"
+    },
+    "projectionPolicy": "FORCE_DECLARED",
+    "enabled": true,
+    "advertised": true,
+    "store": {
+      "@class": "dataStore",
+      "name": "test:postgres",
+      "href": "http://localhost:9090/rest/workspaces/test/datastores/postgres.json"
+    },
+    "serviceConfiguration": false,
+    "simpleConversionEnabled": false,
+    "internationalTitle": "",
+    "internationalAbstract": "",
+    "maxFeatures": 0,
+    "numDecimals": 0,
+    "padWithZeros": false,
+    "forcedDecimal": false,
+    "overridingServiceSRS": false,
+    "skipNumberMatched": false,
+    "circularArcPresent": false,
+    "encodeMeasures": false,
+    "attributes": {
+      "attribute": [
+        {
+          "name": "fid",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.Integer"
+        },
+        {
+          "name": "name",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "area_code",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "area_description",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "file_name",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "feature_serial_number",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.Integer"
+        },
+        {
+          "name": "collection_serial_number",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.Integer"
+        },
+        {
+          "name": "global_polygon_id",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.Integer"
+        },
+        {
+          "name": "admin_unit_id",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.Integer"
+        },
+        {
+          "name": "census_code",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "hectares",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.Double"
+        },
+        {
+          "name": "non_inland_area",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.Double"
+        },
+        {
+          "name": "area_type_code",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "area_type_description",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "non_area_type_code",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "non_area_type_description",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String"
+        },
+        {
+          "name": "geom",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "org.locationtech.jts.geom.MultiPolygon"
+        }
+      ]
+    }
+  }
+}
