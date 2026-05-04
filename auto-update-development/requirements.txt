@@ -1,5 +1,2 @@
 requests
 psycopg2-binary
-sqlalchemy
-pandas
-geopandas

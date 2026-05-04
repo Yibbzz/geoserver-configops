@@ -376,7 +376,7 @@ def promote(conn, staging_table: str, dataset_id: str) -> int:
 
     if geom_col:
         with conn.cursor() as cur:
-            cur.execute(f'SELECT COUNT(*) FROM public."{prod_table}"')
+            cur.execute(f'SELECT COUNT(*) FROM {PROD_SCHEMA}."{prod_table}"')
             promoted_count = cur.fetchone()[0]
         with conn.cursor() as cur:
             cur.execute(f'SELECT COUNT(*) FROM {staging_schema}."{staging_tbl}"')
@@ -396,7 +396,10 @@ def create_spatial_index(conn, dataset_id: str):
     geom_col = get_geometry_column(conn, PROD_SCHEMA, prod_table)
 
     if geom_col is None:
-        log("9.5", f"No geometry column found for public.{prod_table} — skipping index")
+        log(
+            "9.5",
+            f"No geometry column found for {PROD_SCHEMA}.{prod_table} — skipping index",
+        )
         return
 
     index_name = f"{prod_table}_geom_idx"
@@ -404,14 +407,14 @@ def create_spatial_index(conn, dataset_id: str):
     with conn.cursor() as cur:
         cur.execute(f"""
             CREATE INDEX IF NOT EXISTS "{index_name}"
-            ON public."{prod_table}"
+            ON {PROD_SCHEMA}."{prod_table}"
             USING GIST ("{geom_col}")
             """)
     conn.commit()
     log("9.5", f"Created GIST index '{index_name}' on column '{geom_col}'")
 
     with conn.cursor() as cur:
-        cur.execute(f'ANALYZE public."{prod_table}"')
+        cur.execute(f'ANALYZE {PROD_SCHEMA}."{prod_table}"')
     conn.commit()
     log("9.5", "ANALYZE complete — query planner statistics updated")
 

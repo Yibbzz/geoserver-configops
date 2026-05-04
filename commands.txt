@@ -20,3 +20,19 @@ rm *.tgz
 rm -rf charts/application
 helm pull camptocamp/application --version 2.20.0 --untar -d charts
 git diff
+
+---
+
+test datasource uploader job
+
+kubectl delete job ingest-manual-test
+kubectl create job ingest-manual-test --from=cronjob/geoserver-data-ingest
+kubectl logs -f job/ingest-manual-test
+
+---
+
+create os api key
+
+kubectl delete secret geoserver-ingest-secret
+kubectl create secret generic geoserver-ingest-secret \
+  --from-literal=os-api-key=""

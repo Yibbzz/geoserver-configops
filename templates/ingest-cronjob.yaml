@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: geoserver-data-ingest
+spec:
+  schedule: "0 2 * * *"     # 2am every night
+  concurrencyPolicy: Forbid  # don't run if previous is still going
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: ingest
+              image: k3d-k3d-registry.localhost:5000/geoserver-ingest:latest
+              imagePullPolicy: Always
+              env:
+                - name: PROD_SCHEMA
+                  value: "data_layers"
+                - name: DB_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: geoserver-pgconfig-secret
+                      key: database
+                - name: DB_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: geoserver-pgconfig-secret
+                      key: host
+                - name: DB_PORT
+                  valueFrom:
+                    secretKeyRef:
+                      name: geoserver-pgconfig-secret
+                      key: port
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: geoserver-pgconfig-secret
+                      key: username
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: geoserver-pgconfig-secret
+                      key: password
+                - name: OS_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: geoserver-ingest-secret
+                      key: os-api-key

@@ -12,7 +12,7 @@ geoserver cloud auto updates
  - cronjob requests the data, and adds it into the database in a separate schema for management
  - it then updates the data in the main geoserver schema, creating a backup of the previous load
 
-
+how to style the layers correctly? is there styling from os I can import along with the api. probably a manual once job if its not through api.
 
 
 - migrate to gcp

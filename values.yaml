@@ -75,6 +75,13 @@ postgresql:
   primary:
     initdb:
       scriptsConfigMap: install-postgis-configmap
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 0.2
+      limits:
+        memory: 2Gi
+        cpu: 2.0
 
 resources: &common-resources
   requests:
