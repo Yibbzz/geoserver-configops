@@ -1,0 +1,73 @@
+{
+  "featureType": {
+    "name": "test_points_chang",
+    "nativeName": "test_points_yo",
+    "namespace": {
+      "name": "test",
+      "href": "http://localhost:9090/rest/namespaces/test.json"
+    },
+    "title": "test_points_chagned",
+    "keywords": {
+      "string": [
+        "features",
+        "test_points"
+      ]
+    },
+    "nativeCRS": "GEOGCS[\"WGS 84\", \n  DATUM[\"World Geodetic System 1984\", \n    SPHEROID[\"WGS 84\", 6378137.0, 298.257223563, AUTHORITY[\"EPSG\",\"7030\"]], \n    AUTHORITY[\"EPSG\",\"6326\"]], \n  PRIMEM[\"Greenwich\", 0.0, AUTHORITY[\"EPSG\",\"8901\"]], \n  UNIT[\"degree\", 0.017453292519943295], \n  AXIS[\"Geodetic longitude\", EAST], \n  AXIS[\"Geodetic latitude\", NORTH], \n  AUTHORITY[\"EPSG\",\"4326\"]]",
+    "srs": "EPSG:4326",
+    "nativeBoundingBox": {
+      "minx": -3.1883,
+      "maxx": -0.1276,
+      "miny": 51.5074,
+      "maxy": 55.9533,
+      "crs": "EPSG:4326"
+    },
+    "latLonBoundingBox": {
+      "minx": -3.1883,
+      "maxx": -0.1276,
+      "miny": 51.5074,
+      "maxy": 55.9533,
+      "crs": "EPSG:4326"
+    },
+    "projectionPolicy": "FORCE_DECLARED",
+    "enabled": true,
+    "advertised": true,
+    "store": {
+      "@class": "dataStore",
+      "name": "test:postgres",
+      "href": "http://localhost:9090/rest/workspaces/test/datastores/postgres.json"
+    },
+    "serviceConfiguration": false,
+    "simpleConversionEnabled": false,
+    "internationalTitle": "",
+    "internationalAbstract": "",
+    "maxFeatures": 0,
+    "numDecimals": 0,
+    "padWithZeros": false,
+    "forcedDecimal": false,
+    "overridingServiceSRS": false,
+    "skipNumberMatched": false,
+    "circularArcPresent": false,
+    "encodeMeasures": false,
+    "attributes": {
+      "attribute": [
+        {
+          "name": "name",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "java.lang.String",
+          "source": "name"
+        },
+        {
+          "name": "geom",
+          "minOccurs": 0,
+          "maxOccurs": 1,
+          "nillable": true,
+          "binding": "org.locationtech.jts.geom.Point",
+          "source": "geom"
+        }
+      ]
+    }
+  }
+}

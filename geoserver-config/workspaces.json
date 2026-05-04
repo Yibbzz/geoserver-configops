@@ -1,0 +1,10 @@
+{
+  "workspaces": {
+    "workspace": [
+      {
+        "name": "test",
+        "href": "http://localhost:9090/rest/workspaces/test.json"
+      }
+    ]
+  }
+}

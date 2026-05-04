@@ -1,0 +1,10 @@
+{
+  "style": {
+    "name": "generic",
+    "format": "sld",
+    "languageVersion": {
+      "version": "1.0.0"
+    },
+    "filename": "default_generic.sld"
+  }
+}

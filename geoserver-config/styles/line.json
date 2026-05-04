@@ -1,0 +1,10 @@
+{
+  "style": {
+    "name": "line",
+    "format": "sld",
+    "languageVersion": {
+      "version": "1.0.0"
+    },
+    "filename": "default_line.sld"
+  }
+}
