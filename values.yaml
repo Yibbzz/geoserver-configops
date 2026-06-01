@@ -97,9 +97,6 @@ env: &common-env
   GEOSERVER_BASE_PATH:
     value: '/geoserver-cloud'
   SPRING_PROFILES_ACTIVE:
-    # -------------------------------------------------------------------
-    # CHANGED: datadir → pgconfig
-    # -------------------------------------------------------------------
     value: standalone,pgconfig,kube
   GWC_ENABLED:
     value: 'true'
@@ -110,10 +107,6 @@ env: &common-env
     value: '$(JAVA_OPTS_DEFAULT)'
   GEOTOOLS_HTTPCLIENT_PROXY_ENABLED:
     value: 'false'
-  # -------------------------------------------------------------------
-  # ADD: pgconfig connection settings — point these at your PostGIS DB
-  # You can reference a Kubernetes Secret here instead of plain values
-  # -------------------------------------------------------------------
   PGCONFIG_HOST:
     type: 'valueFrom'
     valueFrom:
@@ -297,21 +290,6 @@ geoserver:
           enabled: false
         hosts:
           - gscloud.local
-    # For example #
-    # hostGroups:
-    #   host1:
-    #     tls:
-    #       enabled: false
-    #       secretName: 'my-tls-secret'
-    #     hosts:
-    #       - one.example.com
-    #       - two.example.com
-    #   host2:
-    #     tls:
-    #       enabled: true
-    #       secretName: 'my-wildcard-tls-secret'
-    #     hosts:
-    #       - '*.example.com'
 
   serviceAccount:
     # Specifies whether a service account should be created
