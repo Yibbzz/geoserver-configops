@@ -46,7 +46,7 @@ Every resource has the same outer shape:
 
 ```yaml
 apiVersion: gisdata/v1alpha1
-kind: Layer                 # Project, Source, Dataset, Layer or Style
+kind: Layer                 # Project, Source, Dataset, Layer, LayerGroup or Style
 metadata:
   name: road-links          # unique per kind; lowercase letters, digits and dashes
 spec: {}                    # what you want; differs per kind
@@ -210,6 +210,71 @@ spec:
 
 Formats: SLD (`.sld`) and MBStyle (`.mbstyle`); CSS (`.css`) if the GeoServer images include it and the client gains support. Files are uploaded exactly as written, never re-encoded by GeoServer.
 
+#### Scale limits live in styles
+
+At which scales a feature is drawn is part of how it is represented, so it belongs in the style, not on the layer. A style can also give each kind of feature its own range, which one setting on a layer can't. The OS road style does exactly that, one range per road class:
+
+```xml
+<Rule>
+  <Name>Unclassified</Name>
+  <ogc:Filter>…function = 'Unclassified'…</ogc:Filter>
+  <MinScaleDenominator>250</MinScaleDenominator>       <!-- drawn from 1:250 -->
+  <MaxScaleDenominator>100000</MaxScaleDenominator>    <!-- up to 1:100,000 -->
+  <LineSymbolizer>…</LineSymbolizer>
+</Rule>
+```
+
+In MBStyle the same thing is `minzoom` and `maxzoom` on each layer of the style. `Layer` has no scale fields.
+
+### LayerGroup
+
+Several layers published together, in drawing order, under one name: a basemap, or a tree of layers for clients to browse.
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: LayerGroup
+metadata:
+  name: uk-basemap
+spec:
+  title: UK basemap
+  abstract: Counties and roads from OS OpenData.
+  mode: single                       # one map layer clients can ask for in one request
+  layers:                            # drawn in this order: first at the bottom
+    - counties
+    - road-links
+    - { layer: road-nodes, style: os-road-node }
+  cache: true
+---
+apiVersion: gisdata/v1alpha1
+kind: LayerGroup
+metadata:
+  name: os-opendata
+spec:
+  title: OS OpenData
+  mode: container                    # a folder in clients' layer lists, not a map of its own
+  layers:
+    - uk-basemap                     # groups can hold groups
+    - survey-sites
+```
+
+| Field | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `layers` | yes | | Layers or groups, bottom first. An entry is a name, or `{ layer: <name>, style: <style> }` to draw a layer with a style other than its default |
+| `mode` | no | `single` | How clients see the group (below) |
+| `name` (in GeoServer) | no | `metadata.name` with dashes as underscores | Name clients use |
+| `workspace` | no | the project's `workspace` | |
+| `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents |
+| `cache` | no | `false` | Tile caching for the group as a whole |
+
+| `mode` | GeoServer mode | Clients see |
+| --- | --- | --- |
+| `single` | SINGLE | One layer that draws all members; the members are still published on their own |
+| `named` | NAMED | The group as a layer, with its members listed under it |
+| `container` | CONTAINER | A folder of its members; the group itself can't be requested |
+| `opaque` | OPAQUE_CONTAINER | One layer; its members are hidden from capabilities |
+
+Not in the file, worked out on apply: the group's bounding box (from its members) and its projection.
+
 ## Secrets
 
 A `secret` field names a secret; the files never hold its value. Where the tool looks:
@@ -234,7 +299,7 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 | `gisdata validate` | Checks the files: schema, references between resources, style files exist. No network |
 | `gisdata discover <source> [product]` | Lists products a source offers, or the layers inside one product |
 | `gisdata plan` | Compares files with live GeoServer and PostGIS; prints what `apply` would create, change or delete. Exit code 2 when there are changes, for CI |
-| `gisdata apply [--prune]` | Makes the changes `plan` shows, in order: workspace, store, styles, tables (first sync), layers, tile cache |
+| `gisdata apply [--prune]` | Makes the changes `plan` shows, in order: workspace, store, styles, tables (first sync), layers, layer groups, tile cache |
 | `gisdata sync [dataset]` | Checks sources for new versions and loads them (stage, validate, back up, swap in), then refreshes extents and clears cached tiles of the layers on them. The nightly job |
 | `gisdata status` | Per dataset: version loaded, when, rows, last error, next check. Per layer: published, drifted, tiles cached |
 | `gisdata import` | Reads a live GeoServer workspace and writes the files that describe it; the way in for an existing install |
@@ -293,15 +358,18 @@ Titles equal to the layer name, extents, attribute lists and store details all d
 
 ## Known problems this spec has to answer
 
-- **One table per product today.** The pipeline loads one layer of a multi-layer file into one table: the `openroads` layer holds only road nodes (points), not road links. `tables` fixes this in the spec; the pipeline needs the same change.
+- **One table per product** (fixed in PR #4). The pipeline loaded one layer of a multi-layer file into one table, so the `openroads` layer held only road nodes, not road links. It now loads every layer into its own table. Run on its own, it names them after the provider's product ID (`openroads_road_link`); run by the tool, it gets the Dataset's name, giving the default above (`os_open_roads_road_link`).
 - **Layer-to-style links aren't exported today.** `export-geoserver-config.sh` saves feature types, not GeoServer's layer records, so which style a layer uses isn't in git. `Layer.style` covers it.
-- **Client gaps** (tracked in the roadmap): bounding boxes, full JNDI settings, deleting styles, tile cache seed/truncate, layer publishing settings.
+- **Client gaps** (tracked in the roadmap): bounding boxes, full JNDI settings, deleting styles, tile cache seed/truncate, layer publishing settings. Layer groups are supported (create, read, delete).
+
+## Decided
+
+- **Scale limits** live in styles ([above](#scale-limits-live-in-styles)), 9 Nov 2026.
+- **Layer groups** are in this version as `LayerGroup`, 9 Nov 2026.
 
 ## Open questions
 
 1. **Layer names inside OS products.** The examples assume OS Open Roads contains `road_link` and `road_node`; confirm with `discover` against the real API.
-2. **Scale limits** (show roads only below 1:100,000): leave them inside style files, or add `minScale`/`maxScale` to `Layer` and have the tool write them into the style?
-3. **Layer groups** (a basemap made of several layers): a `LayerGroup` kind now, or later?
-4. **Dataset versions on screen:** should GeoServer's layer abstract or keywords carry the loaded version automatically?
-5. **Several projects on one GeoServer:** fine if each owns its own workspaces; anything else needed?
-6. **The working name** `gisdata`: replace when the project is named.
+2. **Dataset versions on screen:** should GeoServer's layer abstract or keywords carry the loaded version automatically?
+3. **Several projects on one GeoServer:** fine if each owns its own workspaces; anything else needed?
+4. **The working name** `gisdata`: replace when the project is named.

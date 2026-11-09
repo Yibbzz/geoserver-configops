@@ -1,0 +1,25 @@
+# A basemap drawn as one layer, and a folder that groups it with other layers.
+apiVersion: gisdata/v1alpha1
+kind: LayerGroup
+metadata:
+  name: uk-basemap
+spec:
+  title: UK basemap
+  abstract: Counties and roads from OS OpenData.
+  mode: single
+  layers:                       # drawn in this order: first at the bottom
+    - counties
+    - road-links
+    - { layer: road-nodes, style: os-road-node }
+  cache: true
+---
+apiVersion: gisdata/v1alpha1
+kind: LayerGroup
+metadata:
+  name: os-opendata
+spec:
+  title: OS OpenData
+  mode: container
+  layers:
+    - uk-basemap
+    - survey-sites

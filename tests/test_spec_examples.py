@@ -13,7 +13,8 @@ import yaml
 from conftest import ROOT
 
 API_VERSION = "gisdata/v1alpha1"
-KINDS = {"Project", "Source", "Dataset", "Layer", "Style"}
+KINDS = {"Project", "Source", "Dataset", "Layer", "LayerGroup", "Style"}
+GROUP_MODES = {"single", "named", "container", "opaque"}
 NAME = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 SOURCE_TYPES = {"os-downloads", "url", "ckan", "ogc-api-features", "wfs"}
 BUILT_IN_STYLES = {"generic", "line", "point", "polygon", "raster"}
@@ -83,3 +84,32 @@ def test_references_resolve(project):
         for style in [spec.get("style"), *spec.get("styles", [])]:
             if style:
                 assert style in styles | BUILT_IN_STYLES, f"Layer {name}: unknown style {style}"
+
+
+@pytest.mark.parametrize("project", PROJECTS, ids=lambda p: p.name)
+def test_layer_groups_resolve_and_have_no_cycles(project):
+    resources = load(project)
+    layers, groups = by_kind(resources, "Layer"), by_kind(resources, "LayerGroup")
+    styles = set(by_kind(resources, "Style")) | {p.stem for p in (project / "styles").glob("*") if p.is_file()}
+
+    def members(group):
+        for entry in group["spec"].get("layers", []):
+            yield entry if isinstance(entry, str) else entry.get("layer"), entry
+
+    for name, group in groups.items():
+        spec = group["spec"]
+        assert spec.get("mode", "single") in GROUP_MODES, f"LayerGroup {name}: unknown mode"
+        assert spec.get("layers"), f"LayerGroup {name}: needs at least one layer"
+        for member, entry in members(group):
+            assert member in layers or member in groups, f"LayerGroup {name}: unknown member {member}"
+            if isinstance(entry, dict) and entry.get("style"):
+                assert entry["style"] in styles | BUILT_IN_STYLES, f"LayerGroup {name}: unknown style {entry['style']}"
+
+    def reaches(start, target, seen=()):
+        for member, _ in members(groups[start]):
+            if member == target or (member in groups and member not in seen and reaches(member, target, seen + (member,))):
+                return True
+        return False
+
+    for name in groups:
+        assert not reaches(name, name), f"LayerGroup {name} contains itself"
