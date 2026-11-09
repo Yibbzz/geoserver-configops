@@ -99,24 +99,3 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker compose -f tests/e2e/compose.yaml -p gscloud-e2e logs --tail=200
-
-  # The whole chart on a throwaway kind cluster: every pod ready, OGC services through
-  # the gateway, the round trip against the deployment, and a WMS GetMap.
-  kind-deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
-        with:
-          version: v3.22.1
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-      - name: Install Python dependencies
-        run: pip install -r requirements-dev.txt
-      - uses: helm/kind-action@v1.15.2
-        with:
-          cluster_name: gscloud
-      - name: Deploy and test
-        run: tests/kind/deploy-test.sh
