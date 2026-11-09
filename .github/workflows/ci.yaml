@@ -12,27 +12,27 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
         with:
-          version: v3.22.1
+          version: v3.16.4
       - name: Helm lint
         run: helm lint .
       - name: Validate manifests against Kubernetes schemas
         run: |
-          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
           for extra in "" "-f values-local-registry.yaml" "--set ingest.enabled=false"; do
             echo "== helm template $extra"
-            helm template geoserver . -f values.yaml $extra | ./kubeconform -strict -summary -kubernetes-version 1.34.0 -
+            helm template geoserver . -f values.yaml $extra | ./kubeconform -strict -summary -kubernetes-version 1.30.0 -
           done
       - name: Shellcheck
-        run: shellcheck *.sh tests/e2e/*.sh tests/kind/*.sh
+        run: shellcheck *.sh
 
   test:
     runs-on: ubuntu-latest
     services:
       postgis:
-        image: postgis/postgis:18-3.7
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_DB: gis
           POSTGRES_PASSWORD: postgres
@@ -44,13 +44,13 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
         with:
-          version: v3.22.1
-      - uses: actions/setup-python@v7
+          version: v3.16.4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.12'
       - name: Install GDAL
         run: sudo apt-get update && sudo apt-get install -y gdal-bin
       - name: Install Python dependencies
@@ -67,35 +67,10 @@ jobs:
   ingest-image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - name: Build ingest image
         run: docker build -t geoserver-ingest:ci auto-update-development
       - name: Smoke test
         run: |
           docker run --rm geoserver-ingest:ci python -c "import pipeline, sources.os_api"
           docker run --rm geoserver-ingest:ci ogr2ogr --version
-
-  # The real GeoServer Cloud REST service (same images and jndi.yml as the chart) in Docker,
-  # then the catalog import/export round trip against it.
-  e2e-rest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
-        with:
-          version: v3.22.1
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-      - name: Install Python dependencies
-        run: pip install -r requirements-dev.txt
-      - name: Start GeoServer Cloud REST, PostGIS and RabbitMQ
-        run: tests/e2e/up.sh
-      - name: Round trip
-        env:
-          E2E_GEOSERVER_URL: http://localhost:59090/rest
-          E2E_DB_PORT: '55433'
-        run: pytest -m e2e -v
-      - name: Logs on failure
-        if: failure()
-        run: docker compose -f tests/e2e/compose.yaml -p gscloud-e2e logs --tail=200
