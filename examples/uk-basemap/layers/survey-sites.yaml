@@ -1,0 +1,10 @@
+# A layer on a table you load yourself: gisdata publishes it but never changes the table.
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: survey-sites
+spec:
+  table: { schema: field_data, name: sites }
+  title: Survey sites
+  style: point
+  queryable: true

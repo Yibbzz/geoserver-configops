@@ -1,0 +1,34 @@
+# OS Open Roads: both tables in the GeoPackage, each published with its own style.
+# Table names inside the product are to be confirmed with `gisdata discover os OpenRoads`.
+apiVersion: gisdata/v1alpha1
+kind: Dataset
+metadata:
+  name: os-open-roads
+spec:
+  source: os
+  product: OpenRoads
+  update: weekly
+  tables:
+    road_link: {}
+    road_node: {}
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: road-links
+spec:
+  dataset: os-open-roads
+  table: road_link
+  title: OS Open Roads, road links
+  style: os-road-link
+  cache: true
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: road-nodes
+spec:
+  dataset: os-open-roads
+  table: road_node
+  title: OS Open Roads, junctions
+  style: os-road-node

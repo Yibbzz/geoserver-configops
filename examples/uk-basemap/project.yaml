@@ -1,0 +1,16 @@
+# The GeoServer and database this directory manages, and defaults for everything else.
+apiVersion: gisdata/v1alpha1
+kind: Project
+metadata:
+  name: uk-basemap
+spec:
+  geoserver:
+    url: http://geoserver-gsc-gateway:8080/geoserver-cloud
+    credentials: { secret: geoserver-admin }
+  database:
+    jndi: java:comp/env/jdbc/mypostgis
+    connection: { secret: geoserver-pgconfig-secret }
+    schemas: { live: data_layers, staging: staging, backup: backup }
+  workspace: uk
+  crs: EPSG:27700
+  backups: 3

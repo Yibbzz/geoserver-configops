@@ -1,0 +1,7 @@
+apiVersion: gisdata/v1alpha1
+kind: Source
+metadata:
+  name: os
+spec:
+  type: os-downloads
+  credentials: { secret: os-api }   # key: apiKey (free OS Data Hub project key)

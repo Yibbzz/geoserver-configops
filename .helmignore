@@ -44,3 +44,5 @@ Makefile
 pytest.ini
 requirements-dev.txt
 auto-update-development/
+docs/
+examples/
