@@ -4,8 +4,8 @@
 set -euo pipefail
 
 REGISTRY="${REGISTRY:-k3d-k3d-registry.localhost:5000}"
-TAG="${TAG:-2.28.2.3}"
-ACL_TAG="${ACL_TAG:-2.4.0}"
+TAG="${TAG:-3.0.2.1}"
+ACL_TAG="${ACL_TAG:-3.0.4}"
 
 IMAGES=(
   "geoserver-cloud-gateway"
@@ -18,7 +18,6 @@ IMAGES=(
   "geoserver-cloud-gwc"
   "geoserver-acl"
   "geoserver-cloud-config"
-  "geoserver-cloud-discovery"
 )
 
 for img in "${IMAGES[@]}"; do

@@ -11,6 +11,8 @@ metadata:
 spec:
   {{- if $serviceDefinition.serviceName }}
   serviceName: {{ $serviceDefinition.serviceName }}
+  {{- else }}
+  serviceName: {{ include "common.fullname" ( dict "root" $ "service" $serviceDefinition "serviceName" $serviceName ) }}
   {{- end }}
   {{- if $serviceDefinition.replicaCount }}
   replicas: {{ $serviceDefinition.replicaCount }}
@@ -18,6 +20,7 @@ spec:
   {{- if $serviceDefinition.replicas }}
   replicas: {{ $serviceDefinition.replicas }}
   {{- end }}
+  revisionHistoryLimit: {{ $.Values.global.revisionHistoryLimit | default 0 }}
   {{- if $serviceDefinition.minReadySeconds }}
   minReadySeconds: {{ $serviceDefinition.minReadySeconds }}
   {{- end }}

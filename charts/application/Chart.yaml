@@ -6,4 +6,4 @@ dependencies:
   version: 2.1.2
 description: HELM chart that provide everything needed to create a multi pod application.
 name: application
-version: 2.19.0
+version: 2.23.0

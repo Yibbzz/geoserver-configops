@@ -158,6 +158,19 @@
       "type": "array",
       "description": "Pod: Tolerations"
     },
+    "topologySpreadConstraints": {
+      "type": "array",
+      "description": "Pod: Topology spread constraints, passed through unchanged to Kubernetes",
+      "items": {
+        "type": "object"
+      },
+      "defaultMode": {
+        "type": "int"
+      },
+      "optional": {
+        "type": "boolean"
+      }
+    },
     "nodeSelector": {
       "type": "object",
       "description": "Pod: Node selector"
@@ -335,6 +348,12 @@
               "description": "Don't add a secret name to the Ingress TLS host, useful when the certification is configured in the Ingress controller."
             }
           }
+        },
+        "affinity": {
+          "$ref": "#/definitions/affinity"
+        },
+        "topologySpreadConstraints": {
+          "$ref": "#/definitions/topologySpreadConstraints"
         }
       }
     },
@@ -561,6 +580,9 @@
     },
     "tolerations": {
       "$ref": "#/definitions/tolerations"
+    },
+    "topologySpreadConstraints": {
+      "$ref": "#/definitions/topologySpreadConstraints"
     },
     "image": {
       "type": "object",
@@ -968,6 +990,9 @@
           "nodeSelector": {
             "$ref": "#/definitions/nodeSelector"
           },
+          "topologySpreadConstraints": {
+            "$ref": "#/definitions/topologySpreadConstraints"
+          },
           "replicaCount": {
             "type": "integer",
             "description": "The number of replicas"
@@ -996,6 +1021,10 @@
           "minReadySeconds": {
             "type": "integer",
             "description": "The minimum number of seconds for the Pod to be ready"
+          },
+          "terminationGracePeriodSeconds": {
+            "type": "integer",
+            "description": "The duration in seconds the Pod needs to terminate gracefully, passed through unchanged to Kubernetes"
           },
           "persistentVolumeClaimRetentionPolicy": {
             "type": "object",
@@ -1330,6 +1359,10 @@
                 "description": "The type of the service",
                 "default": "ClusterIP"
               },
+              "clusterIP": {
+                "type": "string",
+                "description": "The clusterIP of the service, set it to 'None' to create a headless service"
+              },
               "servicePort": {
                 "type": "integer",
                 "description": "The port of the service (used by Ingress)",
@@ -1369,45 +1402,15 @@
                 "description": "Max number of replicas.",
                 "default": 10
               },
+              "behavior": {
+                "type": "object",
+                "description": "Scaling rules passed to the generated HPA."
+              },
               "metrics": {
                 "type": "array",
-                "description": "Metrics definition.",
+                "description": "Metric definitions passed through unchanged to the HorizontalPodAutoscaler metrics.",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "type": "string",
-                      "enum": ["Resource", "Pods", "External"],
-                      "description": "Metric types (Resource, Pods, External)."
-                    },
-                    "resource": {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "enum": ["cpu", "memory"],
-                          "description": "CPU or memory value."
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "type": {
-                              "type": "string",
-                              "enum": ["Utilization", "Value", "AverageValue"],
-                              "description": "Metric target."
-                            },
-                            "averageUtilization": {
-                              "type": "integer",
-                              "description": "% average use."
-                            }
-                          },
-                          "required": ["type"]
-                        }
-                      },
-                      "required": ["name", "target"]
-                    }
-                  },
-                  "required": ["type"]
+                  "type": "object"
                 }
               }
             },
@@ -1445,6 +1448,49 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "persistentVolumeClaims": {
+      "type": "object",
+      "description": "The PersistentVolumeClaims to create, the key is used as the name suffix, the volumes can refer to them with a claimName like self-pvc-<key>",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Enable this PersistentVolumeClaim",
+            "default": true
+          },
+          "nameOverride": {
+            "$ref": "#/definitions/nameOverride"
+          },
+          "fullnameOverride": {
+            "$ref": "#/definitions/fullnameOverride"
+          },
+          "releaseNameOverride": {
+            "$ref": "#/definitions/releaseNameOverride"
+          },
+          "releaseTrunc": {
+            "$ref": "#/definitions/releaseTrunc"
+          },
+          "nameTrunc": {
+            "$ref": "#/definitions/nameTrunc"
+          },
+          "prefixTrunc": {
+            "$ref": "#/definitions/prefixTrunc"
+          },
+          "labels": {
+            "$ref": "#/definitions/labels"
+          },
+          "annotations": {
+            "$ref": "#/definitions/annotations"
+          },
+          "spec": {
+            "type": "object",
+            "description": "The PersistentVolumeClaim specification, passed through unchanged to Kubernetes"
           }
         }
       }

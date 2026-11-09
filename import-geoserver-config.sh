@@ -18,17 +18,25 @@ BASE_URL="${GEOSERVER_URL:-http://localhost:9090/rest}"
 AUTH="${GEOSERVER_USER:-admin}:${GEOSERVER_PASSWORD:?Set GEOSERVER_PASSWORD}"
 CONFIG_DIR="${CONFIG_DIR:-./geoserver-config}"
 
-# PUT updates an existing resource; if it doesn't exist yet, POST it to the parent collection.
+# Update the resource if it exists (PUT), otherwise create it in its parent collection (POST).
+# Existence is checked with a GET first: GeoServer Cloud 3 answers a PUT on a missing
+# style with HTTP 500 rather than 404.
+FAILED=0
 upsert() {
   local path="$1" parent="$2" file="$3" type="${4:-application/json}"
-  local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' -u "$AUTH" -X PUT \
-    -H "Content-Type: $type" --data-binary "@$file" "$BASE_URL/$path")
-  if [ "$code" = "404" ]; then
+  local exists code query=""
+  # Store SLDs exactly as written; otherwise GeoServer 3 re-encodes them and renames them "Default Styler"
+  [ "$type" = "application/vnd.ogc.sld+xml" ] && query="?raw=true"
+  exists=$(curl -s -o /dev/null -w '%{http_code}' -u "$AUTH" "$BASE_URL/$path.json")
+  if [ "$exists" = "200" ]; then
+    code=$(curl -s -o /dev/null -w '%{http_code}' -u "$AUTH" -X PUT \
+      -H "Content-Type: $type" --data-binary "@$file" "$BASE_URL/$path$query")
+  else
     code=$(curl -s -o /dev/null -w '%{http_code}' -u "$AUTH" -X POST \
       -H "Content-Type: $type" --data-binary "@$file" "$BASE_URL/$parent")
   fi
   echo "  $path -> HTTP $code"
+  case "$code" in 2??) ;; *) FAILED=$((FAILED + 1)) ;; esac
 }
 
 # 1. Workspaces
@@ -70,4 +78,8 @@ for f in "$CONFIG_DIR"/styles/*.sld; do
   upsert "styles/$style" "styles" "$f" "application/vnd.ogc.sld+xml"
 done
 
+if [ "$FAILED" -gt 0 ]; then
+  echo "Done with $FAILED failed request(s)" >&2
+  exit 1
+fi
 echo "Done - config imported"

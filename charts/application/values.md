@@ -12,6 +12,8 @@
   - <a id="properties/global/properties/revisionHistoryLimit"></a>**`revisionHistoryLimit`** *(integer)*: The number of old history to keep to allow rollback.
   - <a id="properties/global/properties/ingress"></a>**`ingress`** *(object)*
     - <a id="properties/global/properties/ingress/properties/noSecretName"></a>**`noSecretName`** *(boolean)*: Don't add a secret name to the Ingress TLS host, useful when the certification is configured in the Ingress controller.
+  - <a id="properties/global/properties/affinity"></a>**`affinity`**: Refer to *[#/definitions/affinity](#definitions/affinity)*.
+  - <a id="properties/global/properties/topologySpreadConstraints"></a>**`topologySpreadConstraints`**: Refer to *[#/definitions/topologySpreadConstraints](#definitions/topologySpreadConstraints)*.
 - <a id="properties/nameOverride"></a>**`nameOverride`**: Refer to *[#/definitions/nameOverride](#definitions/nameOverride)*.
 - <a id="properties/fullnameOverride"></a>**`fullnameOverride`**: Refer to *[#/definitions/fullnameOverride](#definitions/fullnameOverride)*.
 - <a id="properties/releaseNameOverride"></a>**`releaseNameOverride`**: Refer to *[#/definitions/releaseNameOverride](#definitions/releaseNameOverride)*.
@@ -67,6 +69,7 @@
 - <a id="properties/podSecurityContext"></a>**`podSecurityContext`**: Refer to *[#/definitions/podSecurityContext](#definitions/podSecurityContext)*.
 - <a id="properties/affinity"></a>**`affinity`**: Refer to *[#/definitions/affinity](#definitions/affinity)*.
 - <a id="properties/tolerations"></a>**`tolerations`**: Refer to *[#/definitions/tolerations](#definitions/tolerations)*.
+- <a id="properties/topologySpreadConstraints"></a>**`topologySpreadConstraints`**: Refer to *[#/definitions/topologySpreadConstraints](#definitions/topologySpreadConstraints)*.
 - <a id="properties/image"></a>**`image`** *(object)*: Container: Image configuration.
   - <a id="properties/image/properties/pullPolicy"></a>**`pullPolicy`** *(string)*: Image pull policy. Must be one of: "Always", "IfNotPresent", or "Never".
 - <a id="properties/dockerregistry"></a>**`dockerregistry`** *(object)*: Cannot contain additional properties.
@@ -171,6 +174,7 @@
     - <a id="properties/services/additionalProperties/properties/affinity"></a>**`affinity`**: Refer to *[#/definitions/affinity](#definitions/affinity)*.
     - <a id="properties/services/additionalProperties/properties/tolerations"></a>**`tolerations`**: Refer to *[#/definitions/tolerations](#definitions/tolerations)*.
     - <a id="properties/services/additionalProperties/properties/nodeSelector"></a>**`nodeSelector`**: Refer to *[#/definitions/nodeSelector](#definitions/nodeSelector)*.
+    - <a id="properties/services/additionalProperties/properties/topologySpreadConstraints"></a>**`topologySpreadConstraints`**: Refer to *[#/definitions/topologySpreadConstraints](#definitions/topologySpreadConstraints)*.
     - <a id="properties/services/additionalProperties/properties/replicaCount"></a>**`replicaCount`** *(integer)*: The number of replicas.
     - <a id="properties/services/additionalProperties/properties/maxFailedIndexes"></a>**`maxFailedIndexes`** *(integer)*: The maximum number of failed indexes.
     - <a id="properties/services/additionalProperties/properties/parallelism"></a>**`parallelism`** *(integer)*: The number of parallel jobs.
@@ -178,6 +182,7 @@
     - <a id="properties/services/additionalProperties/properties/completionMode"></a>**`completionMode`** *(string)*: The completion mode of the job. Must be one of: "Indexed" or "NonIndexed".
     - <a id="properties/services/additionalProperties/properties/completions"></a>**`completions`** *(integer)*: The number of completions.
     - <a id="properties/services/additionalProperties/properties/minReadySeconds"></a>**`minReadySeconds`** *(integer)*: The minimum number of seconds for the Pod to be ready.
+    - <a id="properties/services/additionalProperties/properties/terminationGracePeriodSeconds"></a>**`terminationGracePeriodSeconds`** *(integer)*: The duration in seconds the Pod needs to terminate gracefully, passed through unchanged to Kubernetes.
     - <a id="properties/services/additionalProperties/properties/persistentVolumeClaimRetentionPolicy"></a>**`persistentVolumeClaimRetentionPolicy`** *(object)*: The persistent volume claim retention policy.
     - <a id="properties/services/additionalProperties/properties/replicas"></a>**`replicas`** *(integer)*: The number of replicas.
     - <a id="properties/services/additionalProperties/properties/paused"></a>**`paused`** *(boolean)*: Pause the deployment.
@@ -258,6 +263,7 @@
     - <a id="properties/services/additionalProperties/properties/service"></a>**`service`** *(object)*: The Kubernetes service configuration. Cannot contain additional properties.
       - <a id="properties/services/additionalProperties/properties/service/properties/name"></a>**`name`** *(string)*: The name of the service.
       - <a id="properties/services/additionalProperties/properties/service/properties/type"></a>**`type`** *(string)*: The type of the service. Default: `"ClusterIP"`.
+      - <a id="properties/services/additionalProperties/properties/service/properties/clusterIP"></a>**`clusterIP`** *(string)*: The clusterIP of the service, set it to 'None' to create a headless service.
       - <a id="properties/services/additionalProperties/properties/service/properties/servicePort"></a>**`servicePort`** *(integer)*: The port of the service (used by Ingress). Default: `80`.
       - <a id="properties/services/additionalProperties/properties/service/properties/labels"></a>**`labels`**: Refer to *[#/definitions/labels](#definitions/labels)*.
       - <a id="properties/services/additionalProperties/properties/service/properties/annotations"></a>**`annotations`**: Refer to *[#/definitions/annotations](#definitions/annotations)*.
@@ -266,14 +272,9 @@
       - <a id="properties/services/additionalProperties/properties/hpa/properties/enabled"></a>**`enabled`** *(boolean)*: Enable or disable HPA for the service. Default: `true`.
       - <a id="properties/services/additionalProperties/properties/hpa/properties/minReplicas"></a>**`minReplicas`** *(integer, required)*: Minimal number of replicas. Minimum: `1`. Default: `1`.
       - <a id="properties/services/additionalProperties/properties/hpa/properties/maxReplicas"></a>**`maxReplicas`** *(integer, required)*: Max number of replicas. Minimum: `1`. Default: `10`.
-      - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics"></a>**`metrics`** *(array)*: Metrics definition.
+      - <a id="properties/services/additionalProperties/properties/hpa/properties/behavior"></a>**`behavior`** *(object)*: Scaling rules passed to the generated HPA.
+      - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics"></a>**`metrics`** *(array)*: Metric definitions passed through unchanged to the HorizontalPodAutoscaler metrics.
         - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics/items"></a>**Items** *(object)*
-          - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics/items/properties/type"></a>**`type`** *(string, required)*: Metric types (Resource, Pods, External). Must be one of: "Resource", "Pods", or "External".
-          - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics/items/properties/resource"></a>**`resource`** *(object)*
-            - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics/items/properties/resource/properties/name"></a>**`name`** *(string, required)*: CPU or memory value. Must be one of: "cpu" or "memory".
-            - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics/items/properties/resource/properties/target"></a>**`target`** *(object, required)*
-              - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics/items/properties/resource/properties/target/properties/type"></a>**`type`** *(string, required)*: Metric target. Must be one of: "Utilization", "Value", or "AverageValue".
-              - <a id="properties/services/additionalProperties/properties/hpa/properties/metrics/items/properties/resource/properties/target/properties/averageUtilization"></a>**`averageUtilization`** *(integer)*: % average use.
     - <a id="properties/services/additionalProperties/properties/podMonitor"></a>**`podMonitor`** *(object)*: The Prometheus Pod monitor configuration. Cannot contain additional properties. Default: `{"enabled": false}`.
       - <a id="properties/services/additionalProperties/properties/podMonitor/properties/enabled"></a>**`enabled`** *(boolean)*: Enable the Pod monitor for this service (Pod). Default: `true`.
       - <a id="properties/services/additionalProperties/properties/podMonitor/properties/name"></a>**`name`** *(string)*: The name of the Pod monitor.
@@ -281,6 +282,18 @@
       - <a id="properties/services/additionalProperties/properties/podMonitor/properties/annotations"></a>**`annotations`**: Refer to *[#/definitions/annotations](#definitions/annotations)*.
       - <a id="properties/services/additionalProperties/properties/podMonitor/properties/podMetricsEndpoints"></a>**`podMetricsEndpoints`** *(object)*: The endpoints of the Pod monitor by port. Can contain additional properties.
         - <a id="properties/services/additionalProperties/properties/podMonitor/properties/podMetricsEndpoints/additionalProperties"></a>**Additional properties** *(object)*: The endpoint of the Pod monitor.
+- <a id="properties/persistentVolumeClaims"></a>**`persistentVolumeClaims`** *(object)*: The PersistentVolumeClaims to create, the key is used as the name suffix, the volumes can refer to them with a claimName like self-pvc-<key>. Can contain additional properties.
+  - <a id="properties/persistentVolumeClaims/additionalProperties"></a>**Additional properties** *(object)*: Cannot contain additional properties.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/enabled"></a>**`enabled`** *(boolean)*: Enable this PersistentVolumeClaim. Default: `true`.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/nameOverride"></a>**`nameOverride`**: Refer to *[#/definitions/nameOverride](#definitions/nameOverride)*.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/fullnameOverride"></a>**`fullnameOverride`**: Refer to *[#/definitions/fullnameOverride](#definitions/fullnameOverride)*.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/releaseNameOverride"></a>**`releaseNameOverride`**: Refer to *[#/definitions/releaseNameOverride](#definitions/releaseNameOverride)*.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/releaseTrunc"></a>**`releaseTrunc`**: Refer to *[#/definitions/releaseTrunc](#definitions/releaseTrunc)*.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/nameTrunc"></a>**`nameTrunc`**: Refer to *[#/definitions/nameTrunc](#definitions/nameTrunc)*.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/prefixTrunc"></a>**`prefixTrunc`**: Refer to *[#/definitions/prefixTrunc](#definitions/prefixTrunc)*.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/labels"></a>**`labels`**: Refer to *[#/definitions/labels](#definitions/labels)*.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/annotations"></a>**`annotations`**: Refer to *[#/definitions/annotations](#definitions/annotations)*.
+    - <a id="properties/persistentVolumeClaims/additionalProperties/properties/spec"></a>**`spec`** *(object)*: The PersistentVolumeClaim specification, passed through unchanged to Kubernetes.
 - <a id="properties/clusterRole"></a>**`clusterRole`** *(object)*: Cannot contain additional properties.
   - <a id="properties/clusterRole/properties/name"></a>**`name`** *(string)*
   - <a id="properties/clusterRole/properties/enabled"></a>**`enabled`** *(boolean)*: Default: `false`.
@@ -338,6 +351,8 @@
   - <a id="definitions/affinity/properties/podAffinity"></a>**`podAffinity`** *(object)*: The standard pod affinity.
   - <a id="definitions/affinity/properties/nodeAffinity"></a>**`nodeAffinity`** *(object)*: The standard node affinity.
 - <a id="definitions/tolerations"></a>**`tolerations`** *(array)*: Pod: Tolerations.
+- <a id="definitions/topologySpreadConstraints"></a>**`topologySpreadConstraints`** *(array)*: Pod: Topology spread constraints, passed through unchanged to Kubernetes.
+  - <a id="definitions/topologySpreadConstraints/items"></a>**Items** *(object)*
 - <a id="definitions/nodeSelector"></a>**`nodeSelector`** *(object)*: Pod: Node selector.
 - <a id="definitions/image"></a>**`image`** *(object)*: Container: Image configuration.
   - **Any of**

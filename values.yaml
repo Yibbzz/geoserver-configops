@@ -3,7 +3,7 @@ podSecurityContext: {}
 securityContext: {}
 
 common-image-stuff: &common-image-stuff
-  tag: '2.28.2.3'
+  tag: '3.0.2.1'
 
 service: &common-service-definition
   type: ClusterIP
@@ -45,43 +45,43 @@ ports: &common-ports
   health:
     containerPort: 8081
 
+# Message bus for keeping GeoServer services in sync (templates/rabbitmq.yaml).
+# Official RabbitMQ image; credentials come from geoserver-rabbitmq-secret.
+# Spring Cloud Bus queues are transient, so no persistent volume is needed.
 rabbitmq:
   enabled: true
-  auth:
-    username: user
-    existingPasswordSecret: geoserver-rabbitmq-secret 
+  image:
+    repository: docker.io/library/rabbitmq
+    tag: '4.4-alpine'
+    pullPolicy: IfNotPresent
   resources:
-    limits:
-      cpu: 1
-      memory: 256Mi
     requests:
       cpu: 0.1
-      memory: 120Mi
-  image:
-    registry: docker.io
-    repository: bitnamilegacy/rabbitmq
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 512Mi
 
+# PostGIS for the GeoServer catalog (pgconfig schema) and ingested data
+# (templates/postgresql.yaml). Credentials come from geoserver-pgconfig-secret.
+# Set enabled: false to use an external or managed database instead; point
+# the host/port in geoserver-pgconfig-secret at it.
 postgresql:
   enabled: true
   image:
-    registry: docker.io
-    repository: bitnamilegacy/postgresql
-  global:
-    postgresql:
-      auth:
-        existingSecret: geoserver-pgconfig-secret
-        secretKeys:
-          adminPasswordKey: password
-  primary:
-    initdb:
-      scriptsConfigMap: install-postgis-configmap
-    resources:
-      requests:
-        memory: 512Mi
-        cpu: 0.2
-      limits:
-        memory: 2Gi
-        cpu: 2.0
+    repository: docker.io/postgis/postgis
+    tag: '18-3.7'
+    pullPolicy: IfNotPresent
+  persistence:
+    size: 10Gi
+    storageClass: ''  # empty = cluster default
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 0.2
+    limits:
+      memory: 2Gi
+      cpu: 2.0
 
 resources: &common-resources
   requests:
@@ -496,7 +496,7 @@ geoserver:
             PG_USERNAME:
               value: 'acl'
           image:
-            tag: '2.4.0'
+            tag: '3.0.4'
             repository: docker.io/geoservercloud/geoserver-acl
             sha: ''
 # Nightly open data ingest job (templates/ingest-cronjob.yaml).

@@ -36,7 +36,7 @@ class FakeGeoServer(http.server.BaseHTTPRequestHandler):
     log: list
 
     def _path(self):
-        path = self.path.removeprefix("/rest/")
+        path = self.path.split("?", 1)[0].removeprefix("/rest/")
         kind = "sld" if path.endswith(".sld") or self.headers.get("Content-Type") == SLD else "json"
         return path.removesuffix(".json").removesuffix(".sld"), kind
 
