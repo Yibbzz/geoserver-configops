@@ -129,6 +129,28 @@ git diff geoserver-config/
 
 Datastores use the JNDI datasource `java:comp/env/jdbc/mypostgis` (`templates/jndi-configmap.yaml`), so no database passwords are stored in the exported files.
 
+## Testing
+
+CI (`.github/workflows/ci.yaml`) runs on every pull request and push to `main`:
+
+| Layer | What runs |
+| --- | --- |
+| Helm chart | `helm lint`, `kubeconform` schema checks on the rendered manifests, and `tests/test_chart.py` (renders the chart and checks services, images, the ingest job and that every secret it uses is in `geoserver-secrets.example.yaml`) |
+| Ingest pipeline | Unit tests with the OS API faked (`tests/test_os_api.py`, `tests/test_pipeline_unit.py`), and end-to-end runs against a real PostGIS (`tests/test_pipeline_integration.py`) |
+| Config scripts | `shellcheck`, and an import-then-export round trip against a fake GeoServer REST API (`tests/test_config_scripts.py`) |
+| Ingest image | Docker build and a smoke test |
+
+Run them locally (needs `helm`, `jq`, `curl`, and `ogr2ogr` for the integration tests):
+
+```bash
+python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pytest                      # integration tests skip without a database
+
+docker run -d --rm --name test-postgis -p 55432:5432 \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gis postgis/postgis:16-3.4
+TEST_DB_HOST=localhost TEST_DB_PORT=55432 .venv/bin/pytest
+```
+
 ## Upgrading the vendored charts
 
 ```bash

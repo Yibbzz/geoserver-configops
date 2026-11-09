@@ -40,3 +40,7 @@ __pycache__/
 /.helmignore
 /.secretignore
 Makefile
+.pytest_cache/
+pytest.ini
+requirements-dev.txt
+auto-update-development/
