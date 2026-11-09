@@ -13,6 +13,8 @@ Standard dataset dict:
         "url":     str,   # direct download URL
         "size":    int,   # bytes (optional)
         "md5":     str,   # checksum (optional)
+        "srs":     str,   # OS OpenData is British National Grid
+        "headers": dict,  # API key header for the download
     }
 """
 
@@ -22,13 +24,12 @@ import requests
 BASE_API = "https://api.os.uk/downloads/v1/products"
 API_KEY = os.environ.get("OS_API_KEY", "")
 
-# Preference order — first match wins. Raster/non-spatial formats are
-# absent so they are silently skipped.
+# Preference order — first match wins. Raster, vector tile and non-spatial
+# formats are absent so they are skipped (the pipeline can't load them).
 FORMAT_PREFERENCE = [
     "GeoPackage",
     "ESRI® Shapefile",
     "GML",
-    "Vector Tiles",
     "MapInfo® TAB",
     "MapInfo",
 ]
@@ -78,6 +79,8 @@ def get_datasets() -> list[dict]:
                 "url": info["url"],
                 "size": info.get("size"),
                 "md5": info.get("md5"),
+                "srs": "EPSG:27700",
+                "headers": {"key": API_KEY} if API_KEY else {},
             }
         )
 

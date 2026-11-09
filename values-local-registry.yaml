@@ -1,0 +1,53 @@
+# Override for a local k3d registry (see pull_all_images.sh).
+#   helm upgrade --install geoserver . -f values.yaml -f values-local-registry.yaml
+geoserver:
+  services:
+    gateway:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-gateway
+    webui:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-webui
+    rest:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-rest
+    wfs:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wfs
+    wms:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wms
+    wcs:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wcs
+    wps:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wps
+    gwc:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-gwc
+    acl:
+      containers:
+        spring:
+          image:
+            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-acl
+
+ingest:
+  image:
+    repository: k3d-k3d-registry.localhost:5000/geoserver-ingest

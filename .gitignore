@@ -10,3 +10,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
+# Local secrets
+geoserver-secrets.yaml
+.env
+*.env
+!.env.example
+
+# Local GeoServer data dir copies
+datadir/

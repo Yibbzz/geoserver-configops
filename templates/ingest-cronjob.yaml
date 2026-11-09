@@ -1,9 +1,10 @@
+{{- if .Values.ingest.enabled }}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: geoserver-data-ingest
 spec:
-  schedule: "0 2 * * *"     # 2am every night
+  schedule: {{ .Values.ingest.schedule | quote }}
   concurrencyPolicy: Forbid  # don't run if previous is still going
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -14,11 +15,17 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: ingest
-              image: k3d-k3d-registry.localhost:5000/geoserver-ingest:latest
-              imagePullPolicy: Always
+              image: "{{ .Values.ingest.image.repository }}:{{ .Values.ingest.image.tag }}"
+              imagePullPolicy: {{ .Values.ingest.image.pullPolicy }}
               env:
                 - name: PROD_SCHEMA
-                  value: "data_layers"
+                  value: {{ .Values.ingest.prodSchema | quote }}
+                - name: STAGING_SCHEMA
+                  value: {{ .Values.ingest.stagingSchema | quote }}
+                - name: BACKUP_SCHEMA
+                  value: {{ .Values.ingest.backupSchema | quote }}
+                - name: BACKUP_RETENTION
+                  value: {{ .Values.ingest.backupRetention | quote }}
                 - name: DB_NAME
                   valueFrom:
                     secretKeyRef:
@@ -49,3 +56,4 @@ spec:
                     secretKeyRef:
                       name: geoserver-ingest-secret
                       key: os-api-key
+{{- end }}

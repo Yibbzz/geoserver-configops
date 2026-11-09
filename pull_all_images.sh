@@ -1,6 +1,11 @@
-REGISTRY="k3d-k3d-registry.localhost:5000"
-TAG="2.28.2.3"
-ACL_TAG="2.4.0"
+#!/usr/bin/env bash
+# Mirror the GeoServer Cloud images into a local registry (e.g. k3d).
+# Only needed with values-local-registry.yaml; the default values pull from Docker Hub.
+set -euo pipefail
+
+REGISTRY="${REGISTRY:-k3d-k3d-registry.localhost:5000}"
+TAG="${TAG:-2.28.2.3}"
+ACL_TAG="${ACL_TAG:-2.4.0}"
 
 IMAGES=(
   "geoserver-cloud-gateway"
@@ -17,15 +22,10 @@ IMAGES=(
 )
 
 for img in "${IMAGES[@]}"; do
-  if [ "$img" = "geoserver-acl" ]; then
-    echo "Processing ACL image with tag ${ACL_TAG}"
-    docker pull geoservercloud/${img}:${ACL_TAG}
-    docker tag  geoservercloud/${img}:${ACL_TAG} ${REGISTRY}/geoservercloud/${img}:${ACL_TAG}
-    docker push ${REGISTRY}/geoservercloud/${img}:${ACL_TAG}
-  else
-    echo "Processing ${img} with tag ${TAG}"
-    docker pull geoservercloud/${img}:${TAG}
-    docker tag  geoservercloud/${img}:${TAG} ${REGISTRY}/geoservercloud/${img}:${TAG}
-    docker push ${REGISTRY}/geoservercloud/${img}:${TAG}
-  fi
+  tag="$TAG"
+  [ "$img" = "geoserver-acl" ] && tag="$ACL_TAG"
+  echo "Processing ${img}:${tag}"
+  docker pull "geoservercloud/${img}:${tag}"
+  docker tag "geoservercloud/${img}:${tag}" "${REGISTRY}/geoservercloud/${img}:${tag}"
+  docker push "${REGISTRY}/geoservercloud/${img}:${tag}"
 done

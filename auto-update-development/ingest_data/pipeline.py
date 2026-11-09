@@ -12,6 +12,8 @@ standard format produced by any source module:
         "url":     str,   # direct download URL
         "size":    int,   # bytes (optional, for logging)
         "md5":     str,   # expected MD5 checksum (optional)
+        "srs":     str,   # source CRS, e.g. "EPSG:27700" (optional, default EPSG:27700)
+        "headers": dict,  # extra HTTP headers for the download, e.g. API key (optional)
     }
 
 Stages:
@@ -21,7 +23,7 @@ Stages:
   5.  Extract
   6.  Load into staging schema
   7.  Validate geometry / row counts
-  8.  Backup production table
+  8.  Backup production table (keeps the newest BACKUP_RETENTION copies)
   9.  Promote staging -> live (invalid geometries filtered on SELECT)
   9.5 Create GIST spatial index + ANALYZE
   10. Record result in metadata table
@@ -34,6 +36,7 @@ import zipfile
 import shutil
 import subprocess
 import psycopg2
+import requests
 from pathlib import Path
 from datetime import datetime
 
@@ -46,6 +49,8 @@ DOWNLOAD_DIR = Path("/tmp/os_ingest")
 PROD_SCHEMA = os.environ.get("PROD_SCHEMA", "data_layers")
 STAGING_SCHEMA = os.environ.get("STAGING_SCHEMA", "staging")
 BACKUP_SCHEMA = os.environ.get("BACKUP_SCHEMA", "backup")
+BACKUP_RETENTION = int(os.environ.get("BACKUP_RETENTION", 3))
+DEFAULT_SRS = "EPSG:27700"
 
 DB = dict(
     dbname=os.environ.get("DB_NAME", "gis"),
@@ -80,14 +85,6 @@ def log(stage, msg: str, error: bool = False):
 
 def get_conn():
     return psycopg2.connect(**DB)
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def ensure_schema(cur, schema: str):
@@ -167,11 +164,8 @@ def last_loaded_version(conn, dataset_id: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def download(url: str, dest: Path, api_key: str = "") -> Path:
-    headers = {"key": api_key} if api_key else {}
-    with __import__("requests").get(
-        url, headers=headers, stream=True, timeout=120
-    ) as r:
+def download(url: str, dest: Path, headers: dict | None = None) -> Path:
+    with requests.get(url, headers=headers or {}, stream=True, timeout=120) as r:
         r.raise_for_status()
         with open(dest, "wb") as f:
             for chunk in r.iter_content(chunk_size=1 << 20):
@@ -185,12 +179,15 @@ def download(url: str, dest: Path, api_key: str = "") -> Path:
 
 
 def verify(path: Path, expected_md5: str | None) -> str:
-    sha = sha256_file(path)
-    if expected_md5:
-        got_md5 = hashlib.md5(open(path, "rb").read()).hexdigest()
-        if got_md5 != expected_md5:
-            raise ValueError(f"MD5 mismatch: expected {expected_md5}, got {got_md5}")
-    return sha
+    """Stream the file once, check the MD5 if given, and return its SHA256."""
+    sha, md5 = hashlib.sha256(), hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            sha.update(chunk)
+            md5.update(chunk)
+    if expected_md5 and md5.hexdigest().lower() != expected_md5.lower():
+        raise ValueError(f"MD5 mismatch: expected {expected_md5}, got {md5.hexdigest()}")
+    return sha.hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -213,8 +210,10 @@ def extract(archive: Path, dest_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def load_staging(dataset_id: str, extract_dir: Path, fmt: str, conn) -> str:
-    staging_schema = "staging"
+def load_staging(
+    dataset_id: str, extract_dir: Path, fmt: str, conn, srs: str = DEFAULT_SRS
+) -> str:
+    staging_schema = STAGING_SCHEMA
     staging_table = dataset_id.lower().replace("-", "_")
 
     ext = EXT_MAP.get(fmt)
@@ -254,9 +253,9 @@ def load_staging(dataset_id: str, extract_dir: Path, fmt: str, conn) -> str:
         "-nlt",
         "PROMOTE_TO_MULTI",
         "-s_srs",
-        "EPSG:27700",
+        srs,
         "-t_srs",
-        "EPSG:27700",
+        srs,
         "-progress",
         "-gt",
         "65536",
@@ -342,6 +341,26 @@ def backup_production(conn, dataset_id: str):
                 AS SELECT * FROM {PROD_SCHEMA}."{prod_table}"
                 """)
     conn.commit()
+    prune_backups(conn, prod_table)
+
+
+def prune_backups(conn, prod_table: str):
+    """Drop all but the newest BACKUP_RETENTION backups of a table."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = %s AND table_name ~ %s
+            ORDER BY table_name DESC
+            """,
+            (BACKUP_SCHEMA, f"^{prod_table}_[0-9]{{8}}_[0-9]{{6}}$"),
+        )
+        old = [row[0] for row in cur.fetchall()][BACKUP_RETENTION:]
+        for table in old:
+            cur.execute(f'DROP TABLE {BACKUP_SCHEMA}."{table}"')
+    conn.commit()
+    if old:
+        log(8, f"Dropped {len(old)} old backup(s), keeping {BACKUP_RETENTION}")
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +400,9 @@ def promote(conn, staging_table: str, dataset_id: str) -> int:
         with conn.cursor() as cur:
             cur.execute(f'SELECT COUNT(*) FROM {staging_schema}."{staging_tbl}"')
             staging_count = cur.fetchone()[0]
+            # The live table is a copy, so the staging table is no longer needed
+            cur.execute(f'DROP TABLE {staging_schema}."{staging_tbl}"')
+        conn.commit()
         return staging_count - promoted_count
 
     return 0
@@ -494,7 +516,7 @@ def process_dataset(conn, dataset: dict):
     # --- Stage 3: download ---
     archive_path = work / "download.zip"
     log(3, f"Downloading {url} ...")
-    download(url, archive_path)
+    download(url, archive_path, dataset.get("headers"))
     log(3, f"Downloaded {archive_path.stat().st_size / 1e6:.1f} MB")
 
     # --- Stage 4: verify ---
@@ -512,7 +534,9 @@ def process_dataset(conn, dataset: dict):
 
     # --- Stage 6: load staging ---
     log(6, "Loading into staging schema...")
-    staging_table = load_staging(dataset_id, extract_dir, fmt, conn)
+    staging_table = load_staging(
+        dataset_id, extract_dir, fmt, conn, dataset.get("srs") or DEFAULT_SRS
+    )
     log(6, f"Loaded into {staging_table}")
 
     # --- Stage 7: validate ---

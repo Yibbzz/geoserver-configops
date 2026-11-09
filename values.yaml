@@ -317,7 +317,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-gateway
+            repository: docker.io/geoservercloud/geoserver-cloud-gateway
             sha: ''
     webui:
       enabled: true
@@ -337,7 +337,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-webui
+            repository: docker.io/geoservercloud/geoserver-cloud-webui
             sha: ''
     rest:
       enabled: true
@@ -357,7 +357,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-rest
+            repository: docker.io/geoservercloud/geoserver-cloud-rest
             sha: ''
     wfs:
       enabled: true
@@ -377,7 +377,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wfs
+            repository: docker.io/geoservercloud/geoserver-cloud-wfs
             sha: ''
     wms:
       enabled: true
@@ -408,7 +408,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wms
+            repository: docker.io/geoservercloud/geoserver-cloud-wms
             sha: ''
     wcs:
       enabled: true
@@ -428,7 +428,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wcs
+            repository: docker.io/geoservercloud/geoserver-cloud-wcs
             sha: ''
     wps:
       enabled: false
@@ -448,7 +448,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-wps
+            repository: docker.io/geoservercloud/geoserver-cloud-wps
             sha: ''
     gwc:
       enabled: true
@@ -468,7 +468,7 @@ geoserver:
             <<: *geoserver-spring-readinessProbe
           image:
             <<: *common-image-stuff
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-cloud-gwc
+            repository: docker.io/geoservercloud/geoserver-cloud-gwc
             sha: ''
     acl:
       enabled: false
@@ -497,5 +497,18 @@ geoserver:
               value: 'acl'
           image:
             tag: '2.4.0'
-            repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-acl
+            repository: docker.io/geoservercloud/geoserver-acl
             sha: ''
+# Nightly open data ingest job (templates/ingest-cronjob.yaml).
+# Needs the geoserver-ingest-secret secret (see geoserver-secrets.example.yaml).
+ingest:
+  enabled: true
+  schedule: '0 2 * * *'
+  image:
+    repository: geoserver-ingest  # build from auto-update-development/Dockerfile and push to your registry
+    tag: latest
+    pullPolicy: Always
+  prodSchema: data_layers
+  stagingSchema: staging
+  backupSchema: backup
+  backupRetention: 3  # timestamped backups kept per dataset
