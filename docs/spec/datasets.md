@@ -2,7 +2,7 @@
 
 A set of YAML files that says which open datasets you want, where they come from, how often they update, and how they are published and styled in GeoServer Cloud. A small command-line tool reads the files and makes PostGIS and GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
 
-> **Status:** first draft for review, 9 Nov 2026. Nothing implements it yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
+> **Status:** first draft for review, 9 Nov 2026. `gisdata validate` is built; the other commands aren't yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
 
 ## Principles
 
@@ -303,6 +303,20 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 | `gisdata sync [dataset]` | Checks sources for new versions and loads them (stage, validate, back up, swap in), then refreshes extents and clears cached tiles of the layers on them. The nightly job |
 | `gisdata status` | Per dataset: version loaded, when, rows, last error, next check. Per layer: published, drifted, tiles cached |
 | `gisdata import` | Reads a live GeoServer workspace and writes the files that describe it; the way in for an existing install |
+
+### `validate`, and checking files as you type
+
+`gisdata validate` is built (the other commands aren't yet). It checks every resource against the JSON Schema in [`gisdata/schema/v1alpha1.json`](../../gisdata/schema/v1alpha1.json), then the rules across files: every reference resolves, style files exist, no two layers or groups share a GeoServer name, no two datasets load the same table, and no layer group contains itself. Problems come out as `file:line`, with a non-zero exit code for CI:
+
+```
+$ gisdata validate examples/uk-basemap
+datasets/os-open-roads.yaml:22: error: Layer road-links: spec.titel: unknown field 'titel' (did you mean 'title'?)
+datasets/os-open-roads.yaml:34: error: Layer road-nodes: spec.style: no style named 'os-road-nodes' (a file in styles/, a Style resource, or one of GeoServer's built-in styles)
+
+2 error(s), 0 warning(s); 10 resources in 6 files
+```
+
+Editors that understand JSON Schema check the files as you type. In VS Code, with the YAML extension, the repo's `.vscode/settings.json` already points the example files at the schema; for your own project, add the same `yaml.schemas` entry.
 
 ### What `plan` compares
 

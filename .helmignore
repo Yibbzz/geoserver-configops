@@ -46,3 +46,6 @@ requirements-dev.txt
 auto-update-development/
 docs/
 examples/
+gisdata/
+pyproject.toml
+*.egg-info/
