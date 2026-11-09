@@ -43,7 +43,7 @@ def create_tables():
     """Empty tables matching each exported layer, so GeoServer can publish them."""
     conn = psycopg2.connect(
         host=os.environ.get("E2E_DB_HOST", "localhost"), port=int(os.environ.get("E2E_DB_PORT", 55433)),
-        dbname="postgres", user="postgres", password="postgres",
+        dbname="postgres", user="postgres", password=os.environ.get("E2E_DB_PASSWORD", "postgres"),
     )
     with conn, conn.cursor() as cur:
         cur.execute("CREATE EXTENSION IF NOT EXISTS postgis; CREATE SCHEMA IF NOT EXISTS data_layers")

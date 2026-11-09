@@ -1,0 +1,25 @@
+# Overrides for the kind deployment test (tests/kind/deploy-test.sh).
+# CI runners are small (2 CPU for private repos) and seven JVMs start at once,
+# so give every service longer before its liveness probe can restart it.
+x-slow-start: &slow-start
+  containers:
+    spring:
+      livenessProbe:
+        initialDelaySeconds: 300
+        failureThreshold: 20
+
+geoserver:
+  ingress:
+    enabled: false
+  services:
+    gateway: *slow-start
+    webui: *slow-start
+    rest: *slow-start
+    wfs: *slow-start
+    wms: *slow-start
+    wcs: *slow-start
+    gwc: *slow-start
+
+postgresql:
+  persistence:
+    size: 2Gi

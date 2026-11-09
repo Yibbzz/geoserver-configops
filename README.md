@@ -19,8 +19,8 @@ A Helm deployment of [GeoServer Cloud](https://github.com/geoserver/geoserver-cl
 
 | Path | What it is |
 | --- | --- |
-| `Chart.yaml`, `values.yaml`, `templates/` | Umbrella Helm chart: GeoServer Cloud services, PostGIS, RabbitMQ, the JNDI datasource and the ingest CronJob |
-| `charts/` | Vendored dependency charts (camptocamp `application`, Bitnami `postgresql` and `rabbitmq`) |
+| `Chart.yaml`, `values.yaml`, `templates/` | Umbrella Helm chart: GeoServer Cloud 3.0 services, PostGIS (`postgis/postgis` image) and RabbitMQ (official image) from this chart's own templates, the JNDI datasource and the ingest CronJob |
+| `charts/` | Vendored camptocamp `application` chart, which templates the GeoServer services |
 | `values-local-registry.yaml` | Override to pull images from a local k3d registry instead of Docker Hub |
 | `geoserver-secrets.example.yaml` | Template for the Kubernetes secrets the chart expects |
 | `export-geoserver-config.sh`, `import-geoserver-config.sh` | Catalog export and import over the GeoServer REST API |
@@ -139,16 +139,25 @@ CI (`.github/workflows/ci.yaml`) runs on every pull request and push to `main`:
 | Ingest pipeline | Unit tests with the OS API faked (`tests/test_os_api.py`, `tests/test_pipeline_unit.py`), and end-to-end runs against a real PostGIS (`tests/test_pipeline_integration.py`) |
 | Config scripts | `shellcheck`, and an import-then-export round trip against a fake GeoServer REST API (`tests/test_config_scripts.py`) |
 | Ingest image | Docker build and a smoke test |
+| Real GeoServer REST | `tests/e2e/up.sh` starts GeoServer Cloud's REST service, PostGIS and RabbitMQ in Docker with the chart's images and `jndi.yml`; `tests/test_e2e_rest.py` imports `geoserver-config/`, re-imports, exports and checks nothing drifts |
+| Full deployment | `tests/kind/deploy-test.sh` installs the whole chart on a kind cluster, waits for every pod, checks WMS, WFS, WCS and WMTS through the gateway, runs the same round trip against it, and renders a layer with WMS GetMap |
 
 Run them locally (needs `helm`, `jq`, `curl`, and `ogr2ogr` for the integration tests):
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/pytest                      # integration tests skip without a database
+.venv/bin/pytest                      # integration and e2e tests skip without their services
 
 docker run -d --rm --name test-postgis -p 55432:5432 \
-  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gis postgis/postgis:16-3.4
-TEST_DB_HOST=localhost TEST_DB_PORT=55432 .venv/bin/pytest
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gis postgis/postgis:18-3.7
+TEST_DB_HOST=localhost TEST_DB_PORT=55432 .venv/bin/pytest -m integration
+
+tests/e2e/up.sh                       # real REST service; about 1 GB of RAM
+E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 .venv/bin/pytest -m e2e
+tests/e2e/up.sh down
+
+kind create cluster --name gscloud    # full deployment; needs about 8 GB of RAM
+tests/kind/deploy-test.sh
 ```
 
 ## Upgrading the vendored charts

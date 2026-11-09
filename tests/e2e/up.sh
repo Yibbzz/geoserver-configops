@@ -7,11 +7,6 @@ set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=../..
 
-if [ "${1:-}" = "down" ]; then
-  docker compose down -v
-  exit 0
-fi
-
 # Read image versions from values.yaml and the jndi.yml from the rendered chart
 eval "$(python3 - "$ROOT" <<'PY'
 import subprocess, sys, yaml
@@ -26,6 +21,10 @@ rendered = subprocess.run(["helm", "template", "geoserver", root, "--show-only",
 open("jndi.yml", "w").write(yaml.safe_load(rendered)["data"]["jndi.yml"])
 PY
 )"
+if [ "${1:-}" = "down" ]; then
+  docker compose down -v
+  exit 0
+fi
 echo "GeoServer Cloud $GEOSERVER_TAG, $POSTGIS_IMAGE, $RABBITMQ_IMAGE"
 docker compose up -d --wait --wait-timeout 420 || { docker compose logs rest | tail -50; exit 1; }
 echo "REST API ready at http://localhost:${E2E_REST_PORT:-59090}/rest"
