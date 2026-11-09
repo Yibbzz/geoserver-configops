@@ -6,7 +6,7 @@ import yaml
 
 from conftest import ROOT, by_kind, containers, helm_template
 
-GEOSERVER_TAG = "2.28.2.3"
+GEOSERVER_TAG = "3.0.2.1"
 ENABLED_SERVICES = {"gateway", "webui", "rest", "wfs", "wms", "wcs", "gwc"}
 DISABLED_SERVICES = {"wps", "acl"}
 
@@ -99,3 +99,11 @@ def test_every_referenced_secret_key_is_in_the_example():
                 if ref["key"] not in example.get(ref["name"], set()):
                     missing.add(f'{ref["name"]}/{ref["key"]} (used by {manifest["metadata"]["name"]})')
     assert not missing, missing
+
+
+def test_pgconfig_jndi_datasource_sets_its_schema():
+    """GeoServer Cloud 3 reads the catalog through this datasource; without a
+    schema it looks for its tables in the wrong place and fails to start."""
+    jndi = yaml.safe_load(by_kind(helm_template(), "ConfigMap")["geoserver-jndi-config"]["data"]["jndi.yml"])
+    pgconfig = jndi["jndi"]["datasources"]["pgconfig"]
+    assert pgconfig["schema"] == "${PGCONFIG_SCHEMA}"

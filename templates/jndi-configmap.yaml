@@ -17,6 +17,7 @@ data:
           idle-timeout: 60000
         pgconfig:
           enabled: true
+          schema: ${PGCONFIG_SCHEMA}
           wait-for-it: true
           wait-timeout: 60
           url: jdbc:postgresql://${PGCONFIG_HOST}:${PGCONFIG_PORT}/${PGCONFIG_DATABASE}

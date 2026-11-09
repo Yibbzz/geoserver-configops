@@ -6,15 +6,6 @@ version: 0.1.0
 dependencies:
   - name: application
     alias: geoserver
-    version: 2.19.0
+    version: 2.23.0
     repository: file://charts/application
 
-  - name: rabbitmq
-    version: 14.4.0
-    repository: file://charts/rabbitmq
-    condition: rabbitmq.enabled
-
-  - name: postgresql
-    version: 15.5.2
-    repository: file://charts/postgresql
-    condition: postgresql.enabled

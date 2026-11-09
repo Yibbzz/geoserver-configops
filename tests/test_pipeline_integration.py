@@ -3,7 +3,7 @@
 Needs ogr2ogr and a PostGIS database, set with TEST_DB_HOST, TEST_DB_PORT,
 TEST_DB_NAME, TEST_DB_USER, TEST_DB_PASSWORD. Skipped otherwise. Example:
 
-    docker run -d --rm -p 55432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gis postgis/postgis:16-3.4
+    docker run -d --rm -p 55432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gis postgis/postgis:18-3.7
     TEST_DB_HOST=localhost TEST_DB_PORT=55432 pytest -m integration
 """
 

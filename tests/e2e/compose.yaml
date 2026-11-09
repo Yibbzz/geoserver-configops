@@ -1,0 +1,42 @@
+# The real GeoServer Cloud REST service, wired the way the Helm chart wires it:
+# same images and tags, same pgconfig settings and the chart's rendered jndi.yml.
+# Started by tests/e2e/up.sh; used by tests/test_e2e_rest.py.
+name: gscloud-e2e
+x-pgconfig: &pgconfig
+  PGCONFIG_HOST: db
+  PGCONFIG_PORT: "5432"
+  PGCONFIG_DATABASE: postgres
+  PGCONFIG_SCHEMA: pgconfig
+  PGCONFIG_USERNAME: postgres
+  PGCONFIG_PASSWORD: postgres
+  PGCONFIG_INITIALIZE: "true"
+services:
+  db:
+    image: ${POSTGIS_IMAGE}
+    environment: {POSTGRES_DB: postgres, POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres}
+    ports: ["${E2E_DB_PORT:-55433}:5432"]
+    healthcheck: {test: ["CMD", "pg_isready", "-U", "postgres"], interval: 3s, retries: 40}
+  rabbitmq:
+    image: ${RABBITMQ_IMAGE}
+    environment: {RABBITMQ_DEFAULT_USER: user, RABBITMQ_DEFAULT_PASS: guest}
+    healthcheck: {test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"], interval: 5s, retries: 40}
+  rest:
+    image: geoservercloud/geoserver-cloud-rest:${GEOSERVER_TAG}
+    depends_on: {db: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+    environment:
+      <<: *pgconfig
+      SPRING_PROFILES_ACTIVE: standalone,pgconfig
+      SPRING_CONFIG_ADDITIONAL_LOCATION: file:/etc/geoserver/jndi.yml
+      GEOSERVER_BASE_PATH: /geoserver-cloud
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: "5672"
+      SPRING_RABBITMQ_USERNAME: user
+      SPRING_RABBITMQ_PASSWORD: guest
+      JAVA_OPTS: -DALLOW_ENV_PARAMETRIZATION=true -XX:MaxRAMPercentage=50
+    volumes: ["./jndi.yml:/etc/geoserver/jndi.yml:ro"]
+    ports: ["${E2E_REST_PORT:-59090}:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8081/actuator/health/readiness"]
+      interval: 5s
+      retries: 60
+      start_period: 30s

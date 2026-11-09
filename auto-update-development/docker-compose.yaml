@@ -15,7 +15,7 @@ services:
       - db
 
   db:
-    image: postgis/postgis:16-3.4
+    image: postgis/postgis:18-3.7
     container_name: updater-db
     environment:
       POSTGRES_DB: gis
@@ -24,7 +24,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql  # Postgres 18+ keeps data under <major>/docker here
 
 volumes:
   pgdata:

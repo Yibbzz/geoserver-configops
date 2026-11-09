@@ -21,3 +21,4 @@ datadir/
 
 # Test caches
 .pytest_cache/
+tests/e2e/jndi.yml
