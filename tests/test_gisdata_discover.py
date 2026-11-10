@@ -115,8 +115,8 @@ spec: { type: ckan, url: https://ckan.example.org }
 ---
 apiVersion: gisdata/v1alpha1
 kind: Source
-metadata: { name: wfs-src }
-spec: { type: wfs, url: https://wfs.example.org }
+metadata: { name: esri }
+spec: { type: arcgis-rest, url: https://maps.example.org }
 """
 
 
@@ -245,8 +245,8 @@ def test_unknown_source_and_a_type_that_cannot_list(proj):
     with pytest.raises(discover.DiscoverError, match="no Source named 'osm'") as e:
         discover.resolve("osm", proj)
     assert e.value.code == 2
-    with pytest.raises(discover.DiscoverError, match="type 'wfs', which can't be discovered"):
-        discover.resolve("wfs-src", proj)
+    with pytest.raises(discover.DiscoverError, match="type 'arcgis-rest', which can't be discovered"):
+        discover.resolve("esri", proj)
 
 
 # --- the command
@@ -257,7 +257,7 @@ def test_listing_products(fake_os, proj, capsys):
     out = capsys.readouterr().out
     assert "OpenRoads  2026-10  GeoPackage  OS Open Roads" in out
     assert "MiniScale  2026-01  -" in out
-    assert "2 products from os; 1 have no file gisdata can load" in out
+    assert "2 products from os; 1 have nothing gisdata can load" in out
 
 
 def test_one_product_shows_downloads_and_layers(fake_os, proj, capsys):

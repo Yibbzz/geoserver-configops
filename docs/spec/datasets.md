@@ -121,15 +121,16 @@ spec:
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `type` | yes | One of the types below |
-| `url` | for `ckan`, `ogc-api-features`, `wfs` | The source's address. For CKAN, the portal (`https://data.gov.uk`); an address already inside `/api/` (such as `https://portal.example/api/3/action`) is used as given |
-| `credentials.secret` | no | Secret with `apiKey`. For CKAN it is an API token, sent only to the portal, never to the servers its files are on |
+| `url` | for `ckan`, `ogc-api-features`, `wfs` | The source's address. For CKAN, the portal (`https://data.gov.uk`); an address already inside `/api/` (such as `https://portal.example/api/3/action`) is used as given. For WFS, the service (`https://host/wfs`); request parameters copied with it (`?service=WFS&request=GetCapabilities`) are dropped, others (`?map=`) kept. For OGC API Features, the API's landing page; a collection's address is cut back to it |
+| `credentials.secret` | no | Secret with `apiKey`. For CKAN it is an API token, sent only to the portal, never to the servers its files are on. Not yet used by `wfs` or `ogc-api-features`, which work with public services only so far |
 
 | `type` | Lists products (`discover`) | Needs a key | Status |
 | --- | --- | --- | --- |
 | `os-downloads` | yes | no for OpenData products | `discover` built; loading exists in the pipeline |
 | `url` | no: you give the URL | no | `discover` built (reads the file's layers) |
 | `ckan` (data.gov.uk and many city, regional and national portals) | yes, by search | no for public data | `discover` built |
-| `ogc-api-features`, `wfs` | yes (collections, feature types) | usually no | later |
+| `wfs` (versions 1.0 to 2.0) | yes: feature types | usually no | `discover` built |
+| `ogc-api-features` | yes: feature collections | usually no | `discover` built |
 
 Each type is a plug-in with two parts: list what's available, and fetch one product with its version. Adding a provider means adding one plug-in.
 
@@ -342,6 +343,21 @@ Editors that understand JSON Schema check the files as you type. In VS Code, wit
 | `os-downloads` | Every OS product (`--search` narrows) | The product's formats; layers of the one `sync` uses |
 | `ckan` | Packages matching `--search`, 20 at a time (`--limit`); without a search, the latest changed | The package's resources, marked loadable or not (web pages and services aren't); layers of the best file, or of `--resource <id or name>` |
 | `url` | (nothing to list) | The product is the file's address: `gisdata discover url https://example.org/roads.zip` |
+| `wfs` | The service's feature types (`--search` narrows) | The feature type (with or without its namespace prefix): geometry, CRS and count, read by GDAL's WFS driver, which also loads it, so the layer name shown is the loader's |
+| `ogc-api-features` | The API's feature collections (coverages and records are left out) | The collection: the count from `numberMatched`, the geometry from the first feature, the CRS the data is stored in |
+
+On a CKAN package, a resource that is a WFS or OGC API service (recognised by its format, address or title, since portals often leave the format blank) shows the command that discovers it, and search results mark packages with only a service as `via WFS`. Many data.gov.uk datasets are published this way, the Environment Agency's among them:
+
+```
+$ gisdata discover ogc-api-features --url https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1 Flood_Zones_2_3_Rivers_and_Sea
+Flood Zones 2 3 Rivers And Sea (Flood_Zones_2_3_Rivers_and_Sea)
+  OGC API Features: https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1/collections/Flood_Zones_2_3_Rivers_and_Sea/items
+
+LAYER                           GEOMETRY      CRS         FEATURES
+Flood_Zones_2_3_Rivers_and_Sea  MultiPolygon  EPSG:27700  415,408
+```
+
+Services are asked directly, so nothing is cached. Requests to any source are tried again, twice, when a server drops the connection or is briefly unavailable.
 
 ```
 $ gisdata discover data-gov-uk conservation-areas125

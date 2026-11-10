@@ -131,15 +131,19 @@ def data_files(entries: list[str]) -> list[str]:
     return sorted(files)
 
 
-def ogrinfo(path: str) -> list[dict]:
-    """Layer summaries GDAL gives for a dataset path (any GDAL virtual path)."""
+def ogrinfo(path: str, layer: str | None = None) -> list[dict]:
+    """
+    Layer summaries GDAL gives for a dataset (a path, any GDAL virtual path,
+    or a connection string such as WFS:<url>): every layer, or just `layer`.
+    """
     if shutil.which("ogrinfo") is None:
         raise RemoteError("reading layers needs GDAL's ogrinfo (3.7 or later) on the PATH")
-    args = ["ogrinfo", "-ro", "-so", "-al", "-json", "-noextent"]
+    args = ["ogrinfo", "-ro", "-so", "-json", "-noextent"]
     if path.lower().endswith(NO_COUNT_EXTENSIONS):
         args.append("-nocount")
     env = {**GDAL_ENV, **os.environ}
-    result = subprocess.run(args + [path], capture_output=True, text=True, env=env)
+    target = [path, layer] if layer else ["-al", path]
+    result = subprocess.run(args + target, capture_output=True, text=True, env=env)
     if result.returncode != 0:
         detail = result.stderr.strip().splitlines()
         raise RemoteError(f"GDAL couldn't read {path.rsplit('/', 1)[-1]}: {detail[-1] if detail else 'no details'}")

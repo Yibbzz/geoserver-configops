@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,7 @@ from pathlib import Path
 from . import remote, secrets
 from .loader import load
 from .sources import Download, NotFound, Product, SourceError, source_types
+from .sources.formats import SERVICE_TYPES, service_address
 
 # Key in a source's credentials secret that holds the API key
 API_KEY = "apiKey"
@@ -55,16 +57,24 @@ def resolve(name: str, root: Path, url: str | None = None) -> ResolvedSource:
                     f"(${secrets.env_name(secret, API_KEY)} or secrets.yaml); trying without a key",
                     file=sys.stderr,
                 )
-        command = f"gisdata discover {name}" + (f" --url {url}" if url else "")
-        return ResolvedSource(name, stype, client(types[stype], api_key, url or source.spec.get("url")), command)
+        c = client(types[stype], api_key, url or source.spec.get("url"))
+        return ResolvedSource(name, stype, c, command(name, c, url))
     if name in types:
-        command = f"gisdata discover {name}" + (f" --url {url}" if url else "")
-        return ResolvedSource(name, name, client(types[name], None, url), command)
+        c = client(types[name], None, url)
+        return ResolvedSource(name, name, c, command(name, c, url))
     raise DiscoverError(
         f"no Source named '{name}' in {root}, and '{name}' isn't a source type. "
         f"Name a Source from the project, or a type: {', '.join(types)}",
         code=2,
     )
+
+
+def command(name: str, c, url: str | None) -> str:
+    """How to run discover on this source again: with its tidied address when one was given."""
+    if not url:
+        return f"gisdata discover {name}"
+    address = getattr(c, "url", None) or getattr(c, "portal", None) or url
+    return f"gisdata discover {name} --url {shlex.quote(address)}"
 
 
 def client(source_type: type, api_key: str | None, url: str | None):
@@ -116,12 +126,15 @@ def product_layers(src: ResolvedSource, product: Product, use_cache: bool = True
         if hit is not None:
             return hit
     d = product.chosen
-    print(
-        f"Reading layers from {d.file_name or d.url} ({size(d.size)}) without downloading it; "
-        "a large file can take a minute or two...",
-        file=sys.stderr,
-    )
-    layers = remote.url_layers(src.client.download_url(d), file_name=d.file_name)
+    if hasattr(src.client, "layers"):  # a service: asked directly, no file
+        layers = src.client.layers(product)
+    else:
+        print(
+            f"Reading layers from {d.file_name or d.url} ({size(d.size)}) without downloading it; "
+            "a large file can take a minute or two...",
+            file=sys.stderr,
+        )
+        layers = remote.url_layers(src.client.download_url(d), file_name=d.file_name)
     save_layers(path, layers)
     return layers
 
@@ -161,14 +174,21 @@ def print_products(src: ResolvedSource, products: list[Product], total: int | No
     if not products:
         print(f"No products from {src.label}" + (f" match '{search}'" if search else ""))
         return
+    def via_service(p: Product) -> str | None:
+        return next((f for f in p.formats if f in SERVICE_TYPES), None)
+
     rows = [["PRODUCT", "VERSION", "LOADS AS", "NAME"]]
     for p in products:
-        rows.append([p.id, version(p.version), p.loads_as or "-", short(p.name)])
+        loads = p.loads_as or (f"via {via_service(p)}" if via_service(p) else "-")
+        rows.append([p.id, version(p.version), loads, short(p.name)])
     print(table(rows))
-    skipped = sum(1 for p in products if not p.loads_as)
+    services = sum(1 for p in products if not p.loads_as and via_service(p))
+    skipped = sum(1 for p in products if not p.loads_as) - services
     shown = f"{len(products)} of {total:,}" if total and total > len(products) else f"{len(products)}"
-    print(f"\n{shown} products from {src.label}" + (f" matching '{search}'" if search else ""), end="")
-    print(f"; {skipped} have no file gisdata can load" if skipped else "")
+    print(f"\n{shown} product{'s' if len(products) != 1 or total != 1 else ''} from {src.label}" + (f" matching '{search}'" if search else ""), end="")
+    print(f"; {skipped} have nothing gisdata can load" if skipped else "")
+    if services:
+        print(f"{services} offer only a WFS or OGC API service: the product's details show how to discover it")
     if total and total > len(products):
         print("More with --limit, or narrow with --search")
     print(f"Layers inside one: {src.command} <product>")
@@ -181,16 +201,27 @@ def download_line(d: Download, used: bool) -> str:
     line = f"  {'*' if used else ' '} {label}: {short(what, 60)}"
     if d.loadable:
         line += f", {size(d.size)}"
+    elif d.format in SERVICE_TYPES:
+        line += " (a service, not a file)"
     else:
         line += " (not a file gisdata loads)"
-    return line + (f"  [{d.id}]" if d.id else "")
+    line += f"  [{d.id}]" if d.id else ""
+    if not d.loadable and d.format in SERVICE_TYPES:
+        line += f"\n        discover it: gisdata discover {SERVICE_TYPES[d.format]} --url {shlex.quote(service_address(d.format, d.url))}"
+    return line
 
 
 def print_product(src: ResolvedSource, p: Product, layers: list[remote.Layer] | None) -> None:
     if src.type == "url":
         print(f"{p.name}\n  {p.id}")
     else:
-        print(f"{p.name} ({p.id}), version {version(p.version) if p.version else 'unknown'}")
+        print(f"{p.name} ({p.id})" + (f", version {version(p.version)}" if p.version else ""))
+    if p.chosen is not None and p.chosen.service:
+        print(f"  {f'{p.chosen.format} {p.chosen.subformat}'.strip()}: {p.chosen.url}")
+        if p.description:
+            print(f"  {short(p.description, 100)}")
+        print_layers(layers, footer=f"In a Dataset: `product: {p.id}`; the table defaults to <dataset>_<layer>, so `tables` can name it.")
+        return
     groups: dict[str, list[Download]] = {}
     for d in p.downloads:
         groups.setdefault(f"{d.format} {d.subformat}".strip(), []).append(d)
@@ -214,6 +245,10 @@ def print_product(src: ResolvedSource, p: Product, layers: list[remote.Layer] | 
     print("  (* the download sync uses)")
     if sum(1 for d in p.downloads if d.loadable) > 1 and p.chosen.id:
         print(f"Another one: --resource <id or name>; in a Dataset, `resource: {p.chosen.id}`")
+    print_layers(layers)
+
+
+def print_layers(layers: list[remote.Layer] | None, footer: str = "") -> None:
     if layers is None:
         return
     print()
@@ -229,7 +264,7 @@ def print_product(src: ResolvedSource, p: Product, layers: list[remote.Layer] | 
     files = sorted({layer.file for layer in layers if layer.file})
     if len(files) > 1:
         print(f"\nfrom {len(files)} files: {', '.join(files)}")
-    print("\nA Dataset loads every layer unless `tables` names some; each becomes table <dataset>_<layer>.")
+    print("\n" + (footer or "A Dataset loads every layer unless `tables` names some; each becomes table <dataset>_<layer>."))
 
 
 def run(
