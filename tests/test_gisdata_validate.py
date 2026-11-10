@@ -210,3 +210,19 @@ def test_source_url_and_resource_only_where_they_mean_something(tmp_path):
         "  product: OpenRoads", "  product: OpenRoads\n  resource: x"))
     one(root, "spec.url: not used by a os-downloads source")
     one(root, "spec.resource: only used with a ckan source")
+
+
+def test_a_project_mounted_from_a_configmap(tmp_path):
+    """Kubernetes mounts a ConfigMap as symlinks into a hidden ..data folder; folders are links too."""
+    data = tmp_path / "..2026_11_10_17_00_00.123"
+    (data / "datasets").mkdir(parents=True)
+    (data / "styles").mkdir()
+    (data / "project.yaml").write_text(textwrap.dedent(PROJECT))
+    (data / "datasets" / "roads.yaml").write_text(textwrap.dedent(DATA.replace("style: line", "style: roads")))
+    (data / "styles" / "roads.sld").write_text("<sld/>")
+    (tmp_path / "..data").symlink_to(data.name)
+    for name in ("project.yaml", "datasets", "styles"):
+        (tmp_path / name).symlink_to(f"..data/{name}")
+    project = load(tmp_path)
+    assert sorted(p.relative_to(tmp_path).as_posix() for p in project.files) == ["datasets/roads.yaml", "project.yaml"]
+    assert problems(tmp_path) == []
