@@ -129,6 +129,10 @@ git diff geoserver-config/
 
 Datastores use the JNDI datasource `java:comp/env/jdbc/mypostgis` (`templates/jndi-configmap.yaml`), so no database passwords are stored in the exported files.
 
+## Where this is heading
+
+The goal is a version-controlled way to choose open datasets, keep them up to date and publish them, described in YAML and applied with an OpenTofu-style `plan`/`apply`. The draft format is in [docs/spec/datasets.md](docs/spec/datasets.md), with a worked example in [examples/uk-basemap/](examples/uk-basemap/).
+
 ## Testing
 
 CI (`.github/workflows/ci.yaml`) runs on every pull request and push to `main`:
