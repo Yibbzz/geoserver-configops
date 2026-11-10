@@ -127,11 +127,18 @@ class GeoServer:
         return [i["name"] for i in (items if isinstance(items, list) else [items])]
 
     def wait(self, seconds: float, every: float = 5) -> None:
-        """Wait up to `seconds` for GeoServer's REST API to answer (it starts after a fresh install)."""
+        """
+        Wait up to `seconds` for GeoServer's REST API, and GeoWebCache's, to
+        answer. After a fresh install they start one by one: in GeoServer
+        Cloud the tile cache is a service of its own.
+        """
         deadline = time.monotonic() + seconds
         while True:
             try:
                 self.request("GET", "about/version.json")
+                r = self.gwc_request("GET", "layers")
+                if r.status_code != 200:
+                    raise GeoServerError("GET", "gwc/layers", r.status_code, r.text)
                 return
             except GeoServerError as e:
                 if e.status in (401, 403) or time.monotonic() + every > deadline:

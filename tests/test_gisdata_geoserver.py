@@ -127,7 +127,7 @@ def test_wait_retries_until_geoserver_answers(monkeypatch):
     import gisdata.geoserver as module
     monkeypatch.setattr(module.time, "sleep", lambda s: None)
     gs, fake = client(fail={("GET", "about/version.json"): (503, None, "starting")})
-    answers = iter([503, 503, 200])
+    answers = iter([503, 503, 200, 200])  # REST starting, starting, up; then GeoWebCache up
 
     def request(method, url, **kw):
         fake.calls.append((method, url))
@@ -136,7 +136,7 @@ def test_wait_retries_until_geoserver_answers(monkeypatch):
 
     fake.request = request
     gs.wait(60, every=1)
-    assert len(fake.calls) == 3
+    assert len(fake.calls) == 4  # REST twice refused, then REST and GeoWebCache answer
 
 
 def test_wait_gives_up_and_never_retries_a_wrong_password(monkeypatch):
@@ -149,3 +149,23 @@ def test_wait_gives_up_and_never_retries_a_wrong_password(monkeypatch):
     gs, _ = client(fail={("GET", "about/version.json"): (503, None, "starting")})
     with pytest.raises(GeoServerError):
         gs.wait(0)
+
+
+def test_wait_also_waits_for_the_tile_cache_service(monkeypatch):
+    """GeoServer Cloud's GeoWebCache is its own service; the gateway answers 502 until it is up."""
+    import gisdata.geoserver as module
+    monkeypatch.setattr(module.time, "sleep", lambda s: None)
+    gs, fake = client()
+    gwc = iter([502, 502, 200])
+    calls = []
+
+    def request(method, url, **kw):
+        calls.append(url)
+        if "/gwc/rest/" in url:
+            status = next(gwc)
+            return Response(status, [] if status == 200 else None, "" if status == 200 else "Bad Gateway")
+        return Response(200, {"about": {}})
+
+    fake.request = request
+    gs.wait(60, every=1)
+    assert sum("/gwc/rest/" in u for u in calls) == 3
