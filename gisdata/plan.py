@@ -13,6 +13,7 @@ don't mention there is shown as unmanaged, and removed only with --prune.
 from __future__ import annotations
 
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
@@ -391,8 +392,12 @@ class PlanError(Exception):
         self.code = code
 
 
-def connect(root: Path, geoserver_url: str | None):
-    """(files, GeoServer, database connection, Database) for a valid project."""
+def connect(root: Path, geoserver_url: str | None, wait: float = 0):
+    """
+    (files, GeoServer, database connection, Database) for a valid project.
+    With `wait`, the database and GeoServer get that many seconds to come up
+    (a Job started alongside a fresh install starts before either).
+    """
     files = load(root)
     errors = [p for p in validate(files) if p.severity == "error"]
     if errors:
@@ -405,22 +410,29 @@ def connect(root: Path, geoserver_url: str | None):
     except MissingCredentials as e:
         raise PlanError(str(e)) from None
     db = sync.database(project, root)
-    try:
-        conn = db.connect()
-    except psycopg2.OperationalError as e:
-        raise PlanError(f"can't connect to the database at {db.host}:{db.port}: {str(e).strip().splitlines()[0]}", code=1) from None
+    deadline = time.monotonic() + wait
+    if wait:
+        print(f"Waiting up to {wait:.0f}s for the database at {db.host}:{db.port} and GeoServer at {gs.url}...", flush=True)
+    while True:
+        try:
+            conn = db.connect()
+            break
+        except psycopg2.OperationalError as e:
+            reason = str(e).strip().splitlines()[0]
+            if "password authentication failed" in reason or time.monotonic() + 5 > deadline:
+                raise PlanError(f"can't connect to the database at {db.host}:{db.port}: {reason}", code=1) from None
+            time.sleep(5)
+    if wait:
+        try:
+            gs.wait(max(deadline - time.monotonic(), 0))
+        except GeoServerError as e:
+            conn.close()
+            raise PlanError(str(e), code=1) from None
     return files, gs, conn, db
 
 
 def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str | None = None, wait: float = 0) -> int:
-    files, gs, conn, db = connect(root, geoserver_url)
-    if wait:
-        print(f"Waiting up to {wait:.0f}s for GeoServer at {gs.url}...", flush=True)
-        try:
-            gs.wait(wait)
-        except GeoServerError as e:
-            conn.close()
-            raise PlanError(str(e), code=1) from None
+    files, gs, conn, db = connect(root, geoserver_url, wait)
     try:
         try:
             changes = ordered(Planner(files, root, gs, conn, db, prune).plan())
