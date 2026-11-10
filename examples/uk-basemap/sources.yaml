@@ -13,11 +13,3 @@ metadata:
 spec:
   type: ckan
   url: https://data.gov.uk          # any CKAN portal; public data needs no key
----
-apiVersion: gisdata/v1alpha1
-kind: Source
-metadata:
-  name: ea-flood-map
-spec:
-  type: ogc-api-features            # the Environment Agency's flood map, as an OGC API
-  url: https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1
