@@ -412,8 +412,15 @@ def connect(root: Path, geoserver_url: str | None):
     return files, gs, conn, db
 
 
-def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str | None = None) -> int:
+def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str | None = None, wait: float = 0) -> int:
     files, gs, conn, db = connect(root, geoserver_url)
+    if wait:
+        print(f"Waiting up to {wait:.0f}s for GeoServer at {gs.url}...", flush=True)
+        try:
+            gs.wait(wait)
+        except GeoServerError as e:
+            conn.close()
+            raise PlanError(str(e), code=1) from None
     try:
         try:
             changes = ordered(Planner(files, root, gs, conn, db, prune).plan())

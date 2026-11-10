@@ -8,6 +8,7 @@ Each catalog object is one REST path; `upsert` creates or updates it.
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape
@@ -124,6 +125,18 @@ class GeoServer:
         outer = data.get(path.rsplit("/", 1)[-1]) or data.get(f"{key}s") or {}
         items = outer.get(key, []) if isinstance(outer, dict) else []
         return [i["name"] for i in (items if isinstance(items, list) else [items])]
+
+    def wait(self, seconds: float, every: float = 5) -> None:
+        """Wait up to `seconds` for GeoServer's REST API to answer (it starts after a fresh install)."""
+        deadline = time.monotonic() + seconds
+        while True:
+            try:
+                self.request("GET", "about/version.json")
+                return
+            except GeoServerError as e:
+                if e.status in (401, 403) or time.monotonic() + every > deadline:
+                    raise
+            time.sleep(every)
 
     # --- workspaces
 

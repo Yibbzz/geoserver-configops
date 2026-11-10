@@ -125,7 +125,8 @@ def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, datas
             found = [(connection, layer, None)]
         else:
             work = Path(tmp)
-            path = work / ("download" + (Path(chosen.file_name).suffix if chosen.file_name else ""))
+            # the download's own name: GDAL names a single file's layer after it (roads.geojson -> roads)
+            path = work / (Path(chosen.file_name).name if chosen.file_name else "download")
             sha = ingest.download(src.client.download_url(chosen), path, chosen.md5)
             if not force and up_to_date(conn, db, dataset, last, None, sha):
                 version = product.version or f"sha256:{sha[:16]}"

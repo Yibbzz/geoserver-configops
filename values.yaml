@@ -499,12 +499,11 @@ geoserver:
             tag: '3.0.4'
             repository: docker.io/geoservercloud/geoserver-acl
             sha: ''
-# Nightly `gisdata sync` (templates/gisdata-sync.yaml): loads new versions of the
-# project's datasets into PostGIS. The project's files go into the gisdata-project
-# ConfigMap; schemas, backups and schedules come from them, not from here.
-sync:
-  enabled: true
-  schedule: '0 2 * * *'   # when the job runs; each Dataset's `update` decides if it is due
+# gisdata (templates/gisdata.yaml): the project's files become the gisdata-project
+# ConfigMap; a Job runs `gisdata apply` after every install and upgrade, and a
+# CronJob runs `gisdata sync` nightly. Schemas, backups, layers and each dataset's
+# schedule come from the project files, not from here.
+gisdata:
   # The project directory, relative to this chart (files outside a chart can't be read by Helm).
   # Its *.yaml, *.yml, *.sld, *.mbstyle and *.css files become the ConfigMap; secrets.yaml never does.
   project: examples/uk-basemap
@@ -512,7 +511,7 @@ sync:
   # so an optional API key can be left out). See geoserver-secrets.example.yaml.
   secrets:
     - geoserver-pgconfig-secret
-    - geoserver-admin   # to refresh layer bounds and cached tiles after a load
+    - geoserver-admin   # for apply, and to refresh layer bounds and cached tiles after a load
     - os-api
   image:
     repository: gisdata  # build from ./Dockerfile and push to your registry
@@ -521,3 +520,13 @@ sync:
   resources:
     requests: { cpu: 250m, memory: 512Mi }
     limits: { memory: 2Gi }
+  # `gisdata apply` after every install and upgrade, as a Job Helm doesn't wait for
+  # (a first apply loads data, which can take a while). `kubectl logs job/gisdata-apply-<revision>`.
+  apply:
+    enabled: true
+    prune: false          # true: also delete what the project's workspace holds that the files don't mention
+    waitSeconds: 900      # how long to wait for GeoServer to come up first
+  # `gisdata sync` nightly; each Dataset's `update` decides whether it is checked that night.
+  sync:
+    enabled: true
+    schedule: '0 2 * * *'
