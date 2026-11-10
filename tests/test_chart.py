@@ -50,9 +50,9 @@ def test_local_registry_override_repoints_every_image():
 
 def test_sync_cronjob_uses_values():
     manifests = helm_template(
-        "--set", "sync.schedule=30 4 * * 0",
-        "--set", "sync.image.repository=example.com/gisdata",
-        "--set", "sync.image.tag=1.2.3",
+        "--set", "gisdata.sync.schedule=30 4 * * 0",
+        "--set", "gisdata.image.repository=example.com/gisdata",
+        "--set", "gisdata.image.tag=1.2.3",
     )
     cronjob = by_kind(manifests, "CronJob")["gisdata-sync"]
     assert cronjob["spec"]["schedule"] == "30 4 * * 0"
@@ -80,7 +80,7 @@ def test_project_files_are_in_a_configmap_at_their_paths():
 
 
 def test_secrets_are_mounted_as_files_and_may_be_missing():
-    manifests = helm_template("--set", "sync.secrets={geoserver-pgconfig-secret,os-api}")
+    manifests = helm_template("--set", "gisdata.secrets={geoserver-pgconfig-secret,os-api}")
     cronjob = by_kind(manifests, "CronJob")["gisdata-sync"]
     pod = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]
     secrets = {v["secret"]["secretName"]: v["secret"] for v in pod["volumes"] if "secret" in v}
@@ -107,16 +107,41 @@ def test_secrets_yaml_never_reaches_the_configmap(tmp_path):
 def test_a_project_directory_without_files_fails_clearly():
     if shutil.which("helm") is None:
         pytest.skip("helm is not installed")
-    result = subprocess.run(["helm", "template", "geoserver", str(ROOT), "--set", "sync.project=nowhere"],
+    result = subprocess.run(["helm", "template", "geoserver", str(ROOT), "--set", "gisdata.project=nowhere"],
                             capture_output=True, text=True)
     assert result.returncode != 0
-    assert "sync.project: no project files found in nowhere" in result.stderr
+    assert "gisdata.project: no project files found in nowhere" in result.stderr
 
 
-def test_sync_can_be_disabled():
-    manifests = helm_template("--set", "sync.enabled=false")
-    assert not by_kind(manifests, "CronJob")
-    assert "gisdata-project" not in by_kind(manifests, "ConfigMap")
+def test_apply_job_runs_each_release_and_waits_for_geoserver():
+    manifests = helm_template("--set", "gisdata.apply.waitSeconds=60")
+    [job] = by_kind(manifests, "Job").values()
+    assert job["metadata"]["name"] == "gisdata-apply-1"  # the release revision: a new Job each upgrade
+    assert containers(job)[0]["args"] == ["apply", "-C", "/project", "--wait", "60"]
+    pod = job["spec"]["template"]["spec"]
+    assert pod["restartPolicy"] == "Never" and pod["securityContext"]["runAsNonRoot"] is True
+    assert "helm.sh/hook" not in job["metadata"].get("annotations", {})  # Helm doesn't block on it
+    pruning = by_kind(helm_template("--set", "gisdata.apply.prune=true"), "Job")
+    assert containers(next(iter(pruning.values())))[0]["args"][-1] == "--prune"
+
+
+def test_apply_and_sync_share_one_pod():
+    manifests = helm_template()
+    [job] = by_kind(manifests, "Job").values()
+    cron = by_kind(manifests, "CronJob")["gisdata-sync"]
+    apply_pod = job["spec"]["template"]["spec"]
+    sync_pod = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    for pod in (apply_pod, sync_pod):
+        pod["containers"][0].pop("args")
+    assert apply_pod == sync_pod
+
+
+def test_apply_and_sync_can_be_disabled():
+    only_apply = helm_template("--set", "gisdata.sync.enabled=false")
+    assert not by_kind(only_apply, "CronJob") and by_kind(only_apply, "Job")
+    neither = helm_template("--set", "gisdata.sync.enabled=false", "--set", "gisdata.apply.enabled=false")
+    assert not by_kind(neither, "CronJob") and not by_kind(neither, "Job")
+    assert "gisdata-project" not in by_kind(neither, "ConfigMap")
 
 
 def test_jndi_config_is_rendered_and_mounted():
@@ -140,14 +165,13 @@ def test_every_referenced_secret_key_is_in_the_example():
     created_by_chart = set(by_kind(manifests, "Secret"))
     missing = set()
     for manifest in manifests:
-        if manifest["kind"] not in ("Deployment", "StatefulSet", "CronJob"):
+        if manifest["kind"] not in ("Deployment", "StatefulSet", "CronJob", "Job"):
             continue
-        if manifest["kind"] == "CronJob":
-            pod = manifest["spec"]["jobTemplate"]["spec"]["template"]["spec"]
-            for volume in pod.get("volumes", []):
-                name = volume.get("secret", {}).get("secretName")
-                if name and name not in created_by_chart and name not in example:
-                    missing.add(f'{name} (mounted by {manifest["metadata"]["name"]})')
+        spec = manifest["spec"]["jobTemplate"]["spec"] if manifest["kind"] == "CronJob" else manifest["spec"]
+        for volume in spec["template"]["spec"].get("volumes", []):
+            name = volume.get("secret", {}).get("secretName")
+            if name and name not in created_by_chart and name not in example:
+                missing.add(f'{name} (mounted by {manifest["metadata"]["name"]})')
         for container in containers(manifest):
             for env in container.get("env", []):
                 ref = env.get("valueFrom", {}).get("secretKeyRef")

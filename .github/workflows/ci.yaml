@@ -21,7 +21,7 @@ jobs:
       - name: Validate manifests against Kubernetes schemas
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
-          for extra in "" "-f values-local-registry.yaml" "--set sync.enabled=false"; do
+          for extra in "" "-f values-local-registry.yaml" "--set gisdata.sync.enabled=false --set gisdata.apply.enabled=false"; do
             echo "== helm template $extra"
             helm template geoserver . -f values.yaml $extra | ./kubeconform -strict -summary -kubernetes-version 1.34.0 -
           done

@@ -71,7 +71,8 @@ def cmd_discover(args) -> int:
 
 def cmd_plan(args) -> int:
     try:
-        return plan(Path(args.dir), apply=args.command == "apply", prune=args.prune, geoserver_url=args.geoserver)
+        return plan(Path(args.dir), apply=args.command == "apply", prune=args.prune, geoserver_url=args.geoserver,
+                    wait=args.wait)
     except (PlanError, SyncError) as e:
         print(f"gisdata {args.command}: {e}", file=sys.stderr)
         return e.code
@@ -138,6 +139,8 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--prune", action="store_true",
                        help="also delete what the project's workspaces hold that the files don't mention")
         c.add_argument("--geoserver", metavar="URL", help="GeoServer's address, if not the Project's (e.g. through a port-forward)")
+        c.add_argument("--wait", type=float, default=0, metavar="SECONDS",
+                       help="wait this long for GeoServer to answer first (a job started with a fresh install)")
         c.set_defaults(func=cmd_plan)
 
     st = commands.add_parser("status", help="datasets (loaded, when, next check) and layers (published, drifted, cached), live",

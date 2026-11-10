@@ -1,0 +1,116 @@
+{{- /*
+gisdata: the project's files as a ConfigMap, `gisdata apply` as a Job after every
+install and upgrade, and `gisdata sync` as a nightly CronJob. Both run the same pod.
+*/ -}}
+{{- $g := .Values.gisdata }}
+{{- if or $g.apply.enabled $g.sync.enabled }}
+{{- /* The project's files, keyed 000-<name> (ConfigMap keys can't hold "/"), mounted back at their paths */ -}}
+{{- $dir := trimSuffix "/" $g.project }}
+{{- $files := dict }}  {{- /* path -> content */}}
+{{- $keys := dict }}   {{- /* path -> ConfigMap key */}}
+{{- $size := 0 }}
+{{- range $path, $_ := .Files.Glob (printf "%s/**" $dir) }}
+{{- $name := base $path }}
+{{- if and (regexMatch "\\.(ya?ml|sld|mbstyle|css)$" $path) (not (regexMatch "^secrets\\.ya?ml$" $name)) }}
+{{- $_ := set $keys $path (printf "%03d-%s" (len $keys) (regexReplaceAll "[^-._a-zA-Z0-9]" $name "_")) }}
+{{- $_ := set $files $path ($.Files.Get $path) }}
+{{- $size = add $size (len ($.Files.Get $path)) }}
+{{- end }}
+{{- end }}
+{{- if not $files }}
+{{- fail (printf "gisdata.project: no project files found in %s (the directory must be inside the chart, and not in .helmignore)" $dir) }}
+{{- end }}
+{{- if gt $size 900000 }}
+{{- fail (printf "gisdata.project: %s holds %d bytes of files, more than a ConfigMap can (about 1 MB)" $dir $size) }}
+{{- end }}
+{{- $ctx := dict "g" $g "dir" $dir "keys" $keys "checksum" (toJson $files | sha256sum) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gisdata-project
+data:
+{{- range $path, $content := $files }}
+  {{ get $keys $path }}: {{ $content | toJson }}
+{{- end }}
+{{- if $g.apply.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # a new Job each release, so every install and upgrade applies the project
+  name: gisdata-apply-{{ .Release.Revision }}
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 604800  # a week
+  template:
+    {{- $args := list "apply" "-C" "/project" "--wait" (toString $g.apply.waitSeconds) }}
+    {{- if $g.apply.prune }}{{ $args = append $args "--prune" }}{{- end }}
+    {{- include "gisdata.pod" (merge (dict "args" $args) $ctx) | nindent 4 }}
+{{- end }}
+{{- if $g.sync.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gisdata-sync
+spec:
+  schedule: {{ $g.sync.schedule | quote }}
+  concurrencyPolicy: Forbid  # never two loads at once
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0  # a failed dataset is retried by the next run, not straight away
+      template:
+        {{- include "gisdata.pod" (merge (dict "args" (list "sync" "-C" "/project")) $ctx) | nindent 8 }}
+{{- end }}
+{{- end }}
+
+{{- define "gisdata.pod" -}}
+metadata:
+  annotations:
+    # a new project version shows on the pods
+    checksum/project: {{ .checksum }}
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  containers:
+    - name: gisdata
+      image: "{{ .g.image.repository }}:{{ .g.image.tag }}"
+      imagePullPolicy: {{ .g.image.pullPolicy }}
+      args: {{ toJson .args }}
+      env:
+        - name: GISDATA_SECRETS_DIR
+          value: /etc/gisdata/secrets
+      resources: {{- toYaml .g.resources | nindent 8 }}
+      volumeMounts:
+        - name: project
+          mountPath: /project
+          readOnly: true
+        - name: work
+          mountPath: /tmp
+        {{- range .g.secrets }}
+        - name: secret-{{ . }}
+          mountPath: /etc/gisdata/secrets/{{ . }}
+          readOnly: true
+        {{- end }}
+  volumes:
+    - name: project
+      configMap:
+        name: gisdata-project
+        items:
+        {{- range $path, $key := .keys }}
+          - key: {{ $key }}
+            path: {{ trimPrefix (printf "%s/" $.dir) $path | quote }}
+        {{- end }}
+    - name: work  # downloads are unpacked here
+      emptyDir: {}
+    {{- range .g.secrets }}
+    - name: secret-{{ . }}
+      secret:
+        secretName: {{ . }}
+        optional: true
+    {{- end }}
+{{- end }}
