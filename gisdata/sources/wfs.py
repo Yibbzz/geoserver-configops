@@ -115,5 +115,9 @@ class WFS:
             layer.crs = layer.crs or default_crs
         return layers
 
+    def gdal_source(self, product: Product) -> tuple[str, str]:
+        """(GDAL connection, layer) that loads this feature type."""
+        return f"WFS:{self.url}", product.id
+
     def download_url(self, download: Download) -> str:
         return download.url

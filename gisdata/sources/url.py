@@ -49,7 +49,7 @@ def probe(session: requests.Session, url: str, headers: dict | None = None) -> P
     return Probe(
         final_url=r.url,
         size=size,
-        version=r.headers.get("ETag") or r.headers.get("Last-Modified"),
+        version=(r.headers.get("ETag") or "").removeprefix("W/").strip('"') or r.headers.get("Last-Modified"),
         file_name=file_name,
         content_type=r.headers.get("Content-Type", "").split(";")[0].strip().lower(),
     )

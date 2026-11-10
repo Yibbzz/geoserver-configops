@@ -494,7 +494,7 @@ def test_a_link_is_its_own_product():
     server = LinkServer(headers={"Content-Range": "bytes 0-0/848600", "ETag": '"v1"', "Content-Type": "application/zip"},
                         final_url="https://cdn.example/files/Conservation%20Areas.zip")
     p = URL(session=server).product("https://example.org/get?id=7")
-    assert (p.name, p.version, p.loads_as, p.chosen.size) == ("Conservation Areas.zip", '"v1"', "ZIP", 848600)
+    assert (p.name, p.version, p.loads_as, p.chosen.size) == ("Conservation Areas.zip", "v1", "ZIP", 848600)
 
 
 def test_a_link_to_a_web_page_is_not_loadable():
