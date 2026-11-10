@@ -125,8 +125,14 @@ def test_export_is_stable_across_reimport(imported, tmp_path):
     run("import-geoserver-config.sh", first)
     run("export-geoserver-config.sh", second)
 
-    files = sorted(p.relative_to(first) for p in first.rglob("*") if p.is_file())
-    assert files == sorted(p.relative_to(second) for p in second.rglob("*") if p.is_file())
+    # only this test's workspaces: others on the same GeoServer (gisdata's, in the kind test) aren't its to check
+    own = {path.parts[-6] for path in FEATURETYPES}
+
+    def mine(rel):
+        return rel.parts[0] != "workspaces" or len(rel.parts) == 1 or rel.parts[1] in own
+
+    files = sorted(rel for rel in (p.relative_to(first) for p in first.rglob("*") if p.is_file()) if mine(rel))
+    assert files == sorted(rel for rel in (p.relative_to(second) for p in second.rglob("*") if p.is_file()) if mine(rel))
     for rel in files:
         if rel.suffix == ".json":
             assert stable(first / rel) == stable(second / rel), rel

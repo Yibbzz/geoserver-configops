@@ -31,7 +31,8 @@ spec:
   url: http://smoke-files/squares.geojson
   update: daily
   tables:
-    squares: { name: smoke_squares }
+    # GeoJSON always counts as WGS84; these coordinates are British National Grid metres
+    squares: { name: smoke_squares, crs: EPSG:27700 }
 ---
 apiVersion: gisdata/v1alpha1
 kind: Layer
