@@ -445,7 +445,7 @@ $ gisdata plan
 Plan: 2 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
 ```
 
-`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done, such as a layer on a table gisdata doesn't load and which doesn't exist. The exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), and 1 when something can't be done. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere, through a port-forward for example.
+`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done, such as a layer on a table gisdata doesn't load and which doesn't exist. Groups leave such a layer out until it can be published. The exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), and 1 when something can't be done. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere, through a port-forward for example.
 
 Each layer gets a PostGIS store in its workspace for the schema its table is in, named after the schema and reaching the database through the Project's JNDI datasource, so no password goes into GeoServer. Bounding boxes are worked out from the table whenever a layer is published or changed.
 

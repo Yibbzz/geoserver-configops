@@ -161,6 +161,17 @@ def test_a_missing_dataset_table_is_a_first_sync_and_a_missing_own_table_cant_be
     assert blocked.run is None and "field.sites doesn't exist" in blocked.note
 
 
+def test_groups_leave_out_layers_that_cant_be_published(project, tables):
+    tables.discard(("field", "sites"))
+    gs = converged()
+    del gs.layers[("uk", "sites")], gs.groups[("uk", "inner")]
+    base = gs.groups[("uk", "base")]["layerGroup"]  # GeoServer drops the members that don't exist
+    base["publishables"]["published"], base["styles"]["style"] = [{"@type": "layer", "name": "uk:road_links"}], [{"name": "line"}]
+    changes = plan(project, gs)
+    assert lines(changes) == [("!", "layer", "uk:sites"), ("!", "group", "uk:inner")]  # base is unchanged
+    assert changes[1].note == "none of its layers can be published yet"
+
+
 def test_converged_means_no_changes(project, tables, capsys):
     assert plan(project, converged()) == []
     print_plan([])
