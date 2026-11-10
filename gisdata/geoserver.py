@@ -1,0 +1,239 @@
+"""A small client for the GeoServer REST API: just what `plan` and `apply` use.
+
+Plain dicts in and out, the JSON GeoServer itself speaks, so `plan` can
+compare what's live with what the files say without a model layer between.
+Each catalog object is one REST path; `upsert` creates or updates it.
+"""
+
+from __future__ import annotations
+
+from urllib.parse import quote
+
+import requests
+
+from .sources import http_session
+
+TIMEOUT = 60
+
+STYLE_TYPES = {  # a style file's suffix -> the content type GeoServer reads it as
+    ".sld": "application/vnd.ogc.sld+xml",
+    ".mbstyle": "application/vnd.geoserver.mbstyle+json",
+    ".css": "application/vnd.geoserver.geocss+css",
+}
+
+
+# The spec's layer group modes, as GeoServer names them
+GROUP_MODES = {"single": "SINGLE", "named": "NAMED", "container": "CONTAINER", "opaque": "OPAQUE_CONTAINER"}
+
+
+class GeoServerError(Exception):
+    """GeoServer refused or failed a request; the message says which and why."""
+
+    def __init__(self, method: str, path: str, status: int, text: str):
+        detail = " ".join(text.split())[:300] or "no details"
+        super().__init__(f"GeoServer answered {method} {path} with HTTP {status}: {detail}")
+        self.status = status
+
+
+def q(name: str) -> str:
+    """A name as one path segment."""
+    return quote(name, safe="")
+
+
+class GeoServer:
+    def __init__(self, url: str, username: str, password: str, session: requests.Session | None = None):
+        self.url = url.rstrip("/")
+        self.rest = f"{self.url}/rest"
+        self.session = session or http_session()
+        self.session.auth = (username, password)
+
+    # --- generic
+
+    def request(self, method: str, path: str, body=None, content_type: str = "application/json",
+                params: dict | None = None, ok=(200, 201)) -> requests.Response:
+        url = f"{self.rest}/{path}"
+        kwargs: dict = {"params": params, "timeout": TIMEOUT, "headers": {"Accept": "application/json"}}
+        if body is not None:
+            kwargs["headers"]["Content-Type"] = content_type
+            kwargs["json" if isinstance(body, (dict, list)) else "data"] = body
+        try:
+            r = self.session.request(method, url, **kwargs)
+        except requests.RequestException as e:
+            raise GeoServerError(method, path, 0, f"can't reach {self.url}: {e}") from None
+        if r.status_code not in ok:
+            raise GeoServerError(method, path, r.status_code, r.text)
+        return r
+
+    def get(self, path: str, params: dict | None = None) -> dict | None:
+        """The object at `path`, or None if there is none."""
+        r = self.request("GET", f"{path}.json", params=params, ok=(200, 404))
+        return None if r.status_code == 404 else r.json()
+
+    def exists(self, path: str) -> bool:
+        return self.request("GET", f"{path}.json", ok=(200, 404)).status_code == 200
+
+    def upsert(self, path: str, collection: str, body, content_type: str = "application/json",
+               params: dict | None = None) -> str:
+        """
+        Update `path` if it exists, else create it in `collection`; returns
+        "updated" or "created". GeoServer Cloud answers a PUT on a missing
+        object with an error, hence the look first.
+        """
+        if self.exists(path):
+            self.request("PUT", path, body, content_type, params)
+            return "updated"
+        self.request("POST", collection, body, content_type, params)
+        return "created"
+
+    def delete(self, path: str, params: dict | None = None) -> bool:
+        """Delete `path`; False if it was already gone."""
+        return self.request("DELETE", path, params=params, ok=(200, 404)).status_code == 200
+
+    def names(self, path: str, key: str) -> list[str]:
+        """Names in a collection, e.g. names("workspaces", "workspace")."""
+        data = self.get(path) or {}
+        outer = data.get(path.rsplit("/", 1)[-1]) or data.get(f"{key}s") or {}
+        items = outer.get(key, []) if isinstance(outer, dict) else []
+        return [i["name"] for i in (items if isinstance(items, list) else [items])]
+
+    # --- workspaces
+
+    def workspace(self, name: str) -> dict | None:
+        return self.get(f"workspaces/{q(name)}")
+
+    def upsert_workspace(self, name: str) -> str:
+        return self.upsert(f"workspaces/{q(name)}", "workspaces", {"workspace": {"name": name}})
+
+    def delete_workspace(self, name: str) -> bool:
+        return self.delete(f"workspaces/{q(name)}", {"recurse": "true"})
+
+    # --- stores
+
+    def datastore(self, ws: str, name: str) -> dict | None:
+        return self.get(f"workspaces/{q(ws)}/datastores/{q(name)}")
+
+    def upsert_jndi_datastore(self, ws: str, name: str, jndi: str, schema: str) -> str:
+        """A PostGIS store that reaches the database through GeoServer's JNDI datasource: no password in the catalog."""
+        entries = {"dbtype": "postgis", "jndiReferenceName": jndi, "schema": schema, "Expose primary keys": "true"}
+        body = {"dataStore": {
+            "name": name, "type": "PostGIS (JNDI)", "enabled": True,
+            "connectionParameters": {"entry": [{"@key": k, "$": v} for k, v in entries.items()]},
+        }}
+        return self.upsert(f"workspaces/{q(ws)}/datastores/{q(name)}", f"workspaces/{q(ws)}/datastores", body)
+
+    def delete_datastore(self, ws: str, name: str) -> bool:
+        return self.delete(f"workspaces/{q(ws)}/datastores/{q(name)}", {"recurse": "true"})
+
+    # --- feature types (a table published from a store)
+
+    def featuretype(self, ws: str, store: str, name: str) -> dict | None:
+        return self.get(f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}")
+
+    def upsert_featuretype(self, ws: str, store: str, name: str, table: str, title: str | None = None,
+                           abstract: str | None = None, keywords: list[str] | None = None, srs: str | None = None) -> str:
+        """
+        Publish `table` as `name`. GeoServer works out the attributes, and the
+        bounding boxes are recalculated from the data each time.
+        """
+        ft: dict = {"name": name, "nativeName": table, "title": title or name, "enabled": True}
+        if abstract is not None:
+            ft["abstract"] = abstract
+        if keywords is not None:
+            ft["keywords"] = {"string": keywords}
+        if srs:
+            ft["srs"] = srs
+            ft["projectionPolicy"] = "FORCE_DECLARED"
+        path = f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}"
+        result = self.upsert(path, f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes", {"featureType": ft})
+        self.recalculate(ws, store, name)
+        return result
+
+    def recalculate(self, ws: str, store: str, name: str) -> None:
+        """Work the bounding boxes out again from the table, after new data is loaded."""
+        path = f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}"
+        current = self.get(path)
+        if current is None:
+            return
+        self.request("PUT", path, {"featureType": {"name": current["featureType"]["name"], "enabled": True}},
+                     params={"recalculate": "nativebbox,latlonbbox"})
+
+    def delete_featuretype(self, ws: str, store: str, name: str) -> bool:
+        return self.delete(f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}", {"recurse": "true"})
+
+    # --- layers (how a feature type is drawn and offered)
+
+    def layer(self, ws: str, name: str) -> dict | None:
+        return self.get(f"workspaces/{q(ws)}/layers/{q(name)}")
+
+    def update_layer(self, ws: str, name: str, style: str | None = None, styles: list[str] | None = None,
+                     queryable: bool | None = None, enabled: bool | None = None) -> None:
+        """Set a layer's styles and settings; anything left None is left as it is."""
+        layer: dict = {}
+        if style is not None:
+            layer["defaultStyle"] = {"name": style}
+        if styles is not None:
+            layer["styles"] = {"style": [{"name": s} for s in styles]}
+        if queryable is not None:
+            layer["queryable"] = queryable
+        if enabled is not None:
+            layer["enabled"] = enabled
+        if layer:
+            self.request("PUT", f"workspaces/{q(ws)}/layers/{q(name)}", {"layer": layer})
+
+    # --- styles
+
+    def style_path(self, name: str, ws: str | None = None) -> tuple[str, str]:
+        base = f"workspaces/{q(ws)}/styles" if ws else "styles"
+        return f"{base}/{q(name)}", base
+
+    def style(self, name: str, ws: str | None = None) -> dict | None:
+        return self.get(self.style_path(name, ws)[0])
+
+    def style_body(self, name: str, ws: str | None = None) -> str | None:
+        """The style's own file (SLD, MBStyle or CSS), as GeoServer holds it."""
+        info = self.style(name, ws)
+        if info is None:
+            return None
+        path = self.style_path(name, ws)[0]
+        suffix = {"sld": "sld", "mbstyle": "mbstyle", "css": "css"}.get(info["style"].get("format", "sld"), "sld")
+        return self.request("GET", f"{path}.{suffix}").text
+
+    def upsert_style(self, name: str, body: str, suffix: str, ws: str | None = None) -> str:
+        """Create or replace a style from its file's text; `suffix` (.sld, .mbstyle, .css) says which language."""
+        content_type = STYLE_TYPES[suffix]
+        path, collection = self.style_path(name, ws)
+        data = body.encode("utf-8")
+        if self.exists(path):
+            self.request("PUT", path, data, content_type, params={"raw": "true"})
+            return "updated"
+        # GeoServer creates a style from its file, posted with the name it should have
+        self.request("POST", collection, data, content_type, params={"name": name, "raw": "true"})
+        return "created"
+
+    def delete_style(self, name: str, ws: str | None = None) -> bool:
+        return self.delete(self.style_path(name, ws)[0], {"purge": "true", "recurse": "true"})
+
+    # --- layer groups
+
+    def layergroup(self, name: str, ws: str | None = None) -> dict | None:
+        base = f"workspaces/{q(ws)}/layergroups" if ws else "layergroups"
+        return self.get(f"{base}/{q(name)}")
+
+    def upsert_layergroup(self, name: str, layers: list[tuple[str, str, str | None]], ws: str | None = None,
+                          title: str | None = None, abstract: str | None = None, mode: str = "single") -> str:
+        """`layers`: (kind "layer" or "layerGroup", qualified name, style or None), first drawn at the bottom."""
+        base = f"workspaces/{q(ws)}/layergroups" if ws else "layergroups"
+        group: dict = {
+            "name": name, "mode": GROUP_MODES[mode.lower()], "title": title or name,
+            "publishables": {"published": [{"@type": kind, "name": n} for kind, n, _ in layers]},
+            "styles": {"style": [{"name": s} if s else "" for _, _, s in layers]},
+        }
+        if abstract is not None:
+            group["abstractTxt"] = abstract
+        if ws:
+            group["workspace"] = {"name": ws}
+        return self.upsert(f"{base}/{q(name)}", base, {"layerGroup": group})
+
+    def delete_layergroup(self, name: str, ws: str | None = None) -> bool:
+        base = f"workspaces/{q(ws)}/layergroups" if ws else "layergroups"
+        return self.delete(f"{base}/{q(name)}")
