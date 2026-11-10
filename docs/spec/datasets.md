@@ -2,7 +2,7 @@
 
 A set of YAML files that says which open datasets you want, where they come from, how often they update, and how they are published and styled in GeoServer Cloud. A small command-line tool reads the files and makes PostGIS and GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
 
-> **Status:** first draft for review, 9 Nov 2026. `gisdata validate`, `gisdata discover` and `gisdata sync` are built; the other commands aren't yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
+> **Status:** first draft for review, 9 Nov 2026. `gisdata validate`, `discover`, `sync`, `plan` and `apply` are built; `status` and `import` aren't yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
 
 ## Principles
 
@@ -427,20 +427,32 @@ Known gaps:
 - Some WFS servers can't serve features in pages, and fail. The BGS geology service is one: it serves complex (GeoSciML) features and asks for a sort order.
 - Private CKAN files, which need the API token on the file's own server, can't be downloaded yet.
 
-### What `plan` compares
+### `plan` and `apply`
 
-Only fields the files set (or whose defaults this spec defines) are compared. Fields GeoServer works out, or that nobody set, never show as changes, so a plan after `apply` is empty. A changed title in the web UI shows as drift and `apply` puts it back.
+`gisdata plan` compares the files with live GeoServer, and with PostGIS for whether each layer's table exists yet. It prints what `apply` would do, with each changed field. `gisdata apply` makes those changes in dependency order: workspaces, stores, styles, first loads of missing tables, layers, layer groups (each after the groups it holds), then, with `--prune`, deletions, groups first. If a change fails, `apply` stops there and says so; running it again carries on, since everything already done now matches.
 
 ```
 $ gisdata plan
+  ~ style uk:os-road-node   (styles/os-road-node.sld differs from GeoServer's copy)
   ~ layer uk:road_links
       title: "Roads (edited in UI)" -> "OS Open Roads, road links"
-  + layer uk:road_nodes
-  + table data_layers.road_nodes            (first sync: OpenRoads 2026-10, ~180 MB)
-  ? layer uk:old_test_points                (unmanaged; removed with --prune)
+  + table data_layers.os_open_roads_road_node   (first sync of dataset os-open-roads)
+  + layer uk:road_nodes   (data_layers.os_open_roads_road_node)
+  ? layer uk:old_test_points   (unmanaged; removed with --prune)
+  ! layer uk:survey_sites   (table field_data.sites doesn't exist; gisdata only publishes it)
 
-Plan: 2 to add, 1 to change, 0 to delete, 1 unmanaged.
+Plan: 2 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
 ```
+
+`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done, such as a layer on a table gisdata doesn't load and which doesn't exist. The exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), and 1 when something can't be done. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere, through a port-forward for example.
+
+Each layer gets a PostGIS store in its workspace for the schema its table is in, named after the schema and reaching the database through the Project's JNDI datasource, so no password goes into GeoServer. Bounding boxes are worked out from the table whenever a layer is published or changed.
+
+#### What `plan` compares
+
+Only fields the files set, or whose defaults this spec defines (`title`, `enabled`, `advertised`, `queryable`, a group's `mode`), are compared. Fields GeoServer works out, or that nobody set, never show as changes, so a plan after `apply` is empty. A title changed in the web UI shows as drift and `apply` puts it back; a default style changed in the web UI on a layer whose file sets none is left alone. A style is compared by its file's text.
+
+Not handled yet: `cache` (tile caching, a separate service in GeoServer Cloud), `attribution`, and refreshing GeoServer after a `sync` (bounding boxes and cached tiles). `plan` doesn't size first loads, since it never calls the data sources.
 
 ## Importing today's config
 
