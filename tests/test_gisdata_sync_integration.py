@@ -211,3 +211,21 @@ def test_loads_in_quick_succession(tmp_path, server, schemas, env):
         assert sync(root, "--force") == 0
     assert len(tables_in(backup)) == 6  # 3 earlier loads of each of 2 tables
     assert tables_in(staging) == []
+
+
+def test_a_single_file_keeps_its_name_so_its_layer_does(tmp_path, schemas, env, capsys):
+    """GDAL names a GeoJSON file's layer after the file: squares.geojson holds layer `squares`."""
+    www = tmp_path / "www"
+    www.mkdir()
+    (www / "squares.geojson").write_text(json.dumps(POLYGONS))
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(www))
+    handler.log_message = lambda *a: None
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{httpd.server_address[1]}/squares.geojson"
+        root = project(tmp_path, url, schemas, tables="  tables: { squares: { name: squares } }\n")
+        assert sync(root) == 0, capsys.readouterr().err
+        assert "squares" in tables_in(schemas[0])
+    finally:
+        httpd.shutdown()

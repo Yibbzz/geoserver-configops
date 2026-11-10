@@ -1,0 +1,43 @@
+# Serves the smoke project's data file inside the cluster (http://smoke-files/squares.geojson),
+# so the deployment test needs no outside data source. Runs on the gisdata image (it has Python).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smoke-files
+data:
+  squares.geojson: |
+    {"type": "FeatureCollection", "features": [
+      {"type": "Feature", "properties": {"name": "a"}, "geometry": {"type": "Polygon",
+        "coordinates": [[[400000, 200000], [400000, 300000], [500000, 300000], [500000, 200000], [400000, 200000]]]}},
+      {"type": "Feature", "properties": {"name": "b"}, "geometry": {"type": "Polygon",
+        "coordinates": [[[200000, 600000], [200000, 700000], [300000, 700000], [300000, 600000], [200000, 600000]]]}}
+    ]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smoke-files
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: smoke-files } }
+  template:
+    metadata: { labels: { app: smoke-files } }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 65534 }
+      containers:
+        - name: http
+          image: gisdata:kind
+          imagePullPolicy: Never
+          command: ["python", "-m", "http.server", "8080", "--directory", "/data"]
+          ports: [{ containerPort: 8080 }]
+          readinessProbe: { tcpSocket: { port: 8080 }, periodSeconds: 2 }
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes: [{ name: data, configMap: { name: smoke-files } }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: smoke-files
+spec:
+  selector: { app: smoke-files }
+  ports: [{ port: 80, targetPort: 8080 }]

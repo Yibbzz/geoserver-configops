@@ -50,13 +50,15 @@ Prerequisites: a Kubernetes cluster (k3d, kind, or managed), `helm`, `kubectl`, 
    docker push <registry>/gisdata:latest
    ```
 
-3. **Install the chart.** `sync.project` is the `gisdata` project to load; it must be inside this directory, since Helm reads files only from the chart.
+3. **Install the chart.** `gisdata.project` is the `gisdata` project to deploy; it must be inside this directory, since Helm reads files only from the chart.
 
    ```bash
    helm upgrade --install geoserver . -f values.yaml \
-     --set sync.image.repository=<registry>/gisdata \
-     --set sync.project=examples/uk-basemap
+     --set gisdata.image.repository=<registry>/gisdata \
+     --set gisdata.project=examples/uk-basemap
    ```
+
+   Once GeoServer is up, the `gisdata-apply-<revision>` Job applies the project: workspace, styles, first loads of the datasets, layers, groups. A first apply downloads data, so it can take a while; Helm doesn't wait for it. Follow it with `kubectl logs -f job/gisdata-apply-1`.
 
    On k3d with a local registry, mirror the GeoServer images first with `./pull_all_images.sh`, then add `-f values-local-registry.yaml`.
 
@@ -67,11 +69,15 @@ Prerequisites: a Kubernetes cluster (k3d, kind, or managed), `helm`, `kubectl`, 
    # http://localhost:8080/geoserver-cloud/
    ```
 
-   Change the default GeoServer admin password (`admin` / `geoserver`) straight away.
+   Change the default GeoServer admin password (`admin` / `geoserver`) straight away, and put the new one in the `geoserver-admin` Secret, which `gisdata` logs in with.
+
+## Changing what's published
+
+Edit the project's files and run `helm upgrade`: each upgrade starts a new `gisdata-apply-<revision>` Job, which makes GeoServer match them (`gisdata.apply` in `values.yaml`; `prune: true` also removes what the project's workspace holds that the files don't mention). From a laptop, `gisdata plan` shows what it would change first.
 
 ## Keeping data up to date
 
-The `gisdata-sync` CronJob runs `gisdata sync` nightly (`sync.schedule` in `values.yaml`) on the project in `sync.project`. Each Dataset's own `update` schedule decides whether it is checked that night. For each one it:
+The `gisdata-sync` CronJob runs `gisdata sync` nightly (`gisdata.sync.schedule` in `values.yaml`) on the project in `gisdata.project`. Each Dataset's own `update` schedule decides whether it is checked that night. For each one it:
 
 1. asks the source for its current version and skips it if that matches the last load (and its tables are still there);
 2. downloads it (checking OS's MD5) and loads the layers the Dataset names into staging tables with `ogr2ogr`;
@@ -79,7 +85,7 @@ The `gisdata-sync` CronJob runs `gisdata sync` nightly (`sync.schedule` in `valu
 4. swaps every table in at once, in one transaction, moving the old ones into the backup schema (the newest `backups` copies are kept);
 5. records the result in `public.os_ingest_log`.
 
-The project's files reach the job in the `gisdata-project` ConfigMap, which the chart builds from `sync.project` (YAML and style files only; a `secrets.yaml` never goes in). The Kubernetes Secrets in `sync.secrets` are mounted as files for it. Changing the project means editing the files and running `helm upgrade`.
+The project's files reach the job in the `gisdata-project` ConfigMap, which the chart builds from `gisdata.project` (YAML and style files only; a `secrets.yaml` never goes in). The Kubernetes Secrets in `gisdata.secrets` are mounted as files for it.
 
 Run it on demand, for every dataset or just some:
 

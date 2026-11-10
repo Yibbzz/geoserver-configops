@@ -1,0 +1,53 @@
+# The smallest whole project: one dataset, its layer with a style of its own and a tile
+# cache, and a group. The kind deployment test (tests/kind/deploy-test.sh) deploys it,
+# with the data file served inside the cluster.
+apiVersion: gisdata/v1alpha1
+kind: Project
+metadata:
+  name: smoke
+spec:
+  geoserver:
+    url: http://geoserver-gsc-gateway:8080/geoserver-cloud
+    credentials: { secret: geoserver-admin }
+  database:
+    jndi: java:comp/env/jdbc/mypostgis
+    connection: { secret: geoserver-pgconfig-secret }
+  workspace: smoke
+  crs: EPSG:27700
+---
+apiVersion: gisdata/v1alpha1
+kind: Source
+metadata:
+  name: files
+spec:
+  type: url
+---
+apiVersion: gisdata/v1alpha1
+kind: Dataset
+metadata:
+  name: squares
+spec:
+  source: files
+  url: http://smoke-files/squares.geojson
+  update: daily
+  tables:
+    # GeoJSON always counts as WGS84; these coordinates are British National Grid metres
+    squares: { name: smoke_squares, crs: EPSG:27700 }
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: squares
+spec:
+  dataset: squares
+  table: squares
+  title: Smoke test squares
+  style: squares
+  cache: true
+---
+apiVersion: gisdata/v1alpha1
+kind: LayerGroup
+metadata:
+  name: everything
+spec:
+  layers: [squares]

@@ -271,3 +271,31 @@ def test_attribution_from_the_file_or_the_sources_licence(project, tables, monke
     assert field == "attribution" and live is None
     assert wanted.startswith("Contains OS data © Crown copyright and database right 20")
     assert changes["uk:sites"] == [("attribution", None, "Our survey")]
+
+
+def test_wait_covers_a_database_still_starting(project, monkeypatch):
+    """A Job started with a fresh install finds the database refusing connections at first."""
+    import psycopg2
+
+    from gisdata import plan as plan_module
+
+    for key, value in {"GS_USERNAME": "a", "GS_PASSWORD": "b", "PG_HOST": "db", "PG_DATABASE": "d",
+                       "PG_USERNAME": "u", "PG_PASSWORD": "p"}.items():
+        monkeypatch.setenv(f"GISDATA_{key}", value)
+    attempts = []
+
+    def connect(self):
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise psycopg2.OperationalError('connection to server at "db" failed: Connection refused')
+        return "conn"
+
+    monkeypatch.setattr(ingest.Database, "connect", connect)
+    monkeypatch.setattr(plan_module.time, "sleep", lambda s: None)
+    monkeypatch.setattr(plan_module.GeoServer, "wait", lambda self, seconds: None)
+    files, gs, conn, db = plan_module.connect(project, None, wait=600)
+    assert conn == "conn" and len(attempts) == 3
+
+    attempts.clear()
+    with pytest.raises(plan_module.PlanError, match="Connection refused"):
+        plan_module.connect(project, None, wait=0)  # no wait: the first refusal is final

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -91,14 +92,20 @@ class Project:
 
 
 def find_files(root: Path) -> list[Path]:
+    """
+    Every YAML file under `root`, hidden ones left out. Symlinked folders are
+    followed: Kubernetes mounts a ConfigMap as symlinks into a hidden ..data
+    folder, so a project's datasets/ is a link to a directory there.
+    """
     files = []
-    for path in sorted(root.rglob("*")):
-        rel = path.relative_to(root)
-        if any(part.startswith(".") for part in rel.parts):
-            continue
-        if path.is_file() and path.suffix in (".yaml", ".yml") and path.name not in SECRET_FILES:
-            files.append(path)
-    return files
+    for folder, dirs, names in os.walk(root, followlinks=True):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in names:
+            path = Path(folder) / name
+            if (not name.startswith(".") and path.suffix in (".yaml", ".yml") and name not in SECRET_FILES
+                    and path.is_file()):
+                files.append(path)
+    return sorted(files)
 
 
 def load(root: Path) -> Project:

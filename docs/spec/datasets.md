@@ -420,7 +420,7 @@ Every check (loaded, up to date, failed) is written to the ingest log in `public
 
 The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `GISDATA_GEOSERVER_PGCONFIG_SECRET_HOST=localhost` and so on, or `secrets.yaml`.
 
-In Kubernetes, the Helm chart runs it nightly as the `gisdata-sync` CronJob. It builds the `gisdata-project` ConfigMap from the project directory (`sync.project`: YAML and style files, never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `sync.secrets` (the database's, `geoserver-admin` for the refresh after loads, and source keys) as files under `$GISDATA_SECRETS_DIR/<secret>/<key>`, where `gisdata` looks after the environment.
+In Kubernetes, the Helm chart runs it nightly as the `gisdata-sync` CronJob, and runs `gisdata apply --wait` as a `gisdata-apply-<revision>` Job after every install and upgrade (a plain Job, not a hook, since a first apply loads data and Helm would block on it). It builds the `gisdata-project` ConfigMap from the project directory (`gisdata.project`: YAML and style files, never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `gisdata.secrets` (the database's, `geoserver-admin` for the refresh after loads, and source keys) as files under `$GISDATA_SECRETS_DIR/<secret>/<key>`, where `gisdata` looks after the environment.
 
 Known gaps:
 
