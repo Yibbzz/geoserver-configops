@@ -12,17 +12,13 @@ from . import __version__
 from .discover import DiscoverError
 from .discover import run as discover
 from .plan import PlanError
+from .importer import run as import_workspace
 from .plan import run as plan
+from .status import run as status
 from .sync import SyncError
 from .sync import run as sync
 from .loader import load
 from .validate import validate
-
-LATER = {
-    "status": "show datasets and layers as they are live",
-    "import": "write files that describe a live GeoServer workspace",
-}
-
 
 def shown(path: Path) -> str:
     """A path relative to the current directory when that's shorter."""
@@ -81,6 +77,22 @@ def cmd_plan(args) -> int:
         return e.code
 
 
+def cmd_status(args) -> int:
+    try:
+        return status(Path(args.dir), fmt=args.format, geoserver_url=args.geoserver)
+    except (PlanError, SyncError) as e:
+        print(f"gisdata status: {e}", file=sys.stderr)
+        return e.code
+
+
+def cmd_import(args) -> int:
+    try:
+        return import_workspace(Path(args.dir), args.workspace, geoserver_url=args.geoserver, force=args.force)
+    except PlanError as e:
+        print(f"gisdata import: {e}", file=sys.stderr)
+        return e.code
+
+
 def cmd_sync(args) -> int:
     try:
         return sync(Path(args.dir), args.datasets, force=args.force)
@@ -128,6 +140,25 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--geoserver", metavar="URL", help="GeoServer's address, if not the Project's (e.g. through a port-forward)")
         c.set_defaults(func=cmd_plan)
 
+    st = commands.add_parser("status", help="datasets (loaded, when, next check) and layers (published, drifted, cached), live",
+                             description="Show the project's datasets from the ingest log, and its layers and groups as GeoServer has them. Changes nothing.")
+    st.add_argument("-C", "--dir", default=".", help="project directory (default: current)")
+    st.add_argument("--format", choices=["text", "json"], default="text")
+    st.add_argument("--geoserver", metavar="URL", help="GeoServer's address, if not the Project's")
+    st.set_defaults(func=cmd_status)
+
+    im = commands.add_parser(
+        "import", help="write the files that describe a live GeoServer workspace",
+        description="Read a GeoServer workspace and write the files that describe it: its layers and groups in "
+        "<workspace>.yaml, its styles in styles/, and project.yaml if the directory has none. Only what differs "
+        "from the defaults is written, so `gisdata plan` on the result has nothing to do.",
+    )
+    im.add_argument("workspace", help="the GeoServer workspace to read")
+    im.add_argument("-C", "--dir", default=".", help="project directory to write into (default: current)")
+    im.add_argument("--geoserver", metavar="URL", help="GeoServer's address (needed when the directory has no Project yet)")
+    im.add_argument("--force", action="store_true", help="replace files that already exist")
+    im.set_defaults(func=cmd_import)
+
     s = commands.add_parser(
         "sync", help="load new versions of datasets into PostGIS",
         description="Check each due Dataset for a new version and load it: stage, check, back up, swap in. "
@@ -137,10 +168,6 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("-C", "--dir", default=".", help="project directory (default: current)")
     s.add_argument("--force", action="store_true", help="load even when the version hasn't changed")
     s.set_defaults(func=cmd_sync)
-
-    for name, what in LATER.items():
-        c = commands.add_parser(name, help=f"{what} (not built yet)")
-        c.set_defaults(func=lambda args, name=name: not_yet(name))
 
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["discover"]:
@@ -153,8 +180,3 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 2
     return args.func(args)
-
-
-def not_yet(name: str) -> int:
-    print(f"gisdata {name}: not built yet; see docs/spec/datasets.md", file=sys.stderr)
-    return 2
