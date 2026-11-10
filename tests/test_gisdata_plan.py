@@ -54,6 +54,10 @@ class FakeGeoServer:
 
     def __init__(self):
         self.workspaces, self.stores, self.styles, self.layers, self.fts, self.groups = {}, {}, {}, {}, {}, {}
+        self.tiles = {}  # ws:name -> GeoWebCache settings
+
+    def tile_layer(self, name):
+        return self.tiles.get(name)
 
     def workspace(self, ws):
         return {"workspace": {"name": ws}} if ws in self.workspaces else None
@@ -227,3 +231,43 @@ def test_style_files_override_and_built_ins(project, tables):
     assert ("+", "workspace", "styling") in changes
     assert ("+", "style", "styling:line") in changes
     assert ("~", "layer", "uk:road_links") in changes  # its extra style is now styling:line
+
+
+def tile(gridsets=("EPSG:4326", "EPSG:900913"), formats=("image/png",)):
+    return {"enabled": True, "gridSubsets": [{"gridSetName": g} for g in gridsets], "mimeFormats": list(formats)}
+
+
+def test_the_cache_geoserver_makes_for_new_layers_is_dropped(project, tables, capsys):
+    gs = converged()
+    gs.tiles["uk:sites"] = tile()  # GeoServer Cloud caches every new layer
+    [change] = plan(project, gs)
+    assert (change.action, change.target, change.fields) == ("~", "uk:sites", [
+        ("cache", {"gridsets": ["EPSG:4326", "EPSG:900913"], "formats": ["image/png"]}, False)])
+    print_plan([change])
+    assert "cache: cached (EPSG:4326, EPSG:900913; image/png) -> False" in capsys.readouterr().out
+
+
+def test_cache_true_and_cache_settings(project, tables):
+    (project / "project.yaml").write_text(PROJECT.replace(
+        "spec: { table: { schema: field, name: sites } }",
+        "spec: { table: { schema: field, name: sites }, cache: { gridsets: [EPSG:27700], formats: [image/png, image/jpeg] } }"
+    ).replace("spec: { mode: container, layers: [sites] }", "spec: { mode: container, layers: [sites], cache: true }"))
+    gs = converged()
+    changes = {c.target: c.fields for c in plan(project, gs)}
+    assert changes["uk:sites"] == [("cache", False, {"gridsets": ["EPSG:27700"], "formats": ["image/jpeg", "image/png"]})]
+    assert changes["uk:inner"] == [("cache", False, {"gridsets": ["EPSG:4326", "EPSG:900913"], "formats": ["image/png"]})]
+    gs.tiles["uk:sites"] = tile(["EPSG:27700"], ["image/jpeg", "image/png"])
+    gs.tiles["uk:inner"] = tile()
+    assert plan(project, gs) == []
+
+
+def test_attribution_from_the_file_or_the_sources_licence(project, tables, monkeypatch):
+    (project / "project.yaml").write_text(PROJECT.replace("spec: { type: url }", "spec: { type: os-downloads }").replace(
+        'spec: { source: web, url: "https://x/roads.zip", tables: { road_link: {} } }',
+        "spec: { source: web, product: OpenRoads, tables: { road_link: {} } }",
+    ).replace("spec: { table: { schema: field, name: sites } }", "spec: { table: { schema: field, name: sites }, attribution: Our survey }"))
+    changes = {c.target: c.fields for c in plan(project, converged())}
+    [(field, live, wanted)] = changes["uk:road_links"]
+    assert field == "attribution" and live is None
+    assert wanted.startswith("Contains OS data © Crown copyright and database right 20")
+    assert changes["uk:sites"] == [("attribution", None, "Our survey")]

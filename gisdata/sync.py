@@ -18,9 +18,10 @@ from pathlib import Path
 import psycopg2
 
 from . import discover, ingest, remote, schedule, secrets
-from .loader import Resource, default_table, load
+from .geoserver import GeoServer, GeoServerError, MissingCredentials, for_project
+from .loader import Project, Resource, default_table, load
 from .sources import Product, SourceError
-from .validate import validate
+from .validate import geoserver_name, members, validate
 
 DB_KEYS = ("host", "port", "database", "username", "password")
 DEFAULT_SCHEMAS = {"live": "data_layers", "staging": "staging", "backup": "backup"}
@@ -101,8 +102,8 @@ def up_to_date(conn, db: ingest.Database, dataset: Resource, last: ingest.LastLo
     return ingest.tables_exist(conn, db.live, last.tables)
 
 
-def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, dataset: Resource, force: bool) -> str:
-    """Check one dataset and load it if needed; returns a line for the user."""
+def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, dataset: Resource, force: bool) -> tuple[str, list[str]]:
+    """Check one dataset and load it if needed; returns a line for the user, and the tables loaded (none if up to date)."""
     started = datetime.now()
     spec = dataset.spec
     src = discover.resolve(spec["source"], root)
@@ -113,7 +114,7 @@ def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, datas
     last = ingest.last_load(conn, dataset.name)
     if not force and up_to_date(conn, db, dataset, last, product.version, None):
         ingest.record(conn, dataset.name, product.version, chosen.format, "skipped", started, tables=last.tables)
-        return f"{dataset.name}: up to date ({discover.version(product.version)})"
+        return f"{dataset.name}: up to date ({discover.version(product.version)})", []
 
     validation = spec.get("validation") or {}
     project_crs = project.spec.get("crs") or DEFAULT_CRS
@@ -129,7 +130,7 @@ def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, datas
             if not force and up_to_date(conn, db, dataset, last, None, sha):
                 version = product.version or f"sha256:{sha[:16]}"
                 ingest.record(conn, dataset.name, version, chosen.format, "skipped", started, sha=sha, tables=last.tables)
-                return f"{dataset.name}: up to date (same file as last time)"
+                return f"{dataset.name}: up to date (same file as last time)", []
             found = ingest.file_layers(path, work)
         layers = plan_layers(dataset, found, project_crs)
         t0 = time.monotonic()
@@ -147,7 +148,53 @@ def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, datas
     detail = ", ".join(f"{db.live}.{s.layer.table} ({s.rows:,} rows)" for s in staged)
     notes = ([f"{dropped:,} invalid {'geometry' if dropped == 1 else 'geometries'} left out"] if dropped else [])
     notes += [s.note for s in staged if s.note]
-    return f"{dataset.name}: loaded {discover.version(version)} in {time.monotonic() - t0:.0f}s: {detail}" + "".join(f"\n  note: {n}" for n in notes)
+    message = f"{dataset.name}: loaded {discover.version(version)} in {time.monotonic() - t0:.0f}s: {detail}"
+    return message + "".join(f"\n  note: {n}" for n in notes), tables
+
+
+def refresh(gs: GeoServer, files: Project, db: ingest.Database, dataset: str) -> str:
+    """
+    After new data: work out again the bounding boxes of the layers on the
+    dataset's tables, and throw away cached tiles of those layers and of the
+    groups that hold them. Returns a note; GeoServer trouble never fails a sync.
+    """
+    project = files.of_kind("Project")[0]
+    default_ws = project.spec["workspace"]
+    layers = [r for r in files.of_kind("Layer") if r.spec.get("dataset") == dataset]
+    if not layers:
+        return ""
+    names = {r.name for r in layers}
+    groups = files.named("LayerGroup")
+    holding: set[str] = set()
+    changed = True
+    while changed:  # groups that hold the layers, or groups that hold those
+        changed = False
+        for name, group in groups.items():
+            if name not in holding and any(m in names or m in holding for _, m in members(group)):
+                holding.add(name)
+                changed = True
+    refreshed, cleared = 0, 0
+    try:
+        for r in layers:
+            ws, name = r.spec.get("workspace") or default_ws, geoserver_name(r)
+            if gs.featuretype(ws, db.live, name) is None:
+                continue  # not published yet: apply does that
+            gs.recalculate(ws, db.live, name)
+            refreshed += 1
+            if gs.tile_layer(f"{ws}:{name}"):
+                gs.truncate(f"{ws}:{name}")
+                cleared += 1
+        for name in sorted(holding):
+            g = groups[name]
+            target = f"{g.spec.get('workspace') or default_ws}:{geoserver_name(g)}"
+            if gs.tile_layer(target):
+                gs.truncate(target)
+                cleared += 1
+    except GeoServerError as e:
+        return f"GeoServer not refreshed: {e}"
+    if not refreshed and not cleared:
+        return ""
+    return f"GeoServer: bounds of {refreshed} layer(s) worked out again, cached tiles of {cleared} layer(s) or group(s) cleared"
 
 
 def run(root: Path, names: list[str], force: bool = False) -> int:
@@ -169,6 +216,12 @@ def run(root: Path, names: list[str], force: bool = False) -> int:
     except psycopg2.OperationalError as e:
         raise SyncError(f"can't connect to the database at {db.host}:{db.port}: {str(e).strip().splitlines()[0]}", code=1) from None
 
+    try:
+        gs: GeoServer | None = for_project(project, root)
+        gs_note = ""
+    except MissingCredentials as e:
+        gs, gs_note = None, f"GeoServer isn't refreshed after loads: {e}"
+
     failures = 0
     try:
         ingest.bootstrap(conn)
@@ -179,7 +232,14 @@ def run(root: Path, names: list[str], force: bool = False) -> int:
                 print(f"{name}: not due ({update or 'manual'})")
                 continue
             try:
-                print(sync_dataset(conn, db, root, project, dataset, force), flush=True)
+                message, loaded = sync_dataset(conn, db, root, project, dataset, force)
+                print(message, flush=True)
+                if loaded and gs is not None:
+                    note = refresh(gs, project_files, db, name)
+                    if note:
+                        print(f"  {note}", flush=True)
+                elif loaded and gs_note:
+                    print(f"  note: {gs_note}", flush=True)
             except (SourceError, ingest.LoadError, remote.RemoteError, discover.DiscoverError, psycopg2.Error, OSError) as e:
                 failures += 1
                 conn.rollback()

@@ -15,12 +15,13 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 import psycopg2
 
-from . import discover, ingest, remote, secrets, sync
-from .geoserver import GROUP_MODES, GeoServer, GeoServerError
+from . import discover, ingest, remote, sync
+from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
@@ -28,6 +29,13 @@ from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, 
 # Apply order: what a change needs is made first; deletions come last, outermost first
 ORDER = ["workspace", "store", "style", "table", "layer", "group"]
 DELETE_ORDER = ["group", "layer", "style", "store"]
+
+# `cache: true`: what GeoServer itself would cache
+DEFAULT_GRIDSETS = ["EPSG:4326", "EPSG:900913"]
+DEFAULT_FORMATS = ["image/png"]
+
+# Attribution a source's licence asks for, when a layer's file gives none
+SOURCE_ATTRIBUTION = {"os-downloads": "Contains OS data © Crown copyright and database right {year}"}
 
 
 @dataclass
@@ -49,6 +57,30 @@ def as_list(value) -> list:
 
 def names_of(items) -> list[str]:
     return [i.get("name") if isinstance(i, dict) else i for i in as_list(items)]
+
+
+def wanted_cache(setting) -> dict | bool:
+    """The spec's `cache` as {gridsets, formats}, or False for no cache."""
+    if not setting:
+        return False
+    if setting is True:
+        setting = {}
+    return {"gridsets": sorted(setting.get("gridsets", DEFAULT_GRIDSETS)), "formats": sorted(setting.get("formats", DEFAULT_FORMATS))}
+
+
+def live_cache(tile_layer: dict | None) -> dict | bool:
+    if not tile_layer or not tile_layer.get("enabled", True):
+        return False
+    return {"gridsets": sorted(g["gridSetName"] for g in as_list(tile_layer.get("gridSubsets"))),
+            "formats": sorted(as_list(tile_layer.get("mimeFormats")))}
+
+
+def set_cache(gs: GeoServer, name: str, wanted: dict | bool) -> None:
+    """Cache `name` as wanted; no cache drops the one GeoServer makes for every new layer."""
+    if wanted:
+        gs.put_tile_layer(name, wanted["gridsets"], wanted["formats"])
+    else:
+        gs.delete_tile_layer(name)
 
 
 def diff(pairs: list[tuple[str, object, object]]) -> list[tuple[str, object, object]]:
@@ -99,6 +131,15 @@ class Planner:
         dataset = self.datasets[layer.spec["dataset"]]
         options = (dataset.spec.get("tables") or {}).get(table) or {}
         return self.db.live, options.get("name") or default_table(dataset.name, table), dataset.name
+
+    def attribution(self, layer: Resource) -> str | None:
+        """The layer's own attribution, else what its dataset's source asks for."""
+        if "attribution" in layer.spec:
+            return layer.spec["attribution"]
+        dataset = self.datasets.get(layer.spec.get("dataset") or "")
+        source = self.files.named("Source").get(dataset.spec["source"]) if dataset else None
+        text = SOURCE_ATTRIBUTION.get(source.spec.get("type")) if source else None
+        return text.format(year=date.today().year) if text else None
 
     def published(self, name: str) -> tuple[str, str]:
         """("layer" or "layerGroup", ws:name) for a group member."""
@@ -168,13 +209,18 @@ class Planner:
                          ("nativeName", table)]
             if "abstract" in spec:
                 wanted_ft.append(("abstract", spec["abstract"]))
-            wanted_layer = [("queryable", spec.get("queryable", True))]
+            attribution = self.attribution(layer)
+            cache = wanted_cache(spec.get("cache"))
+            wanted_layer = [("queryable", spec.get("queryable", True)), ("cache", cache)]
+            if attribution is not None:
+                wanted_layer.append(("attribution", attribution))
             if spec.get("style"):
                 wanted_layer.append(("style", self.style_ref(spec["style"])))
             if "styles" in spec:
                 wanted_layer.append(("styles", [self.style_ref(s) for s in spec["styles"]]))
 
-            def run(ws=ws, name=name, schema=schema, table=table, spec=spec, title=title, old_store=None):
+            def run(ws=ws, name=name, schema=schema, table=table, spec=spec, title=title, attribution=attribution,
+                    cache=cache, old_store=None):
                 if old_store and old_store != schema:
                     self.gs.delete_featuretype(ws, old_store, name)
                 self.gs.upsert_featuretype(ws, schema, name, table, title=title, abstract=spec.get("abstract"),
@@ -182,7 +228,8 @@ class Planner:
                                            advertised=spec.get("advertised", True))
                 self.gs.update_layer(ws, name, style=self.style_ref(spec.get("style")),
                                      styles=[self.style_ref(s) for s in spec["styles"]] if "styles" in spec else None,
-                                     queryable=spec.get("queryable", True))
+                                     queryable=spec.get("queryable", True), attribution=attribution)
+                set_cache(self.gs, f"{ws}:{name}", cache)
 
             live_layer = self.gs.layer(ws, name)
             if live_layer is None:
@@ -197,6 +244,8 @@ class Planner:
                 "queryable": live.get("queryable", True),
                 "style": (live.get("defaultStyle") or {}).get("name"),
                 "styles": names_of((live.get("styles") or {}).get("style")),
+                "attribution": (live.get("attribution") or {}).get("title"),
+                "cache": live_cache(self.gs.tile_layer(target)),
             }
             changed = diff([(k, current[k], v) for k, v in wanted_ft + wanted_layer])
             if "keywords" in spec and names_of((ft.get("keywords") or {}).get("string")) != spec["keywords"]:
@@ -227,13 +276,17 @@ class Planner:
             ws, gs_name, spec = self.workspace_of(group), geoserver_name(group), group.spec
             entries = [(self.published(member), entry.get("style") if isinstance(entry, dict) else None)
                        for (_, member), entry in zip(members(group), spec["layers"])]
+            cache = wanted_cache(spec.get("cache"))
             wanted = [("title", spec.get("title") or gs_name), ("mode", GROUP_MODES[spec.get("mode", "single")]),
-                      ("layers", [n for (_, n), _ in entries]), ("styles", [self.style_ref(s) for _, s in entries])]
+                      ("layers", [n for (_, n), _ in entries]), ("styles", [self.style_ref(s) for _, s in entries]),
+                      ("cache", cache)]
             if "abstract" in spec:
                 wanted.append(("abstract", spec["abstract"]))
-            run = (lambda gs_name=gs_name, ws=ws, spec=spec, entries=entries: self.gs.upsert_layergroup(
-                gs_name, [(kind, n, self.style_ref(style)) for (kind, n), style in entries], ws=ws,
-                title=spec.get("title"), abstract=spec.get("abstract"), mode=spec.get("mode", "single")))
+            def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache):
+                self.gs.upsert_layergroup(gs_name, [(kind, n, self.style_ref(style)) for (kind, n), style in entries], ws=ws,
+                                          title=spec.get("title"), abstract=spec.get("abstract"), mode=spec.get("mode", "single"))
+                set_cache(self.gs, f"{ws}:{gs_name}", cache)
+
             live = self.gs.layergroup(gs_name, ws)
             if live is None:
                 self.add("+", "group", f"{ws}:{gs_name}", note=f"{len(entries)} members", run=run)
@@ -242,7 +295,8 @@ class Planner:
             styles = [s.get("name") if isinstance(s, dict) and s.get("name") else None for s in as_list((g.get("styles") or {}).get("style"))]
             current = {"title": g.get("title"), "mode": g.get("mode"), "abstract": g.get("abstractTxt"),
                        "layers": names_of((g.get("publishables") or {}).get("published")),
-                       "styles": styles + [None] * (len(entries) - len(styles))}
+                       "styles": styles + [None] * (len(entries) - len(styles)),
+                       "cache": live_cache(self.gs.tile_layer(f"{ws}:{gs_name}"))}
             changed = diff([(k, current[k], v) for k, v in wanted])
             if changed:
                 self.add("~", "group", f"{ws}:{gs_name}", changed, run=run)
@@ -298,8 +352,8 @@ class Planner:
 
     def first_sync(self, dataset: str) -> None:
         ingest.bootstrap(self.conn)  # the ingest log, on a database nothing has loaded into yet
-        print("    " + sync.sync_dataset(self.conn, self.db, self.root, self.project, self.datasets[dataset], force=False)
-              .replace("\n", "\n    "), flush=True)
+        message, _ = sync.sync_dataset(self.conn, self.db, self.root, self.project, self.datasets[dataset], force=False)
+        print("    " + message.replace("\n", "\n    "), flush=True)
 
 
 def ordered(changes: list[Change]) -> list[Change]:
@@ -311,6 +365,10 @@ def ordered(changes: list[Change]) -> list[Change]:
 
 
 def show(value) -> str:
+    if isinstance(value, dict) and set(value) == {"gridsets", "formats"}:
+        return f"cached ({', '.join(value['gridsets'])}; {', '.join(value['formats'])})"
+    if value is False:
+        return "False"
     return '"' + value + '"' if isinstance(value, str) else str(value)
 
 
@@ -342,14 +400,10 @@ def connect(root: Path, geoserver_url: str | None):
             print(f"{p.file}:{p.line}: {p.resource + ': ' if p.resource else ''}{p.message}", file=sys.stderr)
         raise PlanError(f"the files have {len(errors)} error(s); `gisdata validate` lists them")
     project = files.of_kind("Project")[0]
-    spec = project.spec["geoserver"]
-    secret = spec["credentials"]["secret"]
-    creds = {key: secrets.lookup(secret, key, root) for key in ("username", "password")}
-    missing = [k for k, v in creds.items() if v is None]
-    if missing:
-        names = ", ".join(f"${secrets.env_name(secret, k)}" for k in missing)
-        raise PlanError(f"the GeoServer secret {secret} is missing {', '.join(missing)}: set {names}, or add them to secrets.yaml")
-    gs = GeoServer(geoserver_url or spec["url"], creds["username"], creds["password"])
+    try:
+        gs = for_project(project, root, geoserver_url)
+    except MissingCredentials as e:
+        raise PlanError(str(e)) from None
     db = sync.database(project, root)
     try:
         conn = db.connect()
