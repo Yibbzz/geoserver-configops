@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gisdata"
+version = "0.1.0"
+description = "Version-controlled open GIS datasets for GeoServer Cloud (working name)"
+readme = "docs/spec/datasets.md"
+license = { text = "BSD-2-Clause" }
+requires-python = ">=3.10"
+dependencies = ["pyyaml>=6", "jsonschema>=4.18"]
+
+[project.scripts]
+gisdata = "gisdata.cli:main"
+
+[tool.setuptools]
+packages = ["gisdata"]
+
+[tool.setuptools.package-data]
+gisdata = ["schema/*.json"]

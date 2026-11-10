@@ -1,3 +1,4 @@
 -r auto-update-development/requirements.txt
 pytest
 pyyaml
+-e .

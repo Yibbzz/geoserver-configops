@@ -63,6 +63,8 @@ jobs:
           TEST_DB_USER: postgres
           TEST_DB_PASSWORD: postgres
         run: pytest
+      - name: Validate the example project
+        run: gisdata validate examples/uk-basemap
 
   ingest-image:
     runs-on: ubuntu-latest

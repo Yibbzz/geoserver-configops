@@ -1,0 +1,545 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Yibbzz/geoserver_cloud/gisdata/schema/v1alpha1.json",
+  "title": "gisdata resource (v1alpha1)",
+  "description": "One resource of the dataset spec: docs/spec/datasets.md",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "gisdata/v1alpha1"
+    },
+    "kind": {
+      "enum": [
+        "Project",
+        "Source",
+        "Dataset",
+        "Layer",
+        "LayerGroup",
+        "Style"
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/resourceName"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "spec": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Project"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/project"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Source"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/source"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Dataset"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/dataset"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Layer"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/layer"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "LayerGroup"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/layerGroup"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Style"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/style"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "resourceName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+      "description": "lowercase letters, digits and dashes, starting and ending with a letter or digit"
+    },
+    "geoserverName": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+      "description": "letters, digits, _ . and -, not starting with a digit"
+    },
+    "tableName": {
+      "type": "string",
+      "pattern": "^[a-z_][a-z0-9_]{0,62}$",
+      "description": "lowercase letters, digits and _, not starting with a digit, at most 63 characters"
+    },
+    "secretRef": {
+      "type": "object",
+      "required": [
+        "secret"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "secret": {
+          "$ref": "#/$defs/resourceName"
+        }
+      }
+    },
+    "crs": {
+      "type": "string",
+      "pattern": "^EPSG:[0-9]+$"
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "schedule": {
+      "type": "string",
+      "anyOf": [
+        {
+          "enum": [
+            "daily",
+            "weekly",
+            "monthly",
+            "manual"
+          ]
+        },
+        {
+          "pattern": "^\\S+( \\S+){4}$",
+          "description": "A five-field cron expression"
+        }
+      ],
+      "description": "daily, weekly, monthly, manual, or a five-field cron expression such as '0 3 * * 1'"
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "geoserver",
+        "database",
+        "workspace"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "geoserver": {
+          "type": "object",
+          "required": [
+            "url",
+            "credentials"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "url": {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            "credentials": {
+              "$ref": "#/$defs/secretRef"
+            }
+          }
+        },
+        "database": {
+          "type": "object",
+          "required": [
+            "jndi",
+            "connection"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "jndi": {
+              "type": "string",
+              "pattern": "^java:comp/env/jdbc/\\S+$"
+            },
+            "connection": {
+              "$ref": "#/$defs/secretRef"
+            },
+            "schemas": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "live": {
+                  "$ref": "#/$defs/tableName"
+                },
+                "staging": {
+                  "$ref": "#/$defs/tableName"
+                },
+                "backup": {
+                  "$ref": "#/$defs/tableName"
+                }
+              }
+            }
+          }
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "crs": {
+          "$ref": "#/$defs/crs"
+        },
+        "backups": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "os-downloads",
+            "url",
+            "ckan",
+            "ogc-api-features",
+            "wfs"
+          ]
+        },
+        "credentials": {
+          "$ref": "#/$defs/secretRef"
+        }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "required": [
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/resourceName"
+        },
+        "product": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https?://"
+        },
+        "update": {
+          "$ref": "#/$defs/schedule"
+        },
+        "tables": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/tableName"
+              },
+              "crs": {
+                "$ref": "#/$defs/crs"
+              }
+            }
+          }
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dropInvalidGeometries": {
+              "type": "boolean"
+            },
+            "minRows": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dataset": {
+          "$ref": "#/$defs/resourceName"
+        },
+        "table": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "A key under the dataset's tables"
+            },
+            {
+              "type": "object",
+              "required": [
+                "schema",
+                "name"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "schema": {
+                  "$ref": "#/$defs/tableName"
+                },
+                "name": {
+                  "$ref": "#/$defs/tableName"
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "title": {
+          "type": "string"
+        },
+        "abstract": {
+          "type": "string"
+        },
+        "keywords": {
+          "$ref": "#/$defs/keywords"
+        },
+        "style": {
+          "type": "string",
+          "minLength": 1
+        },
+        "styles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "advertised": {
+          "type": "boolean"
+        },
+        "queryable": {
+          "type": "boolean"
+        },
+        "cache": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "gridsets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "formats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              }
+            }
+          ]
+        },
+        "attribution": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "table"
+      ],
+      "if": {
+        "required": [
+          "dataset"
+        ]
+      },
+      "then": {
+        "properties": {
+          "table": {
+            "type": "string"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "table": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "layerGroup": {
+      "type": "object",
+      "required": [
+        "layers"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "layers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/resourceName"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "layer"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "layer": {
+                    "$ref": "#/$defs/resourceName"
+                  },
+                  "style": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "mode": {
+          "enum": [
+            "single",
+            "named",
+            "container",
+            "opaque"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "title": {
+          "type": "string"
+        },
+        "abstract": {
+          "type": "string"
+        },
+        "keywords": {
+          "$ref": "#/$defs/keywords"
+        },
+        "cache": {
+          "type": "boolean"
+        }
+      }
+    },
+    "style": {
+      "type": "object",
+      "required": [
+        "file"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "\\.(sld|mbstyle|css)$"
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName"
+        }
+      }
+    }
+  }
+}
