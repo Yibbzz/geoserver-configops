@@ -414,15 +414,16 @@ For each dataset it checks:
 3. **Check:** invalid geometries are left out (unless `validation.dropInvalidGeometries: false`), and a table with fewer than `validation.minRows` rows stops the load.
 4. **Swap in:** in one transaction, each live table is renamed into the backup schema and the new one renamed into its place. Nothing is copied, and if any table fails its check, none of the dataset's live tables change. The newest `backups` backups of each table are kept.
 
+After a load, `sync` works out again the bounding boxes of the published layers on the new tables and clears their cached tiles, and those of the cached layer groups that hold them (directly or through other groups). That needs the Project's GeoServer credentials; without them, or if GeoServer can't be reached, the load still counts and a note says GeoServer wasn't refreshed. Layers not published yet are left to `apply`.
+
 Every check (loaded, up to date, failed) is written to the ingest log in `public.os_ingest_log`, which is how the next run knows the version and when the dataset is next due. A failed check doesn't count, so the next run tries again. Schedules allow an hour's slack, so a daily dataset checked a little after 02:00 yesterday is due at 02:00 today; a cron expression is due when it has named a minute since the last check.
 
 The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `GISDATA_GEOSERVER_PGCONFIG_SECRET_HOST=localhost` and so on, or `secrets.yaml`.
 
-In Kubernetes, the Helm chart runs it nightly as the `gisdata-sync` CronJob. It builds the `gisdata-project` ConfigMap from the project directory (`sync.project`: YAML and style files, never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `sync.secrets` as files under `$GISDATA_SECRETS_DIR/<secret>/<key>`, where `gisdata` looks after the environment.
+In Kubernetes, the Helm chart runs it nightly as the `gisdata-sync` CronJob. It builds the `gisdata-project` ConfigMap from the project directory (`sync.project`: YAML and style files, never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `sync.secrets` (the database's, `geoserver-admin` for the refresh after loads, and source keys) as files under `$GISDATA_SECRETS_DIR/<secret>/<key>`, where `gisdata` looks after the environment.
 
 Known gaps:
 
-- After a load, GeoServer's layer extents aren't refreshed, nor its cached tiles cleared. That comes with `apply`, which owns the GeoServer side.
 - Some data needs fixing in flight: a shapefile with impossible dates (`0000/00/00`) has its date columns loaded as text, with a note.
 - Some WFS servers can't serve features in pages, and fail. The BGS geology service is one: it serves complex (GeoSciML) features and asks for a sort order.
 - Private CKAN files, which need the API token on the file's own server, can't be downloaded yet.
@@ -452,7 +453,11 @@ Each layer gets a PostGIS store in its workspace for the schema its table is in,
 
 Only fields the files set, or whose defaults this spec defines (`title`, `enabled`, `advertised`, `queryable`, a group's `mode`), are compared. Fields GeoServer works out, or that nobody set, never show as changes, so a plan after `apply` is empty. A title changed in the web UI shows as drift and `apply` puts it back; a default style changed in the web UI on a layer whose file sets none is left alone. A style is compared by its file's text.
 
-Not handled yet: `cache` (tile caching, a separate service in GeoServer Cloud), `attribution`, and refreshing GeoServer after a `sync` (bounding boxes and cached tiles). `plan` doesn't size first loads, since it never calls the data sources.
+`cache` is compared with GeoWebCache's settings for the layer or group. GeoServer Cloud caches every new layer by itself, so `cache: false` (the default) means `apply` removes that cache; `cache: true` caches in EPSG:4326 and EPSG:900913 as PNG, and `{ gridsets, formats }` sets both. GeoWebCache's REST API is at `<geoserver url>/gwc/rest` through the gateway; `GISDATA_GWC_URL` points elsewhere (a GeoServer Cloud REST service reached directly serves it under `/geoserver-cloud/gwc/rest`).
+
+`attribution` is the layer's own text or, for a layer on a dataset from a source whose licence asks for one, that source's: OS data gets "Contains OS data © Crown copyright and database right <year>". Other sources have no default yet.
+
+`plan` doesn't size first loads, since it never calls the data sources.
 
 ## Importing today's config
 

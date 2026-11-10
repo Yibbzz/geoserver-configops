@@ -175,3 +175,74 @@ def test_unreachable_database(proj, capsys, monkeypatch):
         monkeypatch.setenv(f"GISDATA_PG_{key}", value)
     assert main(["sync", "-C", str(proj)]) == 1
     assert "can't connect to the database at 127.0.0.1:1" in capsys.readouterr().err
+
+
+# --- refreshing GeoServer after a load
+
+REFRESH_PROJECT = PROJECT + """\
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata: { name: road-links }
+spec: { dataset: roads, table: roads }
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata: { name: other }
+spec: { table: { schema: x, name: y } }
+---
+apiVersion: gisdata/v1alpha1
+kind: LayerGroup
+metadata: { name: inner }
+spec: { layers: [road-links] }
+---
+apiVersion: gisdata/v1alpha1
+kind: LayerGroup
+metadata: { name: outer }
+spec: { layers: [inner, other] }
+---
+apiVersion: gisdata/v1alpha1
+kind: LayerGroup
+metadata: { name: unrelated }
+spec: { layers: [other] }
+"""
+
+
+class RefreshGeoServer:
+    def __init__(self, published=True, cached=(), fail=False):
+        self.published, self.cached, self.fail, self.calls = published, set(cached), fail, []
+
+    def featuretype(self, ws, store, name):
+        return {"featureType": {}} if self.published else None
+
+    def recalculate(self, ws, store, name):
+        if self.fail:
+            from gisdata.geoserver import GeoServerError
+            raise GeoServerError("PUT", "x", 500, "boom")
+        self.calls.append(("recalculate", f"{ws}:{name}", store))
+
+    def tile_layer(self, name):
+        return {"enabled": True} if name in self.cached else None
+
+    def truncate(self, name):
+        self.calls.append(("truncate", name))
+
+
+def refresh_files(tmp_path):
+    (tmp_path / "project.yaml").write_text(REFRESH_PROJECT)
+    return load(tmp_path)
+
+
+def test_refresh_bounds_and_tiles_of_the_layers_and_groups_holding_them(tmp_path):
+    gs = RefreshGeoServer(cached={"t:road_links", "t:outer", "t:unrelated"})
+    db = ingest.Database("h", 5432, "d", "u", "p")
+    note = sync.refresh(gs, refresh_files(tmp_path), db, "roads")
+    assert gs.calls == [("recalculate", "t:road_links", "data_layers"), ("truncate", "t:road_links"), ("truncate", "t:outer")]
+    assert note == "GeoServer: bounds of 1 layer(s) worked out again, cached tiles of 2 layer(s) or group(s) cleared"
+
+
+def test_refresh_skips_unpublished_layers_and_reports_trouble(tmp_path):
+    db = ingest.Database("h", 5432, "d", "u", "p")
+    assert sync.refresh(RefreshGeoServer(published=False), refresh_files(tmp_path), db, "roads") == ""
+    note = sync.refresh(RefreshGeoServer(fail=True), refresh_files(tmp_path), db, "roads")
+    assert note.startswith("GeoServer not refreshed: GeoServer answered PUT x with HTTP 500")

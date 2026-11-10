@@ -70,7 +70,7 @@ def served(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def gs():
-    return GeoServer(URL.removesuffix("/rest"), "admin", PASSWORD)
+    return GeoServer(URL.removesuffix("/rest"), "admin", PASSWORD, gwc_url=os.environ.get("E2E_GWC_URL"))
 
 
 @pytest.fixture(scope="module")
@@ -100,7 +100,7 @@ spec: {{ source: web, url: "{served}", tables: {{ areas: {{ name: e2e_areas }} }
 apiVersion: gisdata/v1alpha1
 kind: Layer
 metadata: {{ name: areas }}
-spec: {{ dataset: e2e-areas, table: areas, title: Areas, style: areas }}
+spec: {{ dataset: e2e-areas, table: areas, title: Areas, style: areas, attribution: Test data, cache: {{ gridsets: [EPSG:900913] }} }}
 ---
 apiVersion: gisdata/v1alpha1
 kind: Layer
@@ -129,6 +129,8 @@ def secrets(monkeypatch):
                        "E2EDB_PORT": str(DB["port"]), "E2EDB_DATABASE": DB["dbname"], "E2EDB_USERNAME": DB["user"],
                        "E2EDB_PASSWORD": DB["password"]}.items():
         monkeypatch.setenv(f"GISDATA_{key}", value)
+    if os.environ.get("E2E_GWC_URL"):
+        monkeypatch.setenv("GISDATA_GWC_URL", os.environ["E2E_GWC_URL"])
 
 
 def gisdata(capsys, *args):
@@ -155,6 +157,17 @@ def test_apply_from_nothing_then_nothing_to_do(project, gs, capsys):
     assert gs.layer(WS, "sites")["layer"]["queryable"] is False
     group = gs.layergroup("everything", WS)["layerGroup"]
     assert group["mode"] == "NAMED"
+    assert gs.layer(WS, "areas")["layer"]["attribution"]["title"] == "Test data"
+    # cached as the file says; the cache GeoServer made for the other new layer is gone
+    assert [g["gridSetName"] for g in gs.tile_layer(f"{WS}:areas")["gridSubsets"]] == ["EPSG:900913"]
+    assert gs.tile_layer(f"{WS}:sites") is None
+    assert gs.tile_layer(f"{WS}:everything") is None
+
+
+def test_sync_refreshes_geoserver_after_a_load(project, capsys):
+    code, out = gisdata(capsys, "sync", "-C", str(project), "e2e-areas", "--force")
+    assert code == 0, out
+    assert "GeoServer: bounds of 1 layer(s) worked out again, cached tiles of 1 layer(s) or group(s) cleared" in out
 
 
 def test_drift_is_shown_and_put_back(project, gs, capsys):

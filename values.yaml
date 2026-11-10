@@ -512,6 +512,7 @@ sync:
   # so an optional API key can be left out). See geoserver-secrets.example.yaml.
   secrets:
     - geoserver-pgconfig-secret
+    - geoserver-admin   # to refresh layer bounds and cached tiles after a load
     - os-api
   image:
     repository: gisdata  # build from ./Dockerfile and push to your registry

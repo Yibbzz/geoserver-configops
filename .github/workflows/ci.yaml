@@ -100,6 +100,7 @@ jobs:
         env:
           E2E_GEOSERVER_URL: http://localhost:59090/rest
           E2E_DB_PORT: '55433'
+          E2E_GWC_URL: http://localhost:59090/geoserver-cloud/gwc/rest  # REST service reached without its gateway
         run: pytest -m e2e -v
       - name: Logs on failure
         if: failure()
@@ -120,6 +121,8 @@ jobs:
           python-version: '3.14'
       - name: Install Python dependencies
         run: pip install -r requirements-dev.txt
+      - name: Install GDAL (plan/apply load a dataset)
+        run: sudo apt-get update && sudo apt-get install -y gdal-bin
       - uses: helm/kind-action@v1.15.2
         with:
           cluster_name: gscloud

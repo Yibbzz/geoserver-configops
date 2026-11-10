@@ -7,10 +7,14 @@ Each catalog object is one REST path; `upsert` creates or updates it.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from urllib.parse import quote
+from xml.sax.saxutils import escape
 
 import requests
 
+from . import secrets
 from .sources import http_session
 
 TIMEOUT = 60
@@ -35,15 +39,40 @@ class GeoServerError(Exception):
         self.status = status
 
 
+class MissingCredentials(Exception):
+    """The Project's GeoServer secret isn't set; the message says how to set it."""
+
+
+def for_project(project, root: Path, url: str | None = None) -> "GeoServer":
+    """The client for a Project resource: its address (or `url`) and its credentials secret."""
+    spec = project.spec["geoserver"]
+    secret = spec["credentials"]["secret"]
+    creds = {key: secrets.lookup(secret, key, root) for key in ("username", "password")}
+    missing = [k for k, v in creds.items() if v is None]
+    if missing:
+        names = ", ".join(f"${secrets.env_name(secret, k)}" for k in missing)
+        raise MissingCredentials(f"the GeoServer secret {secret} is missing {', '.join(missing)}: set {names}, or add them to secrets.yaml")
+    # GISDATA_GWC_URL: GeoWebCache's REST address, for a GeoServer Cloud REST service reached without its gateway
+    return GeoServer(url or spec["url"], creds["username"], creds["password"], gwc_url=os.environ.get("GISDATA_GWC_URL"))
+
+
 def q(name: str) -> str:
     """A name as one path segment."""
     return quote(name, safe="")
 
 
+def tile_name(name: str) -> str:
+    """A ws:name for GeoWebCache's paths, which need the colon as it is."""
+    return quote(name, safe=":")
+
+
 class GeoServer:
-    def __init__(self, url: str, username: str, password: str, session: requests.Session | None = None):
+    def __init__(self, url: str, username: str, password: str, session: requests.Session | None = None,
+                 gwc_url: str | None = None):
         self.url = url.rstrip("/")
         self.rest = f"{self.url}/rest"
+        # GeoWebCache's REST API: <url>/gwc/rest through GeoServer Cloud's gateway
+        self.gwc = (gwc_url or f"{self.url}/gwc/rest").rstrip("/")
         self.session = session or http_session()
         self.session.auth = (username, password)
 
@@ -167,9 +196,11 @@ class GeoServer:
         return self.get(f"workspaces/{q(ws)}/layers/{q(name)}")
 
     def update_layer(self, ws: str, name: str, style: str | None = None, styles: list[str] | None = None,
-                     queryable: bool | None = None, enabled: bool | None = None) -> None:
+                     queryable: bool | None = None, enabled: bool | None = None, attribution: str | None = None) -> None:
         """Set a layer's styles and settings; anything left None is left as it is."""
         layer: dict = {}
+        if attribution is not None:
+            layer["attribution"] = {"title": attribution}
         if style is not None:
             layer["defaultStyle"] = {"name": style}
         if styles is not None:
@@ -238,3 +269,50 @@ class GeoServer:
     def delete_layergroup(self, name: str, ws: str | None = None) -> bool:
         base = f"workspaces/{q(ws)}/layergroups" if ws else "layergroups"
         return self.delete(f"{base}/{q(name)}")
+
+    # --- tile cache (GeoWebCache). Its REST API reads JSON well but writes XML only.
+
+    def gwc_request(self, method: str, path: str, body: str | None = None) -> requests.Response:
+        url = f"{self.gwc}/{path}"
+        headers = {"Accept": "application/json"}
+        if body is not None:
+            headers["Content-Type"] = "text/xml"
+        try:
+            return self.session.request(method, url, data=body.encode("utf-8") if body else None,
+                                        headers=headers, timeout=TIMEOUT)
+        except requests.RequestException as e:
+            raise GeoServerError(method, f"gwc/{path}", 0, f"can't reach {self.gwc}: {e}") from None
+
+    def tile_layer(self, name: str) -> dict | None:
+        """A layer's or group's tile cache settings (name as ws:name), or None if it isn't cached."""
+        r = self.gwc_request("GET", f"layers/{tile_name(name)}")
+        if r.status_code == 200:
+            return r.json().get("GeoServerLayer")
+        if r.status_code in (404, 500) and "Unknown layer" in r.text:
+            return None
+        raise GeoServerError("GET", f"gwc/layers/{name}", r.status_code, r.text)
+
+    def put_tile_layer(self, name: str, gridsets: list[str], formats: list[str]) -> None:
+        """Cache `name` in these gridsets and image formats (creating or replacing its settings)."""
+        xml = (f"<GeoServerLayer><name>{escape(name)}</name><enabled>true</enabled>"
+               f"<mimeFormats>{''.join(f'<string>{escape(f)}</string>' for f in formats)}</mimeFormats>"
+               f"<gridSubsets>{''.join(f'<gridSubset><gridSetName>{escape(g)}</gridSetName></gridSubset>' for g in gridsets)}"
+               "</gridSubsets></GeoServerLayer>")
+        r = self.gwc_request("PUT", f"layers/{tile_name(name)}", xml)
+        if r.status_code != 200:
+            raise GeoServerError("PUT", f"gwc/layers/{name}", r.status_code, r.text)
+
+    def delete_tile_layer(self, name: str) -> bool:
+        """Stop caching `name` and drop its tiles; False if it wasn't cached."""
+        r = self.gwc_request("DELETE", f"layers/{tile_name(name)}")
+        if r.status_code == 200:
+            return True
+        if "Unknown layer" in r.text:
+            return False
+        raise GeoServerError("DELETE", f"gwc/layers/{name}", r.status_code, r.text)
+
+    def truncate(self, name: str) -> None:
+        """Throw away `name`'s cached tiles, so they are drawn again from the new data."""
+        r = self.gwc_request("POST", "masstruncate", f"<truncateLayer><layerName>{escape(name)}</layerName></truncateLayer>")
+        if r.status_code != 200:
+            raise GeoServerError("POST", "gwc/masstruncate", r.status_code, r.text)

@@ -41,7 +41,9 @@ def sql(statement, *args):
 
 @pytest.fixture(scope="module")
 def gs():
-    client = GeoServer(URL.removesuffix("/rest"), "admin", os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver"))
+    # E2E_GWC_URL: GeoWebCache's REST address when the REST service is reached directly, not through the gateway
+    client = GeoServer(URL.removesuffix("/rest"), "admin", os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver"),
+                       gwc_url=os.environ.get("E2E_GWC_URL"))
     sql("CREATE EXTENSION IF NOT EXISTS postgis; CREATE SCHEMA IF NOT EXISTS data_layers;"
         "DROP TABLE IF EXISTS data_layers.gc_points;"
         "CREATE TABLE data_layers.gc_points (id serial PRIMARY KEY, name text, geom geometry(Point, 27700));"
@@ -120,6 +122,23 @@ def test_layer_group(gs):
     assert group["title"] == "Group"
     assert gs.upsert_layergroup("gc-group", [("layer", f"{WS}:points", None)], ws=WS, mode="opaque") == "updated"
     assert gs.layergroup("gc-group", ws=WS)["layerGroup"]["mode"] == "OPAQUE_CONTAINER"
+
+
+def test_tile_cache(gs):
+    name = f"{WS}:points"
+    gs.put_tile_layer(name, ["EPSG:900913"], ["image/png", "image/jpeg"])
+    layer = gs.tile_layer(name)
+    assert [g["gridSetName"] for g in layer["gridSubsets"]] == ["EPSG:900913"]
+    assert sorted(layer["mimeFormats"]) == ["image/jpeg", "image/png"]
+    gs.truncate(name)
+    assert gs.delete_tile_layer(name) is True
+    assert gs.tile_layer(name) is None
+    assert gs.delete_tile_layer(name) is False
+
+
+def test_attribution(gs):
+    gs.update_layer(WS, "points", attribution="Contains test data")
+    assert gs.layer(WS, "points")["layer"]["attribution"]["title"] == "Contains test data"
 
 
 def test_deleting(gs):
