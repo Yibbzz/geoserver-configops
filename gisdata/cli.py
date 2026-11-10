@@ -11,14 +11,14 @@ from pathlib import Path
 from . import __version__
 from .discover import DiscoverError
 from .discover import run as discover
+from .plan import PlanError
+from .plan import run as plan
 from .sync import SyncError
 from .sync import run as sync
 from .loader import load
 from .validate import validate
 
 LATER = {
-    "plan": "compare the files with live GeoServer and PostGIS",
-    "apply": "make the changes plan shows",
     "status": "show datasets and layers as they are live",
     "import": "write files that describe a live GeoServer workspace",
 }
@@ -73,6 +73,14 @@ def cmd_discover(args) -> int:
         return e.code
 
 
+def cmd_plan(args) -> int:
+    try:
+        return plan(Path(args.dir), apply=args.command == "apply", prune=args.prune, geoserver_url=args.geoserver)
+    except (PlanError, SyncError) as e:
+        print(f"gisdata {args.command}: {e}", file=sys.stderr)
+        return e.code
+
+
 def cmd_sync(args) -> int:
     try:
         return sync(Path(args.dir), args.datasets, force=args.force)
@@ -108,6 +116,17 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--no-layers", action="store_true", help="list downloads only; don't read layers from the file")
     d.add_argument("--refresh", action="store_true", help="read layers again instead of using the cache")
     d.set_defaults(func=cmd_discover)
+
+    for name, what in (
+        ("plan", "show what apply would change in GeoServer (exit code 2 when there are changes)"),
+        ("apply", "make GeoServer match the files: workspace, stores, styles, first loads, layers, groups"),
+    ):
+        c = commands.add_parser(name, help=what, description=what[0].upper() + what[1:] + ".")
+        c.add_argument("-C", "--dir", default=".", help="project directory (default: current)")
+        c.add_argument("--prune", action="store_true",
+                       help="also delete what the project's workspaces hold that the files don't mention")
+        c.add_argument("--geoserver", metavar="URL", help="GeoServer's address, if not the Project's (e.g. through a port-forward)")
+        c.set_defaults(func=cmd_plan)
 
     s = commands.add_parser(
         "sync", help="load new versions of datasets into PostGIS",

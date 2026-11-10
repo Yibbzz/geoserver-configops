@@ -90,6 +90,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
+      - name: Install GDAL (plan/apply load a dataset)
+        run: sudo apt-get update && sudo apt-get install -y gdal-bin
       - name: Install Python dependencies
         run: pip install -r requirements-dev.txt
       - name: Start GeoServer Cloud REST, PostGIS and RabbitMQ

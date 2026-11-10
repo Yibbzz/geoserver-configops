@@ -130,12 +130,13 @@ class GeoServer:
         return self.get(f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}")
 
     def upsert_featuretype(self, ws: str, store: str, name: str, table: str, title: str | None = None,
-                           abstract: str | None = None, keywords: list[str] | None = None, srs: str | None = None) -> str:
+                           abstract: str | None = None, keywords: list[str] | None = None, srs: str | None = None,
+                           enabled: bool = True, advertised: bool = True) -> str:
         """
         Publish `table` as `name`. GeoServer works out the attributes, and the
         bounding boxes are recalculated from the data each time.
         """
-        ft: dict = {"name": name, "nativeName": table, "title": title or name, "enabled": True}
+        ft: dict = {"name": name, "nativeName": table, "title": title or name, "enabled": enabled, "advertised": advertised}
         if abstract is not None:
             ft["abstract"] = abstract
         if keywords is not None:
