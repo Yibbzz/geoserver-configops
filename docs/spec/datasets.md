@@ -2,7 +2,7 @@
 
 A set of YAML files that says which open datasets you want, where they come from, how often they update, and how they are published and styled in GeoServer Cloud. A small command-line tool reads the files and makes PostGIS and GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
 
-> **Status:** first draft for review, 9 Nov 2026. `gisdata validate`, `discover`, `sync`, `plan` and `apply` are built; `status` and `import` aren't yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
+> **Status:** first draft for review, 9 Nov 2026. Every command below is built. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
 
 ## Principles
 
@@ -459,42 +459,48 @@ Only fields the files set, or whose defaults this spec defines (`title`, `enable
 
 `plan` doesn't size first loads, since it never calls the data sources.
 
+## `status`
+
+`gisdata status` shows the project as it is live, and changes nothing: each dataset from the ingest log, and each layer and group from GeoServer.
+
+```
+$ gisdata status
+DATASET             UPDATE  LOADED      AT                ROWS  NEXT CHECK        LAST CHECK
+conservation-areas  weekly  2026-11-04  2026-11-10 13:53  10    2026-11-17 12:53  success
+os-open-roads       weekly  never       -                 -     now               failed: can't reach the OS Downloads API: …
+
+LAYER                           PUBLISHED  DRIFTED  TILES CACHED
+uk:conservation_areas           yes        no       no
+uk:road_links                   yes        title    yes
+uk:survey_sites                 no: table field_data.sites doesn't exist; gisdata only publishes it  -  no
+uk:uk_basemap (group)           yes        no       yes
+```
+
+"Drifted" lists the fields `plan` would change. Without the Project's GeoServer credentials, the datasets are still shown. `--format json` is for scripts and dashboards.
+
 ## Importing today's config
 
-`gisdata import` on the current `test` workspace would produce about 30 lines in place of the 541 lines of exported JSON for its four layers and data store:
+`gisdata import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles in `styles/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `gisdata plan` on the result has nothing to do. A layer on a table that one of the directory's Datasets loads is written on that Dataset.
+
+```
+$ gisdata import test -C my-project --geoserver http://localhost:8080/geoserver-cloud
+Wrote test.yaml: 4 layer(s) (0 on a Dataset's table), 0 group(s); 0 style(s) in styles/; project.yaml
+  note: store postgis: apply moves its layers to a store named after their schema (data_layers)
+```
 
 ```yaml
 apiVersion: gisdata/v1alpha1
 kind: Layer
-metadata: { name: openroads }
+metadata:
+  name: test-points-chang
 spec:
-  workspace: test
-  table: { schema: data_layers, name: openroads }
----
-apiVersion: gisdata/v1alpha1
-kind: Layer
-metadata: { name: opengreenspace }
-spec:
-  workspace: test
-  table: { schema: data_layers, name: opengreenspace }
----
-apiVersion: gisdata/v1alpha1
-kind: Layer
-metadata: { name: boundaryline }
-spec:
-  workspace: test
-  table: { schema: data_layers, name: boundaryline }
----
-apiVersion: gisdata/v1alpha1
-kind: Layer
-metadata: { name: test-points-chang }
-spec:
-  workspace: test
-  table: { schema: data_layers, name: test_points_yo }
+  table:
+    schema: data_layers
+    name: test_points_yo
   title: test_points_chagned
 ```
 
-Titles equal to the layer name, extents, attribute lists and store details all drop out because they are defaults or worked out. `import` can link a layer to a Dataset when the ingest log shows which product loaded its table.
+The notes say what couldn't be carried over as it is: a store not named after its schema (`apply` makes one that is), a store that connects with a password instead of the JNDI datasource, styles from another workspace or global styles other than GeoServer's built-in ones, and rasters.
 
 ## Known problems this spec has to answer
 

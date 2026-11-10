@@ -33,26 +33,38 @@ def cron_values(field: str, low: int, high: int) -> set[int]:
     return values
 
 
-def cron_matches(expr: str, t: datetime) -> bool:
+def cron_parse(expr: str) -> tuple:
     fields = expr.split()
-    minute, hour, day, month, weekday = (cron_values(f, lo, hi) for f, (lo, hi) in zip(fields, CRON_FIELDS))
+    sets = tuple(cron_values(f, lo, hi) for f, (lo, hi) in zip(fields, CRON_FIELDS))
+    # as in cron: when both day and weekday are restricted, either may match
+    return sets + (fields[2] != "*" and fields[4] != "*",)
+
+
+def cron_matches(expr: str | tuple, t: datetime) -> bool:
+    minute, hour, day, month, weekday, either = cron_parse(expr) if isinstance(expr, str) else expr
     if t.minute not in minute or t.hour not in hour or t.month not in month:
         return False
     day_ok, weekday_ok = t.day in day, (t.isoweekday() % 7) in weekday
-    # as in cron: when both day and weekday are restricted, either may match
-    if fields[2] != "*" and fields[4] != "*":
-        return day_ok or weekday_ok
-    return day_ok and weekday_ok
+    return (day_ok or weekday_ok) if either else (day_ok and weekday_ok)
+
+
+def cron_next(expr: str, after: datetime, limit: timedelta = MAX_CRON_LOOKBACK) -> datetime | None:
+    """The first minute after `after` the expression names (None if none within `limit`)."""
+    parsed = cron_parse(expr)
+    t = after.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    end = after + limit
+    while t <= end:
+        if cron_matches(parsed, t):
+            return t
+        t += timedelta(minutes=1)
+    return None
 
 
 def cron_fired(expr: str, since: datetime, now: datetime) -> bool:
     """Whether the expression names a minute after `since`, up to `now`."""
-    t = max(since, now - MAX_CRON_LOOKBACK).replace(second=0, microsecond=0) + timedelta(minutes=1)
-    while t <= now:
-        if cron_matches(expr, t):
-            return True
-        t += timedelta(minutes=1)
-    return False
+    start = max(since, now - MAX_CRON_LOOKBACK)
+    found = cron_next(expr, start, now - start)
+    return found is not None and found <= now
 
 
 def due(update: str | None, last_check: datetime | None, now: datetime | None = None) -> bool:
@@ -66,3 +78,19 @@ def due(update: str | None, last_check: datetime | None, now: datetime | None = 
     if update in NAMED:
         return now - last_check >= NAMED[update] - SLACK
     return cron_fired(update, last_check, now)
+
+
+def next_check(update: str | None, last_check: datetime | None, now: datetime | None = None) -> datetime | None:
+    """
+    When the dataset is next due: now, if it already is; None for `manual`.
+    (`sync` runs from a scheduled job, so "due" means "at the next run".)
+    """
+    update = update or "manual"
+    if update == "manual":
+        return None
+    now = now or datetime.now()
+    if due(update, last_check, now):
+        return now
+    if update in NAMED:
+        return last_check + NAMED[update] - SLACK
+    return cron_next(update, now)

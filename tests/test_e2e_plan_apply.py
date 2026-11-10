@@ -120,7 +120,11 @@ spec: {{ title: Everything, mode: named, layers: [areas, sites] }}
     yield root
     gs.delete_workspace(WS)
     sql("DROP SCHEMA IF EXISTS e2e_field CASCADE; DROP TABLE IF EXISTS data_layers.e2e_areas;"
-        "DELETE FROM public.os_ingest_log WHERE dataset_id = 'e2e-areas'")
+        "DELETE FROM public.os_ingest_log WHERE dataset_id = 'e2e-areas';"
+        # the backups the forced sync left
+        "DO $$ DECLARE t text; BEGIN FOR t IN SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = 'backup' AND table_name LIKE 'e2e_areas_%' LOOP "
+        "EXECUTE format('DROP TABLE backup.%I', t); END LOOP; END $$")
 
 
 @pytest.fixture(autouse=True)
@@ -191,3 +195,31 @@ def test_unmanaged_left_alone_until_pruned(project, gs, capsys):
     assert gs.layer(WS, "by_hand") is None
     assert gs.featuretype(WS, "e2e_field", "by_hand") is None
     assert gisdata(capsys, "plan", "-C", str(project), "--prune")[0] == 0
+
+
+def test_status(project, capsys):
+    code, out = gisdata(capsys, "status", "-C", str(project), "--format", "json")
+    assert code == 0, out
+    report = json.loads(out)
+    [dataset] = report["datasets"]
+    assert dataset["dataset"] == "e2e-areas" and dataset["version"] and dataset["tables"] == ["e2e_areas"]
+    layers = {x["name"]: x for x in report["layers"]}
+    assert layers[f"{WS}:areas"] == {"kind": "layer", "name": f"{WS}:areas", "published": True, "drifted": [],
+                                     "cached": True, "problem": None}
+    assert layers[f"{WS}:everything"]["published"] is True
+
+
+def test_import_round_trip(project, tmp_path, monkeypatch, capsys):
+    """Import the workspace apply made: the files it writes need no changes."""
+    for key, value in {"GEOSERVER_ADMIN_USERNAME": "admin", "GEOSERVER_ADMIN_PASSWORD": PASSWORD,
+                       "GEOSERVER_PGCONFIG_SECRET_HOST": DB["host"], "GEOSERVER_PGCONFIG_SECRET_PORT": str(DB["port"]),
+                       "GEOSERVER_PGCONFIG_SECRET_DATABASE": DB["dbname"], "GEOSERVER_PGCONFIG_SECRET_USERNAME": DB["user"],
+                       "GEOSERVER_PGCONFIG_SECRET_PASSWORD": DB["password"]}.items():
+        monkeypatch.setenv(f"GISDATA_{key}", value)
+    target = tmp_path / "imported"
+    code, out = gisdata(capsys, "import", WS, "-C", str(target), "--geoserver", URL.removesuffix("/rest"))
+    assert code == 0, out
+    assert (target / "styles" / "areas.sld").read_text().strip() == SLD.strip()
+    assert gisdata(capsys, "validate", str(target))[0] == 0
+    code, out = gisdata(capsys, "plan", "-C", str(target))
+    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
