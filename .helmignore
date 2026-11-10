@@ -51,3 +51,4 @@ secrets.yaml
 secrets.yml
 Dockerfile
 .dockerignore
+CLAUDE.md
