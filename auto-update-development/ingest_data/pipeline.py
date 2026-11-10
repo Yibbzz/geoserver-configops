@@ -21,15 +21,16 @@ Stages:
   3.  Download
   4.  Verify checksum
   5.  Extract
-  6.  Load into staging schema
-  7.  Validate geometry / row counts
-  8.  Backup production table (keeps the newest BACKUP_RETENTION copies)
+  6.  Load every layer of every data file into its own staging table
+  7.  Validate geometry / row counts (all tables, before anything goes live)
+  8.  Backup production tables (keeps the newest BACKUP_RETENTION copies)
   9.  Promote staging -> live (invalid geometries filtered on SELECT)
   9.5 Create GIST spatial index + ANALYZE
   10. Record result in metadata table
 """
 
 import os
+import re
 import sys
 import hashlib
 import zipfile
@@ -131,6 +132,8 @@ CREATE TABLE IF NOT EXISTS public.os_ingest_log (
     started_at      TIMESTAMP   NOT NULL DEFAULT now(),
     finished_at     TIMESTAMP
 );
+-- live tables a successful load produced, comma-separated (added for multi-table products)
+ALTER TABLE public.os_ingest_log ADD COLUMN IF NOT EXISTS tables TEXT;
 """
 
 
@@ -210,67 +213,88 @@ def extract(archive: Path, dest_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def load_staging(
-    dataset_id: str, extract_dir: Path, fmt: str, conn, srs: str = DEFAULT_SRS
-) -> str:
-    staging_schema = STAGING_SCHEMA
-    staging_table = dataset_id.lower().replace("-", "_")
 
+def table_name(*parts: str) -> str:
+    """A PostgreSQL table name from a dataset ID and layer name: lowercase, a-z 0-9 _ only."""
+    name = re.sub(r"[^a-z0-9]+", "_", "_".join(parts).lower()).strip("_")
+    if not name or name[0].isdigit():
+        name = f"t_{name}"
+    return name[:63]
+
+
+def list_layers(path: Path) -> list[str]:
+    """Names of the layers in a data file, as GDAL reports them."""
+    result = subprocess.run(["ogrinfo", "-ro", "-q", str(path)], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ogrinfo failed on {path.name}:\n{result.stderr}")
+    layers = []
+    for line in result.stdout.splitlines():
+        # e.g. "1: road_link (Multi Line String)" or "2: road_node"
+        m = re.match(r"^\s*\d+: (.+?)(?: \([^()]*\))?\s*$", line)
+        if m:
+            layers.append(m.group(1))
+    return layers
+
+
+def source_layers(extract_dir: Path, fmt: str) -> list[tuple[Path, str]]:
+    """Every (file, layer) in an extracted download, for the given format."""
     ext = EXT_MAP.get(fmt)
     if ext is None:
         raise ValueError(f"No file extension mapped for format: {fmt}")
-
-    src_file = find_file(extract_dir, ext)
-    if src_file is None:
+    files = sorted(extract_dir.rglob(f"*{ext}"))
+    if not files:
         raise FileNotFoundError(f"No {ext} file found under {extract_dir}")
+    return [(f, layer) for f in files for layer in list_layers(f)]
 
+
+def plan_tables(dataset_id: str, layers: list[tuple[Path, str]]) -> list[tuple[Path, str, str]]:
+    """
+    (file, layer, table) for every layer. A product with a single layer keeps
+    the table name it always had (the dataset ID); with several, each layer
+    gets <dataset>_<layer>.
+    """
+    if len(layers) == 1:
+        f, layer = layers[0]
+        return [(f, layer, table_name(dataset_id))]
+    planned = [(f, layer, table_name(dataset_id, layer)) for f, layer in layers]
+    tables = [t for _, _, t in planned]
+    duplicates = sorted({t for t in tables if tables.count(t) > 1})
+    if duplicates:
+        raise ValueError(f"Two layers map to the same table name: {', '.join(duplicates)}")
+    return planned
+
+
+def load_staging(conn, src_file: Path, layer: str, table: str, srs: str = DEFAULT_SRS) -> str:
+    """Load one layer of a data file into STAGING_SCHEMA.<table>."""
     with conn.cursor() as cur:
-        ensure_schema(cur, staging_schema)
-        cur.execute(f'DROP TABLE IF EXISTS {staging_schema}."{staging_table}" CASCADE')
+        ensure_schema(cur, STAGING_SCHEMA)
+        cur.execute(f'DROP TABLE IF EXISTS {STAGING_SCHEMA}."{table}" CASCADE')
     conn.commit()
 
     dsn = (
         f"PG:dbname={DB['dbname']} user={DB['user']} "
         f"password={DB['password']} host={DB['host']} port={DB['port']}"
     )
-
     cmd = [
-        "ogr2ogr",
-        "-f",
-        "PostgreSQL",
-        dsn,
-        str(src_file),
-        "-nln",
-        f"{staging_schema}.{staging_table}",
-        "-lco",
-        "OVERWRITE=YES",
-        "-lco",
-        "PRECISION=NO",
-        "-lco",
-        "GEOMETRY_NAME=geom",
-        "-lco",
-        "UNLOGGED=YES",
-        "-nlt",
-        "PROMOTE_TO_MULTI",
-        "-s_srs",
-        srs,
-        "-t_srs",
-        srs,
-        "-progress",
-        "-gt",
-        "65536",
-        "--config",
-        "PG_USE_COPY",
-        "YES",
+        "ogr2ogr", "-f", "PostgreSQL", dsn, str(src_file), layer,
+        "-nln", f"{STAGING_SCHEMA}.{table}",
+        "-lco", "OVERWRITE=YES",
+        "-lco", "PRECISION=NO",
+        "-lco", "GEOMETRY_NAME=geom",
+        "-lco", "UNLOGGED=YES",
+        "-nlt", "PROMOTE_TO_MULTI",
+        "-s_srs", srs,
+        "-t_srs", srs,
+        "-gt", "65536",
+        "--config", "PG_USE_COPY", "YES",
     ]
-
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"ogr2ogr failed:\n{result.stderr}")
+        raise RuntimeError(f"ogr2ogr failed for layer {layer}:\n{result.stderr}")
     elif result.stderr.strip():
-        print(f"  ogr2ogr warnings:\n{result.stderr.strip()}")
+        print(f"  ogr2ogr warnings ({layer}):\n{result.stderr.strip()}")
 
-    return f"{staging_schema}.{staging_table}"
+    return f"{STAGING_SCHEMA}.{table}"
 
 
 # ---------------------------------------------------------------------------
@@ -319,8 +343,7 @@ def validate(conn, table: str) -> tuple[int, int]:
 # ---------------------------------------------------------------------------
 
 
-def backup_production(conn, dataset_id: str):
-    prod_table = dataset_id.lower().replace("-", "_")
+def backup_production(conn, prod_table: str):
     backup_table = f"{prod_table}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     with conn.cursor() as cur:
@@ -368,8 +391,7 @@ def prune_backups(conn, prod_table: str):
 # ---------------------------------------------------------------------------
 
 
-def promote(conn, staging_table: str, dataset_id: str) -> int:
-    prod_table = dataset_id.lower().replace("-", "_")
+def promote(conn, staging_table: str, prod_table: str) -> int:
     staging_schema, staging_tbl = staging_table.split(".")
     geom_col = get_geometry_column(conn, staging_schema, staging_tbl)
 
@@ -413,8 +435,7 @@ def promote(conn, staging_table: str, dataset_id: str) -> int:
 # ---------------------------------------------------------------------------
 
 
-def create_spatial_index(conn, dataset_id: str):
-    prod_table = dataset_id.lower().replace("-", "_")
+def create_spatial_index(conn, prod_table: str):
     geom_col = get_geometry_column(conn, PROD_SCHEMA, prod_table)
 
     if geom_col is None:
@@ -457,14 +478,15 @@ def record(
     sha=None,
     error=None,
     started_at=None,
+    tables=None,
 ):
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO public.os_ingest_log
                 (dataset_id, version, format_used, status, rows_loaded,
-                 rows_filtered, sha256, error, started_at, finished_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                 rows_filtered, sha256, error, started_at, finished_at, tables)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s)
             """,
             (
                 dataset_id,
@@ -476,6 +498,7 @@ def record(
                 sha,
                 error,
                 started_at,
+                ",".join(tables) if tables else None,
             ),
         )
     conn.commit()
@@ -532,39 +555,39 @@ def process_dataset(conn, dataset: dict):
     extract(archive_path, extract_dir)
     log(5, f"Extracted to {extract_dir}")
 
-    # --- Stage 6: load staging ---
-    log(6, "Loading into staging schema...")
-    staging_table = load_staging(
-        dataset_id, extract_dir, fmt, conn, dataset.get("srs") or DEFAULT_SRS
-    )
-    log(6, f"Loaded into {staging_table}")
+    # --- Stage 6: load every layer into staging ---
+    srs = dataset.get("srs") or DEFAULT_SRS
+    planned = plan_tables(dataset_id, source_layers(extract_dir, fmt))
+    log(6, f"{len(planned)} layer(s) to load: {', '.join(layer for _, layer, _ in planned)}")
+    staged = []
+    for src_file, layer, table in planned:
+        staged.append((load_staging(conn, src_file, layer, table, srs), table))
+        log(6, f"Loaded {layer} into {staged[-1][0]}")
 
-    # --- Stage 7: validate ---
+    # --- Stage 7: validate all of them before anything goes live ---
     log(7, "Validating...")
-    total_rows, invalid_count = validate(conn, staging_table)
-    log(
-        7,
-        f"{total_rows:,} rows staged — {invalid_count:,} invalid geometries to filter",
-    )
+    total_rows = 0
+    for staging_table, _ in staged:
+        rows, invalid = validate(conn, staging_table)
+        total_rows += rows
+        log(7, f"{staging_table}: {rows:,} rows, {invalid:,} invalid geometries to filter")
 
-    # --- Stage 8: backup ---
-    log(8, "Backing up production table...")
-    backup_production(conn, dataset_id)
-
-    # --- Stage 9: promote ---
-    log(9, "Promoting staging -> live (filtering invalid geometries)...")
-    rows_filtered = promote(conn, staging_table, dataset_id)
-    if rows_filtered:
-        log(9, f"Filtered out {rows_filtered:,} invalid geometry rows")
-    log(9, "Done")
-
-    # --- Stage 9.5: spatial index + analyze ---
-    log("9.5", "Creating spatial index and updating planner statistics...")
-    create_spatial_index(conn, dataset_id)
+    # --- Stages 8, 9, 9.5: back up, promote and index each table ---
+    rows_filtered = 0
+    for staging_table, table in staged:
+        log(8, f"Backing up {PROD_SCHEMA}.{table}...")
+        backup_production(conn, table)
+        log(9, f"Promoting {staging_table} -> {PROD_SCHEMA}.{table}...")
+        filtered = promote(conn, staging_table, table)
+        if filtered:
+            log(9, f"Filtered out {filtered:,} invalid geometry rows")
+        rows_filtered += filtered
+        create_spatial_index(conn, table)
 
     # --- Stage 10: record ---
     log(10, "Recording success...")
     rows_loaded = total_rows - rows_filtered
+    tables = [table for _, table in staged]
     record(
         conn,
         dataset_id,
@@ -575,10 +598,11 @@ def process_dataset(conn, dataset: dict):
         rows_filtered=rows_filtered,
         sha=sha,
         started_at=started_at,
+        tables=tables,
     )
 
     shutil.rmtree(work, ignore_errors=True)
-    print(f"✓ {dataset_id} updated to {version}  ({rows_loaded:,} rows loaded)")
+    print(f"✓ {dataset_id} updated to {version}  ({rows_loaded:,} rows in {len(tables)} table(s): {', '.join(tables)})")
 
 
 # ---------------------------------------------------------------------------

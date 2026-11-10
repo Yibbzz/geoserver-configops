@@ -52,6 +52,30 @@ def served_zip(tmp_path_factory):
         z.write(gpkg, "data/polys.gpkg")
     md5 = hashlib.md5((root / "polys.zip").read_bytes()).hexdigest()
 
+    # A GeoPackage with two layers, like OS Open Roads (road links and road nodes)
+    points = root / "points.geojson"
+    points.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"name": "a"}, "geometry": {"type": "Point", "coordinates": [5, 5]}},
+        {"type": "Feature", "properties": {"name": "b"}, "geometry": {"type": "Point", "coordinates": [6, 6]}},
+        {"type": "Feature", "properties": {"name": "c"}, "geometry": {"type": "Point", "coordinates": [7, 7]}},
+    ]}))
+    multi = root / "multi.gpkg"
+    for layer, src in (("squares", geojson), ("points", points)):
+        subprocess.run(["ogr2ogr", "-f", "GPKG", "-update", "-append", str(multi), str(src),
+                        "-nln", layer, "-a_srs", "EPSG:27700"], check=True)
+    with zipfile.ZipFile(root / "multi.zip", "w") as z:
+        z.write(multi, "data/multi.gpkg")
+
+    # A zip with two Shapefiles, like Boundary-Line's Shapefile download
+    shp_dir = root / "shp"
+    shp_dir.mkdir()
+    for name, src in (("Rivers", geojson), ("Roads", points)):
+        subprocess.run(["ogr2ogr", "-f", "ESRI Shapefile", str(shp_dir / f"{name}.shp"), str(src),
+                        "-a_srs", "EPSG:27700"], check=True)
+    with zipfile.ZipFile(root / "shapes.zip", "w") as z:
+        for f in sorted(shp_dir.iterdir()):
+            z.write(f, f"data/{f.parent.name}/{f.name}")
+
     seen_headers = []
 
     class Handler(http.server.SimpleHTTPRequestHandler):
@@ -88,6 +112,9 @@ def isolated(monkeypatch, tmp_path):
     for name, value in schemas.items():
         monkeypatch.setattr(pipeline, name, value)
     conn = pipeline.get_conn()
+    # Commit after every read: an open read transaction here would hold locks the
+    # pipeline needs when it replaces live tables, and the test would hang
+    conn.autocommit = True
     yield conn, schemas, f"Test-{suffix}"
     conn.rollback()
     with conn.cursor() as cur:
@@ -157,6 +184,72 @@ def test_checksum_mismatch_is_recorded_as_failed(served_zip, isolated):
 
     assert [(v, s) for v, s, *_ in log_rows(conn, ds_id)] == [("v1", "failed")]
     assert tables(conn, schemas["PROD_SCHEMA"]) == []
+
+
+def live_rows(conn, schema, table):
+    with conn.cursor() as cur:
+        cur.execute(f'SELECT count(*) FROM {schema}."{table}"')
+        return cur.fetchone()[0]
+
+
+def test_every_layer_of_a_geopackage_gets_its_own_table(served_zip, isolated):
+    url, _, _ = served_zip
+    conn, schemas, ds_id = isolated
+    prefix = ds_id.lower().replace("-", "_")
+    ds = dataset(ds_id, url.replace("polys.zip", "multi.zip"), None, "v1")
+
+    pipeline.run_pipeline([ds])
+
+    live = schemas["PROD_SCHEMA"]
+    assert tables(conn, live) == sorted([f"{prefix}_points", f"{prefix}_squares"])
+    assert live_rows(conn, live, f"{prefix}_points") == 3
+    assert live_rows(conn, live, f"{prefix}_squares") == 1      # the bowtie is filtered out
+    assert tables(conn, schemas["STAGING_SCHEMA"]) == []
+    with conn.cursor() as cur:
+        cur.execute("SELECT rows_loaded, tables FROM public.os_ingest_log WHERE dataset_id = %s", (ds_id,))
+        assert cur.fetchone() == (4, f"{prefix}_squares,{prefix}_points")
+
+    # A second version backs up both tables
+    pipeline.run_pipeline([dict(ds, version="v2")])
+    backups = tables(conn, schemas["BACKUP_SCHEMA"])
+    assert len(backups) == 2
+    assert any(b.startswith(f"{prefix}_points_") for b in backups)
+    assert any(b.startswith(f"{prefix}_squares_") for b in backups)
+
+
+def test_every_shapefile_in_a_zip_gets_its_own_table(served_zip, isolated):
+    url, _, _ = served_zip
+    conn, schemas, ds_id = isolated
+    prefix = ds_id.lower().replace("-", "_")
+    ds = dict(dataset(ds_id, url.replace("polys.zip", "shapes.zip"), None, "v1"), format="ESRI® Shapefile")
+
+    pipeline.run_pipeline([ds])
+
+    assert tables(conn, schemas["PROD_SCHEMA"]) == sorted([f"{prefix}_rivers", f"{prefix}_roads"])
+    assert live_rows(conn, schemas["PROD_SCHEMA"], f"{prefix}_roads") == 3
+
+
+def test_a_failing_table_keeps_every_old_table_live(served_zip, isolated, monkeypatch):
+    url, _, _ = served_zip
+    conn, schemas, ds_id = isolated
+    prefix = ds_id.lower().replace("-", "_")
+    ds = dataset(ds_id, url.replace("polys.zip", "multi.zip"), None, "v1")
+    pipeline.run_pipeline([ds])
+
+    # v2: one of the two tables fails validation, so neither may be replaced
+    real_validate = pipeline.validate
+
+    def failing_validate(conn_, table):
+        if table.endswith("_points"):
+            raise ValueError("simulated bad table")
+        return real_validate(conn_, table)
+
+    monkeypatch.setattr(pipeline, "validate", failing_validate)
+    pipeline.run_pipeline([dict(ds, version="v2")])
+
+    assert [(v, s) for v, s, *_ in log_rows(conn, ds_id)] == [("v1", "success"), ("v2", "failed")]
+    assert tables(conn, schemas["BACKUP_SCHEMA"]) == []                    # nothing was swapped
+    assert live_rows(conn, schemas["PROD_SCHEMA"], f"{prefix}_points") == 3
 
 
 class _Clock:
