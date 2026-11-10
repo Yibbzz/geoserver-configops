@@ -7,7 +7,9 @@ project:
     os-api:
       apiKey: ...
 
-Kubernetes Secrets come later, with the in-cluster commands.
+In Kubernetes, each Secret is mounted as a folder of files (the Helm chart
+does this): $GISDATA_SECRETS_DIR/<secret>/<key>. The environment still wins,
+so a value can be overridden.
 """
 
 from __future__ import annotations
@@ -25,10 +27,18 @@ def env_name(secret: str, key: str) -> str:
     return "GISDATA_" + re.sub(r"[^A-Z0-9]+", "_", f"{secret}_{key}".upper()).strip("_")
 
 
+SECRETS_DIR = "GISDATA_SECRETS_DIR"
+
+
 def lookup(secret: str, key: str, root: Path | None = None) -> str | None:
     value = os.environ.get(env_name(secret, key))
     if value:
         return value
+    mounted = os.environ.get(SECRETS_DIR)
+    if mounted:
+        path = Path(mounted) / secret / key
+        if path.is_file():
+            return path.read_text(encoding="utf-8").strip()
     if root is None:
         return None
     for name in sorted(SECRET_FILES):

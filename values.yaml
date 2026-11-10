@@ -499,16 +499,24 @@ geoserver:
             tag: '3.0.4'
             repository: docker.io/geoservercloud/geoserver-acl
             sha: ''
-# Nightly open data ingest job (templates/ingest-cronjob.yaml).
-# Needs the geoserver-ingest-secret secret (see geoserver-secrets.example.yaml).
-ingest:
+# Nightly `gisdata sync` (templates/gisdata-sync.yaml): loads new versions of the
+# project's datasets into PostGIS. The project's files go into the gisdata-project
+# ConfigMap; schemas, backups and schedules come from them, not from here.
+sync:
   enabled: true
-  schedule: '0 2 * * *'
+  schedule: '0 2 * * *'   # when the job runs; each Dataset's `update` decides if it is due
+  # The project directory, relative to this chart (files outside a chart can't be read by Helm).
+  # Its *.yaml, *.yml, *.sld, *.mbstyle and *.css files become the ConfigMap; secrets.yaml never does.
+  project: examples/uk-basemap
+  # Secrets the project names, mounted as files for gisdata (a missing one is skipped,
+  # so an optional API key can be left out). See geoserver-secrets.example.yaml.
+  secrets:
+    - geoserver-pgconfig-secret
+    - os-api
   image:
-    repository: geoserver-ingest  # build from auto-update-development/Dockerfile and push to your registry
+    repository: gisdata  # build from ./Dockerfile and push to your registry
     tag: latest
     pullPolicy: Always
-  prodSchema: data_layers
-  stagingSchema: staging
-  backupSchema: backup
-  backupRetention: 3  # timestamped backups kept per dataset
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }

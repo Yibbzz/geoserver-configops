@@ -418,10 +418,11 @@ Every check (loaded, up to date, failed) is written to the ingest log in `public
 
 The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `GISDATA_GEOSERVER_PGCONFIG_SECRET_HOST=localhost` and so on, or `secrets.yaml`.
 
+In Kubernetes, the Helm chart runs it nightly as the `gisdata-sync` CronJob. It builds the `gisdata-project` ConfigMap from the project directory (`sync.project`: YAML and style files, never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `sync.secrets` as files under `$GISDATA_SECRETS_DIR/<secret>/<key>`, where `gisdata` looks after the environment.
+
 Known gaps:
 
 - After a load, GeoServer's layer extents aren't refreshed, nor its cached tiles cleared. That comes with `apply`, which owns the GeoServer side.
-- The Helm chart's nightly CronJob still runs the old ingest pipeline (`auto-update-development/`). Moving it to `gisdata sync` needs the project files in the cluster; the old pipeline goes once it has.
 - Some data needs fixing in flight: a shapefile with impossible dates (`0000/00/00`) has its date columns loaded as text, with a note.
 - Some WFS servers can't serve features in pages, and fail. The BGS geology service is one: it serves complex (GeoSciML) features and asks for a sort order.
 - Private CKAN files, which need the API token on the file's own server, can't be downloaded yet.

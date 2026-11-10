@@ -21,7 +21,7 @@ jobs:
       - name: Validate manifests against Kubernetes schemas
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
-          for extra in "" "-f values-local-registry.yaml" "--set ingest.enabled=false"; do
+          for extra in "" "-f values-local-registry.yaml" "--set sync.enabled=false"; do
             echo "== helm template $extra"
             helm template geoserver . -f values.yaml $extra | ./kubeconform -strict -summary -kubernetes-version 1.34.0 -
           done
@@ -66,16 +66,17 @@ jobs:
       - name: Validate the example project
         run: gisdata validate examples/uk-basemap
 
-  ingest-image:
+  gisdata-image:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Build ingest image
-        run: docker build -t geoserver-ingest:ci auto-update-development
+      - name: Build the gisdata image
+        run: docker build -t gisdata:ci .
       - name: Smoke test
         run: |
-          docker run --rm geoserver-ingest:ci python -c "import pipeline, sources.os_api"
-          docker run --rm geoserver-ingest:ci ogr2ogr --version
+          docker run --rm gisdata:ci --version
+          docker run --rm --entrypoint ogr2ogr gisdata:ci --version
+          docker run --rm -v "$PWD/examples/uk-basemap:/project:ro" gisdata:ci validate /project
 
   # The real GeoServer Cloud REST service (same images and jndi.yml as the chart) in Docker,
   # then the catalog import/export round trip against it.

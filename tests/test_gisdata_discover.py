@@ -150,15 +150,6 @@ def test_choose_nothing_loadable():
     assert choose([dl("GeoTIFF"), dl("Vector Tiles")]) is None
 
 
-def test_formats_match_the_pipeline():
-    """discover must show the download the pipeline would load."""
-    import pipeline
-    from sources import os_api
-
-    assert os_downloads.FORMAT_PREFERENCE == os_api.FORMAT_PREFERENCE
-    assert set(os_downloads.FORMAT_PREFERENCE) <= set(pipeline.EXT_MAP)
-
-
 # --- the OS client
 
 
@@ -657,3 +648,14 @@ def test_search_and_resource_need_the_right_form(fake_ckan, proj, capsys):
     assert main(["discover", "-C", str(proj), "portal", "conservation-areas", "--search", "x"]) == 2
     assert main(["discover", "-C", str(proj), "portal", "--resource", "r-shp"]) == 2
     assert main(["discover", "ckan"]) == 2  # no portal address
+
+
+def test_secret_from_a_mounted_kubernetes_secret(tmp_path, monkeypatch):
+    (tmp_path / "geoserver-pgconfig-secret").mkdir()
+    (tmp_path / "geoserver-pgconfig-secret" / "password").write_text("s3cret\n")
+    monkeypatch.setenv("GISDATA_SECRETS_DIR", str(tmp_path))
+    monkeypatch.delenv("GISDATA_GEOSERVER_PGCONFIG_SECRET_PASSWORD", raising=False)
+    assert secrets.lookup("geoserver-pgconfig-secret", "password") == "s3cret"
+    assert secrets.lookup("geoserver-pgconfig-secret", "host") is None
+    monkeypatch.setenv("GISDATA_GEOSERVER_PGCONFIG_SECRET_PASSWORD", "override")
+    assert secrets.lookup("geoserver-pgconfig-secret", "password") == "override"

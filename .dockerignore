@@ -1,0 +1,5 @@
+# Only pyproject.toml and gisdata/ go into the image
+*
+!pyproject.toml
+!gisdata/
+**/__pycache__

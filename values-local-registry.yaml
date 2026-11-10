@@ -48,6 +48,6 @@ geoserver:
           image:
             repository: k3d-k3d-registry.localhost:5000/geoservercloud/geoserver-acl
 
-ingest:
+sync:
   image:
-    repository: k3d-k3d-registry.localhost:5000/geoserver-ingest
+    repository: k3d-k3d-registry.localhost:5000/gisdata
