@@ -286,6 +286,11 @@
         },
         "credentials": {
           "$ref": "#/$defs/secretRef"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https?://",
+          "description": "The source's address: a CKAN portal (e.g. https://data.gov.uk), a WFS or OGC API endpoint"
         }
       }
     },
@@ -302,6 +307,11 @@
         "product": {
           "type": "string",
           "minLength": 1
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which download of a CKAN package to load: a resource ID or name"
         },
         "url": {
           "type": "string",

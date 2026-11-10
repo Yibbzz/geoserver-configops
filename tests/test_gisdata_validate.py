@@ -89,7 +89,6 @@ def test_schedule_lists_the_choices(tmp_path):
     (("table: road_link", "table: road_node"), "dataset roads has no table 'road_node' (its tables: road_link)", 19),
     (("style: line", "style: roads-thick"), "no style named 'roads-thick'", 20),
     (("  product: OpenRoads\n", ""), "spec.product: required for a os-downloads source", 10),
-    (("spec: { type: os-downloads, credentials: { secret: os-api } }", "spec: { type: os-downloads }"), "needs an API key secret", 4),
 ])
 def test_broken_references(tmp_path, change, message, line):
     root = project(tmp_path, data=DATA.replace(*change))
@@ -190,3 +189,24 @@ def test_cli_exit_codes_and_json(tmp_path, capsys):
 
     assert main(["validate", str(root / "missing")]) == 2
     assert main(["plan"]) == 2
+
+
+CKAN_DATA = DATA.replace(
+    "spec: { type: os-downloads, credentials: { secret: os-api } }", "spec: { type: ckan, url: https://data.gov.uk }"
+).replace("  product: OpenRoads", "  product: conservation-areas\n  resource: 9dd40b81")
+
+
+def test_a_ckan_source_and_a_dataset_naming_a_resource(tmp_path):
+    assert problems(project(tmp_path, data=CKAN_DATA)) == []
+
+
+def test_a_ckan_source_needs_its_address(tmp_path):
+    root = project(tmp_path, data=CKAN_DATA.replace(", url: https://data.gov.uk", ""))
+    assert one(root, "needs its address")[1] == 4
+
+
+def test_source_url_and_resource_only_where_they_mean_something(tmp_path):
+    root = project(tmp_path, data=DATA.replace("credentials: { secret: os-api }", "url: https://x.example").replace(
+        "  product: OpenRoads", "  product: OpenRoads\n  resource: x"))
+    one(root, "spec.url: not used by a os-downloads source")
+    one(root, "spec.resource: only used with a ckan source")
