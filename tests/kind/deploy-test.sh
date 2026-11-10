@@ -40,7 +40,7 @@ sed -e "s/password: \"CHANGE_ME\"/password: \"$PG_PASS\"/" geoserver-secrets.exa
 
 echo "Installing the chart (pulls about 7 GB of images on first run)..."
 helm upgrade --install "$RELEASE" . -n "$NS" -f values.yaml -f tests/kind/values-kind.yaml \
-  --set ingest.enabled=false --wait --timeout 25m
+  --set sync.enabled=false --wait --timeout 25m
 kubectl -n "$NS" get pods
 
 kubectl -n "$NS" port-forward svc/geoserver-gsc-gateway 18080:8080 >/dev/null 2>&1 & PIDS+=($!)

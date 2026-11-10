@@ -3,54 +3,59 @@
 A Helm deployment of [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud) that:
 
 - **keeps the GeoServer catalog in git**: workspaces, datastores, layers and styles are exported to JSON/SLD files and can be re-imported into a fresh cluster;
-- **keeps open data up to date**: a nightly job pulls datasets from open data APIs (currently the Ordnance Survey Downloads API), checks for new versions, and loads them into PostGIS with staging, validation and backups.
+- **keeps open data up to date**: the datasets you choose are described in YAML (a `gisdata` project), and a nightly job checks each one for a new version and loads it into PostGIS with staging, validation and backups. Sources: the Ordnance Survey Downloads API, CKAN portals such as data.gov.uk, WFS and OGC API Features services, and plain links.
 
 > **Status: early proof of concept.** It works end to end on a local k3d cluster with OS OpenData. The longer-term aim is a tool where you choose datasets, add your API keys, deploy, and get a version-controlled GIS data server. Expect breaking changes.
 
 ## How it fits together
 
 ```
- Open data APIs ──► ingest CronJob ──► PostGIS (data_layers schema) ──► GeoServer Cloud ──► WMS / WFS / WCS / tiles
-  (OS Downloads)    (auto-update-development/)                      ▲      (gateway, wms, wfs,
-                                                                     │       wcs, gwc, rest, webui)
-                          geoserver-config/  ◄── export / import ────┘
+ gisdata project (YAML) ──► gisdata-project ConfigMap
+                                    │
+ Open data sources ──► gisdata-sync CronJob ──► PostGIS (data_layers schema) ──► GeoServer Cloud ──► WMS / WFS / WCS / tiles
+  (OS, CKAN, WFS, …)    (gisdata sync)                                     ▲      (gateway, wms, wfs,
+                                                                           │       wcs, gwc, rest, webui)
+                          geoserver-config/  ◄── export / import ──────────┘
                           (catalog as files in git)
 ```
 
 | Path | What it is |
 | --- | --- |
-| `Chart.yaml`, `values.yaml`, `templates/` | Umbrella Helm chart: GeoServer Cloud 3.0 services, PostGIS (`postgis/postgis` image) and RabbitMQ (official image) from this chart's own templates, the JNDI datasource and the ingest CronJob |
+| `Chart.yaml`, `values.yaml`, `templates/` | Umbrella Helm chart: GeoServer Cloud 3.0 services, PostGIS (`postgis/postgis` image) and RabbitMQ (official image) from this chart's own templates, the JNDI datasource, and the `gisdata sync` CronJob with the project's ConfigMap |
 | `charts/` | Vendored camptocamp `application` chart, which templates the GeoServer services |
 | `values-local-registry.yaml` | Override to pull images from a local k3d registry instead of Docker Hub |
 | `geoserver-secrets.example.yaml` | Template for the Kubernetes secrets the chart expects |
 | `export-geoserver-config.sh`, `import-geoserver-config.sh` | Catalog export and import over the GeoServer REST API |
 | `geoserver-config/` | The exported catalog (example: a `test` workspace with OS Open Roads, Open Greenspace and Boundary-Line) |
-| `auto-update-development/` | The ingest job: Python pipeline, Dockerfile, and a docker-compose dev environment |
+| `gisdata/`, `pyproject.toml`, `Dockerfile` | The `gisdata` command (validate, discover, sync) and its image |
+| `examples/uk-basemap/` | A worked `gisdata` project, and the one the chart deploys by default |
+| `docs/spec/datasets.md` | The project file format and the commands |
 
 ## Quick start
 
-Prerequisites: a Kubernetes cluster (k3d, kind, or managed), `helm`, `kubectl`, `docker`, `jq`, and a free [OS Data Hub](https://osdatahub.os.uk/) API key for OS data.
+Prerequisites: a Kubernetes cluster (k3d, kind, or managed), `helm`, `kubectl`, `docker` and `jq`.
 
 1. **Create the secrets.**
 
    ```bash
    cp geoserver-secrets.example.yaml geoserver-secrets.yaml   # git-ignored
-   # edit the passwords and add your OS API key
+   # edit the passwords (an OS Data Hub key is optional: OpenData needs none)
    kubectl apply -f geoserver-secrets.yaml
    ```
 
-2. **Build and push the ingest image** to a registry your cluster can pull from.
+2. **Build and push the gisdata image** to a registry your cluster can pull from.
 
    ```bash
-   docker build -t <registry>/geoserver-ingest:latest auto-update-development
-   docker push <registry>/geoserver-ingest:latest
+   docker build -t <registry>/gisdata:latest .
+   docker push <registry>/gisdata:latest
    ```
 
-3. **Install the chart.**
+3. **Install the chart.** `sync.project` is the `gisdata` project to load; it must be inside this directory, since Helm reads files only from the chart.
 
    ```bash
    helm upgrade --install geoserver . -f values.yaml \
-     --set ingest.image.repository=<registry>/geoserver-ingest
+     --set sync.image.repository=<registry>/gisdata \
+     --set sync.project=examples/uk-basemap
    ```
 
    On k3d with a local registry, mirror the GeoServer images first with `./pull_all_images.sh`, then add `-f values-local-registry.yaml`.
@@ -64,56 +69,35 @@ Prerequisites: a Kubernetes cluster (k3d, kind, or managed), `helm`, `kubectl`, 
 
    Change the default GeoServer admin password (`admin` / `geoserver`) straight away.
 
-## Data ingest
+## Keeping data up to date
 
-The `geoserver-data-ingest` CronJob runs nightly (`ingest.schedule` in `values.yaml`). For each dataset it:
+The `gisdata-sync` CronJob runs `gisdata sync` nightly (`sync.schedule` in `values.yaml`) on the project in `sync.project`. Each Dataset's own `update` schedule decides whether it is checked that night. For each one it:
 
-1. skips it if the version matches the last successful load;
-2. downloads and verifies the archive (MD5 when the source provides one);
-3. loads every layer of every data file into its own staging table with `ogr2ogr` (a product with one layer keeps the table name it always had, the product ID; with several, each layer gets `<product>_<layer>`, e.g. `openroads_road_link`);
-4. checks row counts and geometry validity of all of them, so nothing goes live unless every table passes;
-5. backs up the live tables into the backup schema (keeps the newest `ingest.backupRetention` copies of each);
-6. swaps the new data into `data_layers`, dropping invalid geometries, then adds spatial indexes;
-7. records the result, including the tables it produced, in `public.os_ingest_log`.
+1. asks the source for its current version and skips it if that matches the last load (and its tables are still there);
+2. downloads it (checking OS's MD5) and loads the layers the Dataset names into staging tables with `ogr2ogr`;
+3. leaves out invalid geometries and checks row counts, so nothing goes live unless every table passes;
+4. swaps every table in at once, in one transaction, moving the old ones into the backup schema (the newest `backups` copies are kept);
+5. records the result in `public.os_ingest_log`.
 
-Run it on demand:
+The project's files reach the job in the `gisdata-project` ConfigMap, which the chart builds from `sync.project` (YAML and style files only; a `secrets.yaml` never goes in). The Kubernetes Secrets in `sync.secrets` are mounted as files for it. Changing the project means editing the files and running `helm upgrade`.
 
-```bash
-kubectl create job ingest-manual --from=cronjob/geoserver-data-ingest
-kubectl logs -f job/ingest-manual
-```
-
-Choose which OS products to load with `ALLOWLIST` / `BLOCKLIST` in `auto-update-development/ingest_data/sources/os_api.py`.
-
-### Adding a data source
-
-Create `auto-update-development/ingest_data/sources/<name>.py` with a `get_datasets()` function that returns a list of dicts:
-
-```python
-{
-    "id": "OpenRoads",           # stable ID, also the table name (lowercased)
-    "name": "OS Open Roads",
-    "version": "2026-04",        # a change triggers a reload
-    "format": "GeoPackage",      # GeoPackage, ESRI® Shapefile, GML, MapInfo® TAB
-    "url": "https://...",        # zip archive
-    "md5": "...",                # optional
-    "srs": "EPSG:27700",         # optional, source CRS
-    "headers": {"key": "..."},   # optional, e.g. API key
-}
-```
-
-Then add it to `SOURCES` in `main.py`.
-
-### Local development
+Run it on demand, for every dataset or just some:
 
 ```bash
-cd auto-update-development
-cp .env.example .env    # add OS_API_KEY
-docker compose up -d    # dev container + PostGIS
-docker compose exec dev python ingest_data/main.py
+kubectl create job sync-now --from=cronjob/gisdata-sync
+kubectl logs -f job/sync-now
 ```
 
-A VS Code devcontainer config is included.
+### Working on a project locally
+
+```bash
+pip install -e .
+gisdata validate my-project/                       # check the files
+gisdata discover os-downloads OpenRoads            # what a source offers, and the layers inside
+gisdata sync -C my-project/ roads                  # load one dataset now
+```
+
+Secrets come from `GISDATA_<SECRET>_<KEY>` environment variables or a git-ignored `secrets.yaml` next to the project. See [docs/spec/datasets.md](docs/spec/datasets.md) for the file format and every command.
 
 ## Config as code
 
@@ -133,7 +117,7 @@ Datastores use the JNDI datasource `java:comp/env/jdbc/mypostgis` (`templates/jn
 
 The goal is a version-controlled way to choose open datasets, keep them up to date and publish them, described in YAML and applied with an OpenTofu-style `plan`/`apply`. The draft format is in [docs/spec/datasets.md](docs/spec/datasets.md), with a worked example in [examples/uk-basemap/](examples/uk-basemap/).
 
-Three commands are built (`pip install -e .`). `gisdata validate examples/uk-basemap` checks a project's files against the spec, with every problem reported as `file:line`, and `gisdata discover` lists what a source offers and the layers inside a product: OS (`gisdata discover os-downloads OpenRoads`), any CKAN portal such as data.gov.uk (`gisdata discover ckan --url https://data.gov.uk --search "conservation areas"`), a WFS or OGC API Features service (`gisdata discover wfs --url https://.../wfs`), or a plain link (`gisdata discover url https://.../file.zip`). `gisdata sync` loads new versions of a project's datasets into PostGIS: stage, check, back up, swap in, on each Dataset's own schedule.
+Three commands are built (see [Keeping data up to date](#keeping-data-up-to-date)). `gisdata validate examples/uk-basemap` checks a project's files against the spec, with every problem reported as `file:line`, and `gisdata discover` lists what a source offers and the layers inside a product: OS (`gisdata discover os-downloads OpenRoads`), any CKAN portal such as data.gov.uk (`gisdata discover ckan --url https://data.gov.uk --search "conservation areas"`), a WFS or OGC API Features service (`gisdata discover wfs --url https://.../wfs`), or a plain link (`gisdata discover url https://.../file.zip`). `gisdata sync` loads new versions of a project's datasets into PostGIS: stage, check, back up, swap in, on each Dataset's own schedule.
 
 ## Testing
 
@@ -141,10 +125,10 @@ CI (`.github/workflows/ci.yaml`) runs on every pull request and push to `main`:
 
 | Layer | What runs |
 | --- | --- |
-| Helm chart | `helm lint`, `kubeconform` schema checks on the rendered manifests, and `tests/test_chart.py` (renders the chart and checks services, images, the ingest job and that every secret it uses is in `geoserver-secrets.example.yaml`) |
-| Ingest pipeline | Unit tests with the OS API faked (`tests/test_os_api.py`, `tests/test_pipeline_unit.py`), and end-to-end runs against a real PostGIS (`tests/test_pipeline_integration.py`) |
+| Helm chart | `helm lint`, `kubeconform` schema checks on the rendered manifests, and `tests/test_chart.py` (renders the chart and checks services, images, the sync job and its project ConfigMap, and that every secret it uses is in `geoserver-secrets.example.yaml`) |
+| gisdata | Unit tests with sources faked (`tests/test_gisdata_*.py`), and `sync` end to end against a real PostGIS (`tests/test_gisdata_sync_integration.py`) |
 | Config scripts | `shellcheck`, and an import-then-export round trip against a fake GeoServer REST API (`tests/test_config_scripts.py`) |
-| Ingest image | Docker build and a smoke test |
+| gisdata image | Docker build, and a smoke test that validates the example project inside it |
 | Real GeoServer REST | `tests/e2e/up.sh` starts GeoServer Cloud's REST service, PostGIS and RabbitMQ in Docker with the chart's images and `jndi.yml`; `tests/test_e2e_rest.py` imports `geoserver-config/`, re-imports, exports and checks nothing drifts |
 | Full deployment | `tests/kind/deploy-test.sh` installs the whole chart on a kind cluster, waits for every pod, checks WMS, WFS, WCS and WMTS through the gateway, runs the same round trip against it, and renders a layer with WMS GetMap |
 

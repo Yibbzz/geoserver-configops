@@ -25,7 +25,7 @@ import requests
 
 from . import remote
 
-LOG_TABLE = "public.os_ingest_log"  # the pipeline's log; sync writes the same table
+LOG_TABLE = "public.os_ingest_log"  # the name the first ingest pipeline gave it; kept so history carries on
 TIMEOUT = 120
 
 # A date PostgreSQL rejects (shapefiles store "no date" as 0000/00/00): load dates as text instead

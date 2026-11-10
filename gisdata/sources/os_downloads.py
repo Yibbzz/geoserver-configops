@@ -11,8 +11,7 @@ from . import Download, Listing, NotFound, Product, SourceError, http_session, m
 BASE_API = "https://api.os.uk/downloads/v1/products"
 TIMEOUT = 30
 
-# Formats the loader can read, best first. Keep in step with the pipeline's
-# FORMAT_PREFERENCE (tests check); raster, vector tiles and CSV are left out.
+# Formats the loader can read, best first; raster, vector tiles and CSV are left out.
 FORMAT_PREFERENCE = [
     "GeoPackage",
     "ESRI® Shapefile",

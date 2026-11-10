@@ -36,16 +36,18 @@ poetry.lock
 __pycache__/
 */__pycache__/
 
-/examples/
 /.helmignore
 /.secretignore
 Makefile
 .pytest_cache/
 pytest.ini
 requirements-dev.txt
-auto-update-development/
 docs/
-examples/
 gisdata/
 pyproject.toml
 *.egg-info/
+# gisdata secret values: never packaged, never put in the project ConfigMap
+secrets.yaml
+secrets.yml
+Dockerfile
+.dockerignore
