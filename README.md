@@ -70,11 +70,11 @@ The `geoserver-data-ingest` CronJob runs nightly (`ingest.schedule` in `values.y
 
 1. skips it if the version matches the last successful load;
 2. downloads and verifies the archive (MD5 when the source provides one);
-3. loads it into the staging schema with `ogr2ogr`;
-4. checks row counts and geometry validity;
-5. backs up the live table into the backup schema (keeps the newest `ingest.backupRetention` copies);
-6. swaps the new data into `data_layers`, dropping invalid geometries, then adds a spatial index;
-7. records the result in `public.os_ingest_log`.
+3. loads every layer of every data file into its own staging table with `ogr2ogr` (a product with one layer keeps the table name it always had, the product ID; with several, each layer gets `<product>_<layer>`, e.g. `openroads_road_link`);
+4. checks row counts and geometry validity of all of them, so nothing goes live unless every table passes;
+5. backs up the live tables into the backup schema (keeps the newest `ingest.backupRetention` copies of each);
+6. swaps the new data into `data_layers`, dropping invalid geometries, then adds spatial indexes;
+7. records the result, including the tables it produced, in `public.os_ingest_log`.
 
 Run it on demand:
 
