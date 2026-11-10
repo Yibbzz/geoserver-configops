@@ -38,8 +38,11 @@ TIMEOUT = 60
 MAX_DOWNLOAD = 300_000_000
 
 # Larger HTTP reads: GDAL reads a compressed archive front to back, and its
-# default 16 KB requests make that slow. Overridable from the environment.
-GDAL_ENV = {"CPL_VSIL_CURL_CHUNK_SIZE": "2097152", "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR"}
+# default 16 KB requests make that slow. Retries: one 504 from a busy server
+# (seen on the EA's OGC API) would otherwise fail a load of hundreds of pages.
+# Overridable from the environment.
+GDAL_ENV = {"CPL_VSIL_CURL_CHUNK_SIZE": "2097152", "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
+            "GDAL_HTTP_MAX_RETRY": "5", "GDAL_HTTP_RETRY_DELAY": "10"}
 
 
 class RemoteError(Exception):
