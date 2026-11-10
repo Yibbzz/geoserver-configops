@@ -9,13 +9,13 @@ description = "Version-controlled open GIS datasets for GeoServer Cloud (working
 readme = "docs/spec/datasets.md"
 license = { text = "BSD-2-Clause" }
 requires-python = ">=3.10"
-dependencies = ["pyyaml>=6", "jsonschema>=4.18"]
+dependencies = ["pyyaml>=6", "jsonschema>=4.18", "requests>=2.28"]
 
 [project.scripts]
 gisdata = "gisdata.cli:main"
 
 [tool.setuptools]
-packages = ["gisdata"]
+packages = ["gisdata", "gisdata.sources"]
 
 [tool.setuptools.package-data]
 gisdata = ["schema/*.json"]

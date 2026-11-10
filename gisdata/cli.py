@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .discover import DiscoverError
+from .discover import run as discover
 from .loader import load
 from .validate import validate
 
@@ -18,7 +20,6 @@ LATER = {
     "sync": "load new versions of datasets",
     "status": "show datasets and layers as they are live",
     "import": "write files that describe a live GeoServer workspace",
-    "discover": "list what a source offers",
 }
 
 
@@ -59,6 +60,18 @@ def cmd_validate(args) -> int:
     return 1 if errors else 0
 
 
+def cmd_discover(args) -> int:
+    try:
+        return discover(
+            args.source, args.product, Path(args.dir), fmt=args.format,
+            layers=not args.no_layers, use_cache=not args.refresh,
+            search=args.search, limit=args.limit, resource=args.resource, url=args.url,
+        )
+    except DiscoverError as e:
+        print(f"gisdata discover: {e}", file=sys.stderr)
+        return e.code
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="gisdata", description="Version-controlled open GIS datasets for GeoServer Cloud.")
     parser.add_argument("--version", action="version", version=f"gisdata {__version__}")
@@ -69,11 +82,35 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--format", choices=["text", "json"], default="text")
     v.set_defaults(func=cmd_validate)
 
+    d = commands.add_parser(
+        "discover", help="list what a source offers, or the layers inside one product",
+        description="List the products a source offers, or the downloads and layers of one product. "
+        "SOURCE is a Source in the project (e.g. os) or a source type: os-downloads, ckan (with --url), "
+        "or url (the product is then a file's address).",
+    )
+    d.add_argument("source", help="a Source name from the project, or a source type")
+    d.add_argument("product", nargs="?", help="a product ID (a CKAN package, a file's URL), to list its downloads and layers")
+    d.add_argument("--search", metavar="WORDS", help="list only products matching these words")
+    d.add_argument("--limit", type=int, metavar="N", help="list at most N products (CKAN default: 20)")
+    d.add_argument("--resource", metavar="ID", help="read this download of the product (a CKAN resource ID or name)")
+    d.add_argument("--url", help="the source's address, e.g. a CKAN portal (overrides the Source's spec.url)")
+    d.add_argument("-C", "--dir", default=".", help="project directory, for Sources and secrets (default: current)")
+    d.add_argument("--format", choices=["text", "json"], default="text")
+    d.add_argument("--no-layers", action="store_true", help="list downloads only; don't read layers from the file")
+    d.add_argument("--refresh", action="store_true", help="read layers again instead of using the cache")
+    d.set_defaults(func=cmd_discover)
+
     for name, what in LATER.items():
         c = commands.add_parser(name, help=f"{what} (not built yet)")
         c.set_defaults(func=lambda args, name=name: not_yet(name))
 
-    args = parser.parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["discover"]:
+        # options may come between the source and the product
+        args = d.parse_intermixed_args(argv[1:])
+        args.command = "discover"
+    else:
+        args = parser.parse_args(argv)
     if not args.command:
         parser.print_help()
         return 2

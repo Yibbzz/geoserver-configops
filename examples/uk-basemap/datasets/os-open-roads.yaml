@@ -1,5 +1,5 @@
-# OS Open Roads: both tables in the GeoPackage, each published with its own style.
-# Table names inside the product are to be confirmed with `gisdata discover os OpenRoads`.
+# OS Open Roads: road links and nodes from the GeoPackage, each published with its own style.
+# `gisdata discover os OpenRoads` lists its layers; motorway_junction is left out here.
 apiVersion: gisdata/v1alpha1
 kind: Dataset
 metadata:

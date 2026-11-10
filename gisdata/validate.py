@@ -23,7 +23,7 @@ from .loader import Problem, Project, Resource
 BUILT_IN_STYLES = {"generic", "line", "point", "polygon", "raster"}
 STYLE_SUFFIXES = {".sld", ".mbstyle", ".css"}
 SOURCES_WITH_PRODUCTS = {"os-downloads", "ckan", "ogc-api-features", "wfs"}
-SOURCES_NEEDING_KEYS = {"os-downloads"}
+SOURCES_WITH_ADDRESSES = {"ckan", "ogc-api-features", "wfs"}  # need the Source's spec.url
 
 
 def schema() -> dict:
@@ -127,8 +127,11 @@ def check_references(project: Project) -> list[Problem]:
     sources, datasets = project.named("Source"), project.named("Dataset")
 
     for s in project.of_kind("Source"):
-        if s.spec.get("type") in SOURCES_NEEDING_KEYS and "credentials" not in s.spec:
-            problems.append(Problem(s.file, s.line(("spec",)), f"spec.credentials: a {s.spec['type']} source needs an API key secret", s.label))
+        kind = s.spec.get("type")
+        if kind in SOURCES_WITH_ADDRESSES and not s.spec.get("url"):
+            problems.append(Problem(s.file, s.line(("spec",)), f"spec.url: a {kind} source needs its address, e.g. https://data.gov.uk", s.label))
+        if kind not in SOURCES_WITH_ADDRESSES and s.spec.get("url"):
+            problems.append(Problem(s.file, s.line(("spec", "url")), f"spec.url: not used by a {kind} source", s.label))
 
     for d in project.of_kind("Dataset"):
         source = sources.get(d.spec.get("source"))
@@ -143,6 +146,8 @@ def check_references(project: Project) -> list[Problem]:
             problems.append(Problem(d.file, d.line(("spec",)), "spec.url: required for a url source", d.label))
         if kind != "url" and d.spec.get("url"):
             problems.append(Problem(d.file, d.line(("spec", "url")), f"spec.url: only used with a url source, not {kind}", d.label))
+        if kind != "ckan" and d.spec.get("resource"):
+            problems.append(Problem(d.file, d.line(("spec", "resource")), f"spec.resource: only used with a ckan source, not {kind}", d.label))
 
     for layer in project.of_kind("Layer"):
         name = layer.spec.get("dataset")

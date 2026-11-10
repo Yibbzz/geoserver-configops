@@ -1,5 +1,5 @@
 # OS Boundary-Line: every table in the product is loaded (no `tables`); one is published.
-# The table name is to be confirmed with `gisdata discover os BoundaryLine`.
+# `gisdata discover os BoundaryLine` lists its 18 layers.
 apiVersion: gisdata/v1alpha1
 kind: Dataset
 metadata:

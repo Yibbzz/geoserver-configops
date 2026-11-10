@@ -2,7 +2,7 @@
 
 A set of YAML files that says which open datasets you want, where they come from, how often they update, and how they are published and styled in GeoServer Cloud. A small command-line tool reads the files and makes PostGIS and GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
 
-> **Status:** first draft for review, 9 Nov 2026. `gisdata validate` is built; the other commands aren't yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
+> **Status:** first draft for review, 9 Nov 2026. `gisdata validate` and `gisdata discover` are built; the other commands aren't yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
 
 ## Principles
 
@@ -100,7 +100,7 @@ metadata:
   name: os
 spec:
   type: os-downloads                 # OS Downloads API
-  credentials: { secret: os-api }    # key: apiKey
+  credentials: { secret: os-api }    # key: apiKey; optional, OpenData products need none
 ---
 apiVersion: gisdata/v1alpha1
 kind: Source
@@ -108,13 +108,27 @@ metadata:
   name: web
 spec:
   type: url                          # plain file downloads, no key
+---
+apiVersion: gisdata/v1alpha1
+kind: Source
+metadata:
+  name: data-gov-uk
+spec:
+  type: ckan                         # a CKAN portal
+  url: https://data.gov.uk
 ```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `type` | yes | One of the types below |
+| `url` | for `ckan`, `ogc-api-features`, `wfs` | The source's address. For CKAN, the portal (`https://data.gov.uk`); an address already inside `/api/` (such as `https://portal.example/api/3/action`) is used as given |
+| `credentials.secret` | no | Secret with `apiKey`. For CKAN it is an API token, sent only to the portal, never to the servers its files are on |
 
 | `type` | Lists products (`discover`) | Needs a key | Status |
 | --- | --- | --- | --- |
-| `os-downloads` | yes | yes (free OS Data Hub key) | exists today in the pipeline |
-| `url` | no: you give the URL | no | to build |
-| `ckan` (data.gov.uk and others) | yes | no | later |
+| `os-downloads` | yes | no for OpenData products | `discover` built; loading exists in the pipeline |
+| `url` | no: you give the URL | no | `discover` built (reads the file's layers) |
+| `ckan` (data.gov.uk and many city, regional and national portals) | yes, by search | no for public data | `discover` built |
 | `ogc-api-features`, `wfs` | yes (collections, feature types) | usually no | later |
 
 Each type is a plug-in with two parts: list what's available, and fetch one product with its version. Adding a provider means adding one plug-in.
@@ -142,6 +156,7 @@ spec:
 | `source` | yes | | Name of a Source |
 | `product` | for `os-downloads`, `ckan`, `wfs` | | Product, package or collection ID at the source |
 | `url` | for `url` | | File to download (zip, GeoPackage, GeoJSON, CSV, Shapefile) |
+| `resource` | no, `ckan` only | the best loadable file | Which file of the package: a resource ID or name, as `discover` lists them. Packages often hold the same data in several formats, or several files |
 | `update` | no | `manual` | When `sync` checks for a new version |
 | `tables` | no | every layer in the file | Which layers of the downloaded file to load, and as what |
 | `tables.<layer>.name` | no | `<dataset>_<layer>` with dashes as underscores | Table name in the live schema |
@@ -306,7 +321,7 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 
 ### `validate`, and checking files as you type
 
-`gisdata validate` is built (the other commands aren't yet). It checks every resource against the JSON Schema in [`gisdata/schema/v1alpha1.json`](../../gisdata/schema/v1alpha1.json), then the rules across files: every reference resolves, style files exist, no two layers or groups share a GeoServer name, no two datasets load the same table, and no layer group contains itself. Problems come out as `file:line`, with a non-zero exit code for CI:
+`gisdata validate` checks every resource against the JSON Schema in [`gisdata/schema/v1alpha1.json`](../../gisdata/schema/v1alpha1.json), then the rules across files: every reference resolves, style files exist, no two layers or groups share a GeoServer name, no two datasets load the same table, and no layer group contains itself. Problems come out as `file:line`, with a non-zero exit code for CI:
 
 ```
 $ gisdata validate examples/uk-basemap
@@ -317,6 +332,51 @@ datasets/os-open-roads.yaml:34: error: Layer road-nodes: spec.style: no style na
 ```
 
 Editors that understand JSON Schema check the files as you type. In VS Code, with the YAML extension, the repo's `.vscode/settings.json` already points the example files at the schema; for your own project, add the same `yaml.schemas` entry.
+
+### `discover`
+
+`gisdata discover <source>` lists a source's products and the format each would load as; `gisdata discover <source> <product>` lists its downloads, marks the one `sync` would use, and lists the layers inside it, which are the names `tables` takes. `<source>` is a Source in the project (`-C dir`, default the current directory), whose secret supplies the API key if it has one, or a source type when there is no project yet: `os-downloads`, `ckan --url <portal>`, or `url`.
+
+| Source type | `discover <source>` | `discover <source> <product>` |
+| --- | --- | --- |
+| `os-downloads` | Every OS product (`--search` narrows) | The product's formats; layers of the one `sync` uses |
+| `ckan` | Packages matching `--search`, 20 at a time (`--limit`); without a search, the latest changed | The package's resources, marked loadable or not (web pages and services aren't); layers of the best file, or of `--resource <id or name>` |
+| `url` | (nothing to list) | The product is the file's address: `gisdata discover url https://example.org/roads.zip` |
+
+```
+$ gisdata discover data-gov-uk conservation-areas125
+Conservation Areas (conservation-areas125), version 2026-11-04
+    Shapefile: Conservation Areas, conservation_areas.zip, size unknown  [c3a73b80-a7fb-4e21-ab32-e87f514b620e]
+    GeoJSON: Conservation Areas, conservation_areas.geojson, size unknown  [5dcaa616-b91c-4e58-8b11-141fda4db7e1]
+    GML: Conservation Areas, conservation_areas.gml, size unknown  [57f9f97a-82da-4e98-b5a4-7f9d2dff75ee]
+  * GeoPackage: Conservation Areas, conservation_areas.gpkg, size unknown  [9dd40b81-62f5-4c75-b1cd-d200af101632]
+  (* the download sync uses)
+Another one: --resource <id or name>; in a Dataset, `resource: 9dd40b81-62f5-4c75-b1cd-d200af101632`
+
+LAYER               GEOMETRY  CRS         FEATURES
+conservation_areas  Geometry  EPSG:27700  11
+```
+
+Portals label formats loosely (`SHP`, `ZIP`, a media-type URL, or nothing), so the format comes from the declared format, the media type and the file name together; a zip named `roads.gpkg.zip` counts as a GeoPackage. Loadable files, best first: GeoPackage, Shapefile, GeoJSON, GML, File Geodatabase, KML, FlatGeobuf, then a zip of unknown contents.
+
+```
+$ gisdata discover os OpenRoads
+OS Open Roads (OpenRoads), version 2026-10
+    ESRI® Shapefile: oproad_essh_gb.zip, 585.8 MB
+    GML 3: oproad_gml3_gb.zip, 611.8 MB
+  * GeoPackage: oproad_gpkg_gb.zip, 1.0 GB
+    Vector Tiles (MBTiles): oproad_mbtiles_gb.zip, 1.4 GB
+  (* the download sync uses)
+
+LAYER              GEOMETRY    CRS         FEATURES
+motorway_junction  Point       EPSG:27700  668
+road_link          LineString  EPSG:27700  3,980,725
+road_node          Point       EPSG:27700  3,364,565
+```
+
+The layers are read from the download in place, with GDAL over HTTP range requests, so nothing is saved to disk (a server that only sends whole files has the file fetched to a temporary folder instead, up to 300 MB); the zip's file list costs a few requests, but a GeoPackage inside a compressed zip is read through, which takes a minute or two for a 1 GB product. A product version never changes (for CKAN, the package's last change; for a link, its ETag or Last-Modified), so the layers are cached (`~/.cache/gisdata`) and the next run is instant; `--refresh` reads them again, `--no-layers` skips them, `--format json` is for scripts. GDAL 3.7 or later (`ogrinfo`) is needed for layers.
+
+The download `sync` uses is the first of GeoPackage, Shapefile, GML, MapInfo TAB that comes as one file for the whole country; a format offered only as grid-square tiles is passed over, since each tile would become its own table.
 
 ### What `plan` compares
 
@@ -380,10 +440,12 @@ Titles equal to the layer name, extents, attribute lists and store details all d
 
 - **Scale limits** live in styles ([above](#scale-limits-live-in-styles)), 9 Nov 2026.
 - **Layer groups** are in this version as `LayerGroup`, 9 Nov 2026.
+- **Layer names inside OS products**, checked with `discover`, 10 Nov 2026: OS Open Roads (GeoPackage) holds `motorway_junction`, `road_link` and `road_node`; the example names two in `tables`, so the third isn't loaded. Boundary-Line holds 18 layers, among them `county`.
+- **OS API key** is optional: the OS Downloads API serves OpenData products without one, 10 Nov 2026.
+- **CKAN sources** take the portal's address in the Source (`url`), and a Dataset can pin one file of a package with `resource`, 10 Nov 2026.
 
 ## Open questions
 
-1. **Layer names inside OS products.** The examples assume OS Open Roads contains `road_link` and `road_node`; confirm with `discover` against the real API.
-2. **Dataset versions on screen:** should GeoServer's layer abstract or keywords carry the loaded version automatically?
-3. **Several projects on one GeoServer:** fine if each owns its own workspaces; anything else needed?
-4. **The working name** `gisdata`: replace when the project is named.
+1. **Dataset versions on screen:** should GeoServer's layer abstract or keywords carry the loaded version automatically?
+2. **Several projects on one GeoServer:** fine if each owns its own workspaces; anything else needed?
+3. **The working name** `gisdata`: replace when the project is named.
