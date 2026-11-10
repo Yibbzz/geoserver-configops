@@ -5,7 +5,8 @@ A source type is a class built as Type(api_key=None, url=None), with a
     products(search, limit) -> Listing   products, with the format sync would load
     product(id, resource) -> Product     one product, with all its downloads
     download_url(download) -> str        a direct link to the file (redirects followed)
-    layers(product) -> list[Layer]       optional: for services, read layers without a file
+    layers(product) -> list[Layer]       services only: read layers without a file
+    gdal_source(product) -> (str, str)   services only: the GDAL connection and layer that load it
 
 `url` is the Source's own address (a CKAN portal, say); `resource` picks
 one download when a product has several. Fetching and loading come later,

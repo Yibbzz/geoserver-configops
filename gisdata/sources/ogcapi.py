@@ -107,5 +107,9 @@ class OGCAPIFeatures:
             features=matched if isinstance(matched, int) else None,
         )]
 
+    def gdal_source(self, product: Product) -> tuple[str, str]:
+        """(GDAL connection, layer) that loads this collection."""
+        return f"OAPIF:{self.url}", product.id
+
     def download_url(self, download: Download) -> str:
         return download.url

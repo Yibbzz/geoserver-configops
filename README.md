@@ -133,7 +133,7 @@ Datastores use the JNDI datasource `java:comp/env/jdbc/mypostgis` (`templates/jn
 
 The goal is a version-controlled way to choose open datasets, keep them up to date and publish them, described in YAML and applied with an OpenTofu-style `plan`/`apply`. The draft format is in [docs/spec/datasets.md](docs/spec/datasets.md), with a worked example in [examples/uk-basemap/](examples/uk-basemap/).
 
-Two commands are built (`pip install -e .`): `gisdata validate examples/uk-basemap` checks a project's files against the spec, with every problem reported as `file:line`, and `gisdata discover` lists what a source offers and the layers inside a product: OS (`gisdata discover os-downloads OpenRoads`), any CKAN portal such as data.gov.uk (`gisdata discover ckan --url https://data.gov.uk --search "conservation areas"`), a WFS or OGC API Features service (`gisdata discover wfs --url https://.../wfs`), or a plain link (`gisdata discover url https://.../file.zip`).
+Three commands are built (`pip install -e .`). `gisdata validate examples/uk-basemap` checks a project's files against the spec, with every problem reported as `file:line`, and `gisdata discover` lists what a source offers and the layers inside a product: OS (`gisdata discover os-downloads OpenRoads`), any CKAN portal such as data.gov.uk (`gisdata discover ckan --url https://data.gov.uk --search "conservation areas"`), a WFS or OGC API Features service (`gisdata discover wfs --url https://.../wfs`), or a plain link (`gisdata discover url https://.../file.zip`). `gisdata sync` loads new versions of a project's datasets into PostGIS: stage, check, back up, swap in, on each Dataset's own schedule.
 
 ## Testing
 

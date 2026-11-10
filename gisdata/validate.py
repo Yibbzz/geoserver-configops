@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import difflib
 import json
-import re
 from collections import defaultdict
 from importlib import resources as package_files
 from pathlib import Path
@@ -18,7 +17,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import best_match
 
-from .loader import Problem, Project, Resource
+from .loader import Problem, Project, Resource, default_table
 
 BUILT_IN_STYLES = {"generic", "line", "point", "polygon", "raster"}
 STYLE_SUFFIXES = {".sld", ".mbstyle", ".css"}
@@ -251,7 +250,7 @@ def check_names(project: Project) -> list[Problem]:
     tables: dict[str, Resource] = {}
     for d in project.of_kind("Dataset"):
         for key, options in (d.spec.get("tables") or {}).items():
-            table = (options or {}).get("name") or re.sub(r"[^a-z0-9]+", "_", f"{d.name}_{key}".lower()).strip("_")
+            table = (options or {}).get("name") or default_table(d.name or "", key)
             if table in tables and tables[table] is not d:
                 other = tables[table]
                 problems.append(Problem(d.file, d.line(("spec", "tables", key)),

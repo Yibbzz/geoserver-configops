@@ -2,7 +2,7 @@
 
 A set of YAML files that says which open datasets you want, where they come from, how often they update, and how they are published and styled in GeoServer Cloud. A small command-line tool reads the files and makes PostGIS and GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
 
-> **Status:** first draft for review, 9 Nov 2026. `gisdata validate` and `gisdata discover` are built; the other commands aren't yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
+> **Status:** first draft for review, 9 Nov 2026. `gisdata validate`, `gisdata discover` and `gisdata sync` are built; the other commands aren't yet. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
 
 ## Principles
 
@@ -393,6 +393,38 @@ road_node          Point       EPSG:27700  3,364,565
 The layers are read from the download in place, with GDAL over HTTP range requests, so nothing is saved to disk (a server that only sends whole files has the file fetched to a temporary folder instead, up to 300 MB); the zip's file list costs a few requests, but a GeoPackage inside a compressed zip is read through, which takes a minute or two for a 1 GB product. A product version never changes (for CKAN, the package's last change; for a link, its ETag or Last-Modified), so the layers are cached (`~/.cache/gisdata`) and the next run is instant; `--refresh` reads them again, `--no-layers` skips them, `--format json` is for scripts. GDAL 3.7 or later (`ogrinfo`) is needed for layers.
 
 The download `sync` uses is the first of GeoPackage, Shapefile, GML, MapInfo TAB that comes as one file for the whole country; a format offered only as grid-square tiles is passed over, since each tile would become its own table.
+
+### `sync`
+
+`gisdata sync` loads new versions of the project's datasets into PostGIS. Run with no names (the nightly job), it checks each Dataset whose `update` schedule is due; `gisdata sync roads rivers` checks those two whatever their schedule, and `--force` loads even when nothing changed.
+
+```
+$ gisdata sync -C examples/uk-basemap
+boundary-line: not due (monthly)
+conservation-areas: loaded 2026-11-04 in 1s: data_layers.conservation_areas (10 rows)
+  note: 1 invalid geometry left out
+flood-zones: not due (monthly)
+os-open-roads: up to date (2026-10)
+```
+
+For each dataset it checks:
+
+1. **Is there a new version?** It asks the source for its current version: OS's release, a CKAN package's last change, a link's ETag. If that matches the last load, its tables still exist and `tables` hasn't changed, there's nothing to do. A source with no version is downloaded and compared by checksum. A service (WFS, OGC API) is loaded each time it is due.
+2. **Download and stage:** the file is downloaded (with OS's MD5 checked) and unzipped. Every layer `tables` names (all of them if it names none) is loaded with ogr2ogr into the staging schema. A service is loaded straight from the service. A layer whose file declares no CRS gets the project's `crs`, or the table's own `crs`.
+3. **Check:** invalid geometries are left out (unless `validation.dropInvalidGeometries: false`), and a table with fewer than `validation.minRows` rows stops the load.
+4. **Swap in:** in one transaction, each live table is renamed into the backup schema and the new one renamed into its place. Nothing is copied, and if any table fails its check, none of the dataset's live tables change. The newest `backups` backups of each table are kept.
+
+Every check (loaded, up to date, failed) is written to the ingest log in `public.os_ingest_log`, which is how the next run knows the version and when the dataset is next due. A failed check doesn't count, so the next run tries again. Schedules allow an hour's slack, so a daily dataset checked a little after 02:00 yesterday is due at 02:00 today; a cron expression is due when it has named a minute since the last check.
+
+The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `GISDATA_GEOSERVER_PGCONFIG_SECRET_HOST=localhost` and so on, or `secrets.yaml`.
+
+Known gaps:
+
+- After a load, GeoServer's layer extents aren't refreshed, nor its cached tiles cleared. That comes with `apply`, which owns the GeoServer side.
+- The Helm chart's nightly CronJob still runs the old ingest pipeline (`auto-update-development/`). Moving it to `gisdata sync` needs the project files in the cluster; the old pipeline goes once it has.
+- Some data needs fixing in flight: a shapefile with impossible dates (`0000/00/00`) has its date columns loaded as text, with a note.
+- Some WFS servers can't serve features in pages, and fail. The BGS geology service is one: it serves complex (GeoSciML) features and asks for a sort order.
+- Private CKAN files, which need the API token on the file's own server, can't be downloaded yet.
 
 ### What `plan` compares
 

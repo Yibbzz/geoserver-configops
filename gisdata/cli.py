@@ -11,13 +11,14 @@ from pathlib import Path
 from . import __version__
 from .discover import DiscoverError
 from .discover import run as discover
+from .sync import SyncError
+from .sync import run as sync
 from .loader import load
 from .validate import validate
 
 LATER = {
     "plan": "compare the files with live GeoServer and PostGIS",
     "apply": "make the changes plan shows",
-    "sync": "load new versions of datasets",
     "status": "show datasets and layers as they are live",
     "import": "write files that describe a live GeoServer workspace",
 }
@@ -72,6 +73,14 @@ def cmd_discover(args) -> int:
         return e.code
 
 
+def cmd_sync(args) -> int:
+    try:
+        return sync(Path(args.dir), args.datasets, force=args.force)
+    except SyncError as e:
+        print(f"gisdata sync: {e}", file=sys.stderr)
+        return e.code
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="gisdata", description="Version-controlled open GIS datasets for GeoServer Cloud.")
     parser.add_argument("--version", action="version", version=f"gisdata {__version__}")
@@ -99,6 +108,16 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--no-layers", action="store_true", help="list downloads only; don't read layers from the file")
     d.add_argument("--refresh", action="store_true", help="read layers again instead of using the cache")
     d.set_defaults(func=cmd_discover)
+
+    s = commands.add_parser(
+        "sync", help="load new versions of datasets into PostGIS",
+        description="Check each due Dataset for a new version and load it: stage, check, back up, swap in. "
+        "Named datasets are checked whatever their schedule. The database comes from the Project's connection secret.",
+    )
+    s.add_argument("datasets", nargs="*", help="only these Datasets, due or not")
+    s.add_argument("-C", "--dir", default=".", help="project directory (default: current)")
+    s.add_argument("--force", action="store_true", help="load even when the version hasn't changed")
+    s.set_defaults(func=cmd_sync)
 
     for name, what in LATER.items():
         c = commands.add_parser(name, help=f"{what} (not built yet)")
