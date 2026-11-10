@@ -53,19 +53,18 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt   # GDAL'
 
 ## Current state (10 Nov 2026)
 
-Every command in the spec is built and merged (PRs #6 to #13). **PR #14 is open**: the `gisdata-apply-<revision>` Job, values restructured under one `gisdata:` key, and fixes the deploy attempts surfaced (`--wait` covers the database and GeoWebCache; ConfigMap symlinked folders; single-file downloads keep their name). Its last run had the apply Job, plan, WMS and sync all passing in kind, with one remaining failure in the old round-trip test, fixed in the latest push (`c35ce3d`). Check CI is green, then merge it.
+Every command in the spec is built and merged (PRs #6 to #13), and the chart runs them (#14): a `gisdata-apply-<revision>` Job applies the project on every install and upgrade, and the `gisdata-sync` CronJob loads new data nightly. Values live under one `gisdata:` key. CI's kind job deploys `examples/smoke` end to end through the chart and passes: apply, a clean plan, the layer drawing through WMS, and a sync. The full `examples/uk-basemap` project has not yet run on a real cluster.
 
 ## Next
 
-1. **Merge PR #14** once green.
-2. **Real deploy of `examples/uk-basemap` on the dev VM** (Proxmox), never the owner's laptop (a ThinkPad, 7.6 GB, which ran out of memory). Check where you are first: `hostname`, `systemd-detect-virt`.
+1. **Real deploy of `examples/uk-basemap` on the dev VM** (Proxmox), never the owner's laptop (a ThinkPad, 7.6 GB, which ran out of memory). Check where you are first: `hostname`, `systemd-detect-virt`.
    - Memory: 8 GB free for the cluster runs a reduced set: `--set geoserver.services.webui.enabled=false --set geoserver.services.wfs.enabled=false --set geoserver.services.wcs.enabled=false` (gateway, REST, WMS and the tile cache remain, with Postgres, RabbitMQ and gisdata). All seven GeoServer services need about 12 GB (768 Mi limit each, Postgres 2 Gi, gisdata up to 2 Gi).
    - Steps: install k3d (`curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | USE_SUDO=false K3D_INSTALL_DIR=$HOME/.local/bin bash`); `k3d cluster create gscloud --agents 0 --k3s-arg "--disable=traefik@server:0"`; check the node can pull (`docker exec k3d-gscloud-server-0 crictl pull rancher/mirrored-pause:3.6`); `docker build -t gisdata:local . && k3d image import gisdata:local -c gscloud`; create the secrets from `geoserver-secrets.example.yaml` with real passwords (`geoserver-admin` must hold GeoServer's admin login, `admin`/`geoserver` on a fresh install); then
      `helm upgrade --install geoserver . -n gscloud -f values.yaml -f tests/kind/values-kind.yaml --set gisdata.image.repository=gisdata --set gisdata.image.tag=local --set gisdata.image.pullPolicy=Never` (plus the service switches above). Skip Helm's `--wait` and watch pods yourself; a lost connection left the release stuck in pending-install once.
    - Follow `kubectl -n gscloud logs -f job/gisdata-apply-1`: it loads OS Open Roads (~1 GB), Boundary-Line (~800 MB), the EA flood zones (415k features over OGC API) and Surrey conservation areas, then publishes them. Then check layers and the `uk-basemap` group draw through WMS, run `gisdata status`, and run a sync Job from the CronJob.
    - If the VM runs NordVPN (or anything rewriting DNS) and the node can't resolve names: k3d's DNS fix and k3s's firewall rules can both break DNS inside the node. Recreate with `K3D_FIX_DNS=0` and, if needed, write a reachable DNS server into the node's `/etc/resolv.conf` and restart CoreDNS.
-3. **Retire the old catalog scripts** (`export-/import-geoserver-config.sh`, `geoserver-config/`, `tests/test_config_scripts.py`, `tests/test_e2e_rest.py`), after `gisdata import test` carries over the `test` workspace.
-4. Optional: a scheduled CI job running `gisdata plan` against the cluster, failing on exit code 2 (drift).
+2. **Retire the old catalog scripts** (`export-/import-geoserver-config.sh`, `geoserver-config/`, `tests/test_config_scripts.py`, `tests/test_e2e_rest.py`), after `gisdata import test` carries over the `test` workspace.
+3. Optional: a scheduled CI job running `gisdata plan` against the cluster, failing on exit code 2 (drift).
 
 Backlog, only when needed: API keys for `wfs`/`ogc-api-features` (unlocks the OS NGD API), private CKAN files, default attribution for sources other than OS, servers that can't page WFS (BGS), naming the project (`gisdata` and the `apiVersion` group are working names).
 
