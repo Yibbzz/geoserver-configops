@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
-from . import Download, Listing, NotFound, Product, SourceError, matches
+from . import Download, Listing, NotFound, Product, SourceError, http_session, matches
 
 BASE_API = "https://api.os.uk/downloads/v1/products"
 TIMEOUT = 30
@@ -52,7 +52,7 @@ class OSDownloads:
 
     def __init__(self, api_key: str | None = None, url: str | None = None, session: requests.Session | None = None):
         self.api_key = api_key
-        self.session = session or requests.Session()
+        self.session = session or http_session()
         self.base = (url or BASE_API).rstrip("/")
 
     def _get(self, url: str, **kwargs) -> requests.Response:

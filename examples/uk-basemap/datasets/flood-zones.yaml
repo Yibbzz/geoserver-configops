@@ -1,0 +1,23 @@
+# Flood zones 2 and 3 (rivers and sea) from the Environment Agency's OGC API.
+# `gisdata discover ea-flood-map` lists the collection; the layer inside is
+# named after it, and loaded here as table flood_zones.
+apiVersion: gisdata/v1alpha1
+kind: Dataset
+metadata:
+  name: flood-zones
+spec:
+  source: ea-flood-map
+  product: Flood_Zones_2_3_Rivers_and_Sea
+  update: monthly
+  tables:
+    Flood_Zones_2_3_Rivers_and_Sea: { name: flood_zones }
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: flood-zones
+spec:
+  dataset: flood-zones
+  table: Flood_Zones_2_3_Rivers_and_Sea
+  title: Flood zones 2 and 3, rivers and sea (Environment Agency)
+  style: polygon

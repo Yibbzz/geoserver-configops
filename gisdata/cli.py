@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     d = commands.add_parser(
         "discover", help="list what a source offers, or the layers inside one product",
         description="List the products a source offers, or the downloads and layers of one product. "
-        "SOURCE is a Source in the project (e.g. os) or a source type: os-downloads, ckan (with --url), "
+        "SOURCE is a Source in the project (e.g. os) or a source type: os-downloads, ckan, wfs or ogc-api-features (with --url), "
         "or url (the product is then a file's address).",
     )
     d.add_argument("source", help="a Source name from the project, or a source type")

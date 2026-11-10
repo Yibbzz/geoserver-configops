@@ -13,7 +13,7 @@ from urllib.parse import unquote, urlparse
 
 import requests
 
-from . import Download, Listing, NotFound, Product, SourceError
+from . import Download, Listing, NotFound, Product, SourceError, http_session
 from .formats import FILE_LABELS, classify, rank, service
 from .url import resolve
 
@@ -49,7 +49,7 @@ class CKAN:
         self.portal = url.rstrip("/")
         self.base = action_base(url)
         self.api_key = api_key
-        self.session = session or requests.Session()
+        self.session = session or http_session()
 
     def _auth(self, url: str) -> dict:
         same_host = urlparse(url).netloc == urlparse(self.base).netloc
@@ -85,7 +85,7 @@ class CKAN:
         raw = text(r.get("format")).strip()
         size = r.get("size")
         return Download(
-            format=label or service(raw) or raw.removeprefix("https://www.iana.org/assignments/media-types/") or "unknown",
+            format=label or service(raw, url, text(r.get("name"))) or raw.removeprefix("https://www.iana.org/assignments/media-types/") or "unknown",
             url=url,
             file_name=unquote(urlparse(url).path.rsplit("/", 1)[-1]),
             size=size if isinstance(size, int) else None,

@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlparse
 
 import requests
 
-from . import Download, Listing, NotFound, Product, SourceError
+from . import Download, Listing, NotFound, Product, SourceError, http_session
 from .formats import FILE_LABELS, classify
 
 TIMEOUT = 30
@@ -65,7 +65,7 @@ class URL:
     formats = FILE_LABELS
 
     def __init__(self, api_key: str | None = None, url: str | None = None, session: requests.Session | None = None):
-        self.session = session or requests.Session()
+        self.session = session or http_session()
 
     def products(self, search: str | None = None, limit: int | None = None) -> Listing:
         raise SourceError("a url source has no list of products; give the file's address as the product, e.g. https://example.org/data.zip")
