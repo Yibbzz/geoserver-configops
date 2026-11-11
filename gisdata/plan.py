@@ -119,14 +119,15 @@ class Planner:
                 if f.is_file() and f.suffix in STYLE_SUFFIXES:
                     found[f.stem] = (f, self.ws)
         for name, s in self.files.named("Style").items():
-            found[name] = (self.root / s.spec["file"], self.workspace_of(s))
+            found[name] = (self.root / s.spec["file"], None if s.spec.get("global") else self.workspace_of(s))
         return found
 
     def style_ref(self, name: str | None) -> str | None:
         """A style as a layer refers to it: workspace styles qualified, GeoServer's built-in ones not."""
         if name is None or name in BUILT_IN_STYLES and name not in self.styles:
             return name
-        return f"{self.styles[name][1]}:{name}"
+        ws = self.styles[name][1]
+        return f"{ws}:{name}" if ws else name  # a global style is named without a workspace
 
     def table_of(self, layer: Resource) -> tuple[str, str, str | None]:
         """(schema, table, dataset) a layer publishes."""
@@ -158,11 +159,14 @@ class Planner:
         self.changes.append(Change(*args, **kwargs))
 
     def plan(self) -> list[Change]:
-        managed = sorted({self.ws} | {self.workspace_of(r) for r in [*self.layers.values(), *self.groups.values(),
-                                                                       *self.files.named("Style").values()]})
+        workspaces = {geoserver_name(w): w for w in self.files.of_kind("Workspace")}
+        managed = sorted({self.ws} | set(workspaces) | {self.workspace_of(r) for r in [*self.layers.values(), *self.groups.values()]}
+                         | {self.workspace_of(s) for s in self.files.named("Style").values() if not s.spec.get("global")})
         for ws in managed:
             if self.gs.workspace(ws) is None:
                 self.add("+", "workspace", ws, run=lambda ws=ws: self.gs.upsert_workspace(ws))
+        for ws, w in workspaces.items():
+            self.plan_workspace(ws, w)
         server.plan(self)
         self.plan_stores()
         stores.plan(self)
@@ -194,10 +198,11 @@ class Planner:
             text = path.read_text(encoding="utf-8")
             live = self.gs.style_body(name, ws)
             run = (lambda name=name, text=text, suffix=path.suffix, ws=ws: self.gs.upsert_style(name, text, suffix, ws))
+            target = f"{ws}:{name}" if ws else f"{name} (global)"
             if live is None:
-                self.add("+", "style", f"{ws}:{name}", note=str(path.relative_to(self.root)), run=run)
+                self.add("+", "style", target, note=str(path.relative_to(self.root)), run=run)
             elif live.replace("\r\n", "\n").strip() != text.replace("\r\n", "\n").strip():
-                self.add("~", "style", f"{ws}:{name}", note=f"{path.relative_to(self.root)} differs from GeoServer's copy", run=run)
+                self.add("~", "style", target, note=f"{path.relative_to(self.root)} differs from GeoServer's copy", run=run)
 
     def layer_settings(self, layer: Resource, resource: tuple[str, str] | None = None) -> tuple[list[tuple[str, object]], Callable[[], None]]:
         """
@@ -316,6 +321,27 @@ class Planner:
         else:
             self.gs.delete(f"workspaces/{ws}/layers/{name}", {"recurse": "true"})
 
+    def plan_workspace(self, ws: str, w: Resource) -> None:
+        """A Workspace's namespace URI, isolation, and whether it's the default."""
+        spec = w.spec
+        live_ws = (self.gs.get(f"workspaces/{ws}") or {}).get("workspace") or {}
+        live_ns = (self.gs.get(f"namespaces/{ws}") or {}).get("namespace") or {}
+        default = ((self.gs.get("workspaces/default") or {}).get("workspace") or {}).get("name")
+        current = {"namespace": live_ns.get("uri"), "isolated": live_ws.get("isolated", False), "default": default == ws}
+        wanted = {k: spec[k] for k in ("namespace", "isolated", "default") if k in spec}
+        changed = [(k, current[k], v) for k, v in wanted.items() if current[k] != v]
+        if not changed:
+            return
+
+        def run():
+            if "namespace" in wanted:
+                self.gs.request("PUT", f"namespaces/{ws}", {"namespace": {"prefix": ws, "uri": wanted["namespace"]}})
+            if "isolated" in wanted:
+                self.gs.request("PUT", f"workspaces/{ws}", {"workspace": {"name": ws, "isolated": wanted["isolated"]}})
+            if wanted.get("default"):
+                self.gs.request("PUT", "workspaces/default", {"workspace": {"name": ws}})
+        self.add("~", "workspace", ws, changed, run=run)
+
     def plan_groups(self) -> None:
         for name in self.group_order():
             group = self.groups[name]
@@ -334,9 +360,16 @@ class Planner:
                       ("cache", cache)]
             if "abstract" in spec:
                 wanted.append(("abstract", spec["abstract"]))
-            def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache):
+            extra = {k: spec[k] for k in ("enabled", "advertised") if k in spec}
+            links = details.wanted_resource({"metadataLinks": spec["metadataLinks"]}) if "metadataLinks" in spec else {}
+            wanted += list(extra.items()) + list(links.items())
+
+            def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache, extra=extra, links=links):
                 self.gs.upsert_layergroup(gs_name, [(kind, n, self.style_ref(style)) for (kind, n), style in entries], ws=ws,
                                           title=spec.get("title"), abstract=spec.get("abstract"), mode=spec.get("mode", "single"))
+                if extra or links:
+                    self.gs.request("PUT", f"workspaces/{ws}/layergroups/{gs_name}",
+                                    {"layerGroup": {**extra, **details.patch_resource({}, links)}})
                 set_cache(self.gs, f"{ws}:{gs_name}", cache)
 
             live = self.gs.layergroup(gs_name, ws)
@@ -348,7 +381,9 @@ class Planner:
             current = {"title": g.get("title"), "mode": g.get("mode"), "abstract": g.get("abstractTxt"),
                        "layers": names_of((g.get("publishables") or {}).get("published")),
                        "styles": styles + [None] * (len(entries) - len(styles)),
-                       "cache": live_cache(self.gs.tile_layer(f"{ws}:{gs_name}"))}
+                       "cache": live_cache(self.gs.tile_layer(f"{ws}:{gs_name}")),
+                       "enabled": g.get("enabled", True), "advertised": g.get("advertised", True),
+                       **details.live_resource(g, links)}
             changed = diff([(k, current[k], v) for k, v in wanted])
             if changed:
                 self.add("~", "group", f"{ws}:{gs_name}", changed, run=run)
@@ -373,7 +408,7 @@ class Planner:
         wanted = {
             "group": {f"{self.workspace_of(g)}:{geoserver_name(g)}" for g in self.groups.values()},
             "layer": {f"{self.workspace_of(layer)}:{geoserver_name(layer)}" for layer in self.layers.values()},
-            "style": {f"{ws}:{name}" for name, (_, ws) in self.styles.items()},
+            "style": {f"{ws}:{name}" for name, (_, ws) in self.styles.items() if ws},
             "store": {f"{ws}:{schema}" for ws, schema in self.wanted_stores()}
                      | {f"{self.workspace_of(s)}:{geoserver_name(s)}" for s in self.files.of_kind("Store")},
         }

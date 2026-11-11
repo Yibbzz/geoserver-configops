@@ -83,6 +83,7 @@ class Importer:
         self.styles: dict[str, tuple[str, str]] = {}  # style name -> (suffix, text)
         self.store_resources: dict[str, dict] = {}  # GeoServer store name -> Store resource, for stores that aren't the JNDI PostGIS
         self.secrets: list[str] = []  # Secrets the imported stores name
+        self.global_styles: dict[str, tuple[str, str]] = {}  # global style name -> (suffix, text)
 
     def style(self, ref: str | None) -> str | None:
         """A live style reference as the files write it, or None if it can't be."""
@@ -96,8 +97,17 @@ class Importer:
             return None
         if ref in BUILT_IN_STYLES:
             return ref
-        self.notes.append(f"global style {ref} isn't imported (only {self.ws}'s styles are); left out")
-        return None
+        if not RESOURCE_NAME.match(ref):
+            self.notes.append(f"global style {ref}: the files can only name it if it's lowercase letters, digits and dashes; left out")
+            return None
+        if ref not in self.global_styles:
+            info = (self.gs.style(ref) or {}).get("style") or {}
+            suffix = STYLE_SUFFIX.get(info.get("format", "sld"))
+            if suffix is None:
+                self.notes.append(f"global style {ref}: format {info.get('format')} isn't supported; left out")
+                return None
+            self.global_styles[ref] = (suffix, self.gs.style_body(ref))
+        return ref
 
     def stores(self) -> dict[str, dict]:
         """The PostGIS stores on the JNDI datasource (by name: their parameters); other stores become Store resources."""
@@ -313,8 +323,31 @@ class Importer:
             elif cache:
                 self.notes.append(f"group {gs_name}: tile cache with its own gridsets or formats; groups only take cache: true")
                 spec["cache"] = True
+            for flag in ("enabled", "advertised"):
+                if g.get(flag) is False:
+                    spec[flag] = False
+            links = details.to_spec(g, {}).get("metadataLinks")
+            if links:
+                spec["metadataLinks"] = links
             found.append(resource("LayerGroup", name, spec))
         return found
+
+    def workspace(self) -> list[dict]:
+        """A Workspace resource, when its namespace, isolation or being the default isn't GeoServer's default."""
+        spec: dict = {}
+        ns = (self.gs.get(f"namespaces/{self.ws}") or {}).get("namespace") or {}
+        if ns.get("uri") and ns["uri"] != f"http://{self.ws}":
+            spec["namespace"] = ns["uri"]
+        if ((self.gs.get(f"workspaces/{self.ws}") or {}).get("workspace") or {}).get("isolated"):
+            spec["isolated"] = True
+        if ((self.gs.get("workspaces/default") or {}).get("workspace") or {}).get("name") == self.ws:
+            spec["default"] = True
+        if not spec:
+            return []
+        name, explicit = resource_name(self.ws)
+        if explicit:
+            spec["name"] = explicit
+        return [resource("Workspace", name, spec)]
 
     def workspace_styles(self) -> None:
         for name in self.gs.names(f"workspaces/{self.ws}/styles", "style"):
@@ -375,7 +408,11 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             layers = imp.layers(stores)
             groups = imp.groups()
             imp.workspace_styles()
-            files[target / f"{ws}.yaml"] = dump(list(imp.store_resources.values()) + layers + groups)
+            styles = []
+            for name, (suffix, text) in imp.global_styles.items():  # not in styles/ itself, which holds the workspace's
+                files[target / "styles" / "global" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
+                styles.append(resource("Style", resource_name(name)[0], {"file": f"styles/global/{name}{suffix}", "global": True}))
+            files[target / f"{ws}.yaml"] = dump(imp.workspace() + list(imp.store_resources.values()) + layers + groups + styles)
             for name, (suffix, text) in imp.styles.items():
                 files[target / "styles" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
             linked = sum(1 for r in layers if "dataset" in r["spec"])
