@@ -1426,6 +1426,24 @@
                 "mixed",
                 "challenge"
               ]
+            },
+            "masterPassword": {
+              "type": "object",
+              "required": [
+                "secret",
+                "key"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "secret": {
+                  "$ref": "#/$defs/resourceName"
+                },
+                "key": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "description": "the keystore's master password, from a Secret (GeoServer asks for at least 8 characters)"
             }
           }
         },

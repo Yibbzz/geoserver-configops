@@ -145,9 +145,11 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | REST rules | Yes | `AccessRule` `rest:`, kept in order |
 | Catalog mode | Yes | `Settings` `global.catalogMode` |
 | Settings (active role service, encryption) | Not yet | |
-| Authentication: providers, filters, filter chains | Not yet | LDAP, JDBC, auth-key and gateway shared auth are in the images |
+| Authentication: providers, filters | Not yet | REST has them, but a filter does nothing outside a filter chain |
+| Filter chains, role services | Can't | No REST endpoint in GeoServer Cloud (404) |
 | Other user/group and role services (LDAP, JDBC) | Not yet | |
-| Passwords: master password, password policies | Not yet | |
+| Master password | Yes | `Settings` `global.masterPassword` from a Secret; `import` doesn't write it |
+| Password policies | Can't | No REST endpoint in GeoServer Cloud |
 | GeoServer ACL | Chart | Off in the chart (`geoserver.services.acl.enabled`) |
 
 ## Not configuration
