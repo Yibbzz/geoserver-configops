@@ -12,8 +12,8 @@ them, stay. Then:
 - a resource only in the files is reported, and removed with --prune.
 
 Some things can't be read back from GeoServer: passwords and keys (the files
-keep the Secrets they name), a layer's attributes, the master password. The
-files' own values for those are kept.
+keep the Secrets they name), the master password, and a layer's attributes
+when the project's database can't be reached. The files' own values for those are kept.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from .loader import Project, Resource
 from .security import account_name, role_name, rule_key
 from .validate import geoserver_name
 
+WHEN_MISSING = ("attributes",)  # kept only when import couldn't read them (without the project's database)
 KEPT_FROM_FILES = {  # fields import can't read back, kept as the files have them
     "Layer": ("attributes", "dataset", "table"),
     "User": ("password",),
@@ -153,7 +154,7 @@ def merge(target: Path, existing: Project, imported: dict[Path, list[dict]], ws:
             continue
         spec = dict(doc.get("spec") or {})
         for kept in KEPT_FROM_FILES.get(doc["kind"], ()):
-            if kept in match.spec:
+            if kept in match.spec and not (kept in WHEN_MISSING and kept in spec):
                 spec[kept] = match.spec[kept]
         changed = differences(doc["kind"], match.spec, spec, key[-1], default_ws, own)
         if not changed:

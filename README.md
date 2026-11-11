@@ -213,6 +213,18 @@ spec: { layer: { workspace: uk, layer: flood_zones, access: read }, roles: [EDIT
 
 **Keep a change made in the web UI:** run the same `import` in the project folder. It updates the files in place, only what changed, keeping your names, order and comments; review it with `git diff` and commit. `--prune` also takes out what GeoServer no longer has.
 
+## What can't be done as code
+
+Everything on GeoServer's web UI can be kept in the files ([docs/coverage.md](docs/coverage.md) goes page by page), except:
+
+| What | Why |
+| --- | --- |
+| Oracle stores | GeoServer Cloud's images don't ship Oracle's JDBC driver |
+| OGC API Features settings | GeoServer Cloud has no REST endpoint for them, and keeps them in its catalog database rather than a file |
+| Tile cache disk quota | GeoServer Cloud switches it off and has no REST endpoint for it |
+
+Some settings take effect only when GeoServer's services restart, and `apply` says so: the tile caching defaults. A few live in the Helm chart rather than the project files: which services run, logging, WPS and GeoServer ACL.
+
 ## How it fits together
 
 ```

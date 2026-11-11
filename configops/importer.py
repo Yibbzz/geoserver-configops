@@ -101,12 +101,13 @@ def resource(kind: str, name: str, spec: dict) -> dict:
 
 class Importer:
     def __init__(self, gs: GeoServer, ws: str, project_ws: str | None, live_schema: str, dataset_tables: dict,
-                 attributions: dict | None = None, project_crs: str | None = None, full: bool = False):
+                 attributions: dict | None = None, project_crs: str | None = None, full: bool = False, columns=None):
         self.gs, self.ws, self.project_ws, self.live_schema = gs, ws, project_ws, live_schema
         self.project_crs = project_crs  # a declared CRS that's the project's is left out when the native one is unknown
         self.full = full  # write a layer's style even when it's the default for its geometry (updating files that name it)
         self.dataset_tables = dataset_tables  # table -> (dataset, key), from the project's Datasets
         self.attributions = attributions or {}  # dataset -> the attribution its source gives by itself
+        self.columns = columns  # (schema, table) -> the table's columns, less its key; None without the database
         self.notes: list[str] = []
         self.names: dict[str, str] = {}  # GeoServer name -> resource name, for group members
         self.styles: dict[str, tuple[str, str]] = {}  # style name -> (suffix, text)
@@ -343,6 +344,11 @@ class Importer:
             cache = self.cache(f"{self.ws}:{gs_name}")
             if cache:
                 spec["cache"] = cache
+            published = [a["name"] for a in as_list((ft.get("attributes") or {}).get("attribute"))
+                         if not str(a.get("binding", "")).startswith("org.locationtech.jts.geom.")]
+            full = self.columns(schema, table) if self.columns else None
+            if full is not None and published not in full:  # GeoServer lists every attribute unless the layer narrows them
+                spec["attributes"] = published
             if ft.get("projectionPolicy") == "FORCE_DECLARED" and ft.get("srs") and ft["srs"] != (native_code(ft) or self.project_crs):
                 spec["crs"] = ft["srs"]
             spec.update(details.to_spec(ft, layer))
@@ -596,7 +602,8 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             if gs.workspace(ws) is None:
                 raise PlanError(f"GeoServer has no workspace {ws}", code=1)
             imp = Importer(gs, ws, project_ws, live, dataset_tables, attributions,
-                           project_crs=project.spec.get("crs") if project else None, full=project is not None and not force)
+                           project_crs=project.spec.get("crs") if project else None, full=project is not None and not force,
+                           columns=table_columns(project, target) if project else None)
             stores = imp.stores()
             layers = imp.layers(stores)
             groups = imp.groups()
@@ -680,3 +687,30 @@ def native_code(ft: dict) -> str | None:
         return text
     codes = re.findall(r'AUTHORITY\["EPSG",\s*"(\d+)"\]', text)
     return f"EPSG:{codes[-1]}" if codes else None
+
+
+def table_columns(project, root: Path):
+    """A lookup of a table's full attribute lists, with its key and without (a store may expose keys or not),
+    or None if the database can't be reached."""
+    from .sync import database
+
+    try:
+        conn = database(project, root).connect()
+    except Exception:  # import works without the database; it just can't tell narrowed attributes
+        return None
+    cache: dict = {}
+
+    def columns(schema: str, table: str) -> list[list[str]] | None:
+        if (schema, table) not in cache:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT a.attname, i.indrelid IS NOT NULL FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+                               JOIN pg_namespace n ON n.oid = c.relnamespace
+                               LEFT JOIN pg_index i ON i.indrelid = c.oid AND i.indisprimary AND a.attnum = ANY(i.indkey)
+                               WHERE n.nspname = %s AND c.relname = %s AND a.attnum > 0 AND NOT a.attisdropped
+                                 AND format_type(a.atttypid, a.atttypmod) NOT LIKE 'geometry%%'
+                               ORDER BY a.attnum""", (schema, table))
+                rows = cur.fetchall()
+            conn.rollback()
+            cache[(schema, table)] = [[name for name, _ in rows], [name for name, key in rows if not key]] if rows else None
+        return cache[(schema, table)]
+    return columns

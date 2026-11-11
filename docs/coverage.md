@@ -57,7 +57,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Metadata links | Yes | `metadataLinks` |
 | Data links | Yes | `dataLinks` |
 | Restrict features (CQL filter) | Yes | `filter` |
-| Attributes shown | Partly | `attributes`; `import` doesn't write them (REST can't tell a narrowed list from the full one) |
+| Attributes shown | Yes | `attributes`; `import` tells a narrowed list from the full one by reading the table, so it needs the project's database |
 | SQL views | Yes | `sql: { schema, query, key, geometry }` |
 | Raster bands and coverage parameters | Yes | `bands`, `parameters` |
 | **Publishing:** default style, other styles | Yes | |
@@ -111,8 +111,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | WMS, WFS, WCS, WMTS | Yes | `Service`: every field on the page, plus `geoserver:` for others |
 | WPS | Chart | Off in the chart (`geoserver.services.wps.enabled`) |
-| OGC API Features | Not yet | |
-| Turning a service on or off | Partly | `enabled:` in a `Service`; whether the service runs at all is `geoserver.services.<name>.enabled` in the chart |
+| OGC API Features | Can't | In the images, but GeoServer Cloud's REST API has no endpoint for its settings, and they're kept in the catalog database, not in a file |
+| Turning a service on or off | Yes | `enabled:` in a `Service`; whether the service runs at all is `geoserver.services.<name>.enabled` in the chart |
 
 ## Settings
 
@@ -131,7 +131,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Tile layers | Yes | Each layer's and group's `cache:` |
 | Caching defaults | Yes | `Settings` `global.tileCaching`; GeoServer reads them when its services start |
 | Gridsets (your own) | Yes | `Gridset`, e.g. British National Grid |
-| Disk quota | Can't | `/gwc/rest/diskquota` answers 404 in GeoServer Cloud |
+| Disk quota | Can't | GeoServer Cloud switches it off (`GWC_DISKQUOTA_DISABLED`), has no REST endpoint for it (404), and would read its settings from each pod's own folder |
 | Blob stores: a folder, S3 | Yes | `BlobStore` `type: file` (on the data volume) or `s3`; `cache.blobStore` |
 | Blob stores: Azure, Google Cloud Storage | Yes | `BlobStore` `type: azure`, `gcs` |
 | Seeding, truncating | Yes | `cache.seed`: after apply changes a layer and after each load, which also clears the old tiles |

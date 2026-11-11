@@ -984,7 +984,7 @@ Next: git diff, then configops plan -C examples/uk-basemap
 - Only the keys whose meaning changed are rewritten, in place; the rest of the file, its order and its comments are left as written. A value spelled out in a file that is GeoServer's default (`enabled: true`, a title equal to the name, the default style for the geometry) counts as the same.
 - A resource only in GeoServer is added to `<workspace>.yaml`, `server.yaml` or `security.yaml`. A style file is rewritten where the project keeps it, as GeoServer has it, when its content differs.
 - A resource only in the files is listed (`not in GeoServer`); `--prune` takes it out of the files.
-- What GeoServer can't give back stays as the files have it: passwords and keys (the Secrets they name), a layer's `attributes`, its `dataset` and `table`, the master password.
+- What GeoServer can't give back stays as the files have it: passwords and keys (the Secrets they name), a layer's `dataset` and `table`, the master password, and its `attributes` when the project's database can't be reached (import compares the published attributes with the table's columns).
 
 `--force` writes fresh files instead, replacing those that exist. Then `git diff` shows the change, and `plan` on the files has nothing to do.
 

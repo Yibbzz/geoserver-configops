@@ -143,5 +143,6 @@ def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
     assert configops(capsys, "import", WS, "-C", str(imported))[0] == 0
     text = (imported / f"{WS}.yaml").read_text()
     assert "query: |" in text and "legend:" in text
+    assert "attributes:\n  - name\n  - kind\n" in text  # narrowed: the table also has a height column
     code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
