@@ -394,7 +394,7 @@ class Planner:
             current = {"title": g.get("title"), "mode": g.get("mode"), "abstract": g.get("abstractTxt"),
                        "layers": names_of((g.get("publishables") or {}).get("published")),
                        "styles": styles + [None] * (len(entries) - len(styles)),
-                       "cache": live_cache(self.gs.tile_layer(f"{ws}:{gs_name}")),
+                       "cache": live_cache(self.gs.tile_layer(f"{ws}:{gs_name}"), cache),
                        "enabled": g.get("enabled", True), "advertised": g.get("advertised", True),
                        **details.live_resource(g, links)}
             changed = diff([(k, current[k], v) for k, v in wanted])

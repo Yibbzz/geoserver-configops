@@ -345,7 +345,7 @@ class GeoServer:
         r = self.gwc_request("GET", f"gridsets/{q(name)}")
         if r.status_code == 200:
             return r.json().get("gridSet")
-        if r.status_code in (400, 404):
+        if r.status_code in (400, 404) or "does not exist" in r.text:  # GeoServer Cloud's REST service answers 500
             return None
         raise GeoServerError("GET", f"gwc/gridsets/{name}", r.status_code, r.text)
 
