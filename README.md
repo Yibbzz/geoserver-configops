@@ -6,7 +6,7 @@ A Helm chart for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud)
 - **load them into PostGIS** and keep them up to date: a nightly job checks each one for a new version and loads it with staging, checks and backups;
 - **publish them** as GeoServer layers, styles and layer groups, set GeoServer's own settings and services (contact details, titles, limits), and its security (users, groups, roles, who may see and do what), with an OpenTofu-style `plan` and `apply`.
 
-> **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI. Expect breaking changes.
+> **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI. Expect breaking changes. [docs/coverage.md](docs/coverage.md) tracks which of GeoServer's settings the tool covers so far.
 
 ## Quick start
 
@@ -217,6 +217,7 @@ The repository's root is the Helm chart, and the `gisdata` command sits beside i
 | `gisdata/`, `pyproject.toml`, `Dockerfile` | The `gisdata` command and its image |
 | `examples/` | Example projects |
 | `docs/spec/datasets.md` | The file format and every command |
+| `docs/coverage.md` | Every page of GeoServer's web UI, and what the tool covers |
 | `tests/` | Unit tests; `tests/e2e/` runs GeoServer Cloud's REST service in Docker; `tests/kind/` deploys the whole chart |
 
 ## Testing
