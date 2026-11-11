@@ -16,8 +16,8 @@ import time
 import pytest
 import requests
 
-from gisdata.cli import main
-from gisdata.geoserver import GeoServer
+from configops.cli import main
+from configops.geoserver import GeoServer
 
 pytestmark = pytest.mark.e2e
 
@@ -31,37 +31,37 @@ REST_FILE = "resource/security/rest.properties"
 # Fresh each run: GeoServer caches a login for minutes, so a password from an earlier run still works for a while
 PW = {name: f"{name}-{secrets.token_hex(4)}" for name in ("alice-1", "alice-2", "bob")}
 SECURITY = """\
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Role
 metadata: { name: e2e-editor }                 # GeoServer role E2E_EDITOR
 spec: {}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Group
 metadata: { name: e2e-editors }
 spec: { roles: [E2E_EDITOR] }
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: User
 metadata: { name: e2e-alice }
 spec: { password: { secret: e2eusers, key: alice }, groups: [e2e-editors] }
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: User
 metadata: { name: e2e-bob }
 spec: { password: { secret: e2eusers, key: bob }, enabled: false, roles: [E2E_EDITOR] }
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: AccessRule
 metadata: { name: private }
 spec: { layer: { workspace: e2e_private, layer: "*", access: read }, roles: [E2E_EDITOR] }
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: AccessRule
 metadata: { name: transactions }
 spec: { service: { service: wfs, operation: Transaction }, roles: [E2E_EDITOR] }
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: AccessRule
 metadata: { name: rest-about }
 spec: { rest: { path: /rest/about/**, methods: [GET] }, roles: [E2E_EDITOR] }
@@ -88,7 +88,7 @@ def gs():
 @pytest.fixture
 def project(tmp_path, monkeypatch):
     (tmp_path / "project.yaml").write_text(f"""\
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata: {{ name: e2e-security }}
 spec:
@@ -101,11 +101,11 @@ spec:
                        "E2EDB_PORT": DB["port"], "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": "postgres",
                        "E2EDB_PASSWORD": os.environ.get("E2E_DB_PASSWORD", "postgres"),
                        "E2EUSERS_ALICE": PW["alice-1"], "E2EUSERS_BOB": PW["bob"]}.items():
-        monkeypatch.setenv(f"GISDATA_{key}", value)
+        monkeypatch.setenv(f"CONFIGOPS_{key}", value)
     return tmp_path
 
 
-def gisdata(capsys, *args):
+def configops(capsys, *args):
     code = main(list(args))
     out = capsys.readouterr()
     return code, out.out + out.err
@@ -122,9 +122,9 @@ def status_as(user: str, password: str, path: str = "about/version.json", expect
 
 
 def test_apply_then_nothing_to_do_and_rules_take_effect(gs, project, capsys):
-    code, out = gisdata(capsys, "apply", "-C", str(project))
+    code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0, out
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 0 and not [line for line in out.splitlines() if line.startswith(("  +", "  ~", "  -"))], out
 
     assert gs.get("security/usergroup/user/e2e-alice/groups")["groups"] in (["e2e-editors"], "e2e-editors")
@@ -139,35 +139,35 @@ def test_apply_then_nothing_to_do_and_rules_take_effect(gs, project, capsys):
 
 
 def test_a_new_password_is_applied(gs, project, capsys, monkeypatch):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
-    monkeypatch.setenv("GISDATA_E2EUSERS_ALICE", PW["alice-2"])
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    monkeypatch.setenv("CONFIGOPS_E2EUSERS_ALICE", PW["alice-2"])
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 2 and 'password: "(differs)"' in out
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     assert status_as("e2e-alice", PW["alice-2"], expect=200) == 200
-    assert gisdata(capsys, "plan", "-C", str(project))[0] == 0
+    assert configops(capsys, "plan", "-C", str(project))[0] == 0
 
 
 def test_import_round_trip(gs, project, tmp_path_factory, capsys, monkeypatch):
     """What apply set, import writes back; with the passwords in the Secret it names, plan has nothing to do."""
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text((project / "project.yaml").read_text().split("\n---\n")[0] + "\n")
-    code, out = gisdata(capsys, "import", "--security", "-C", str(imported))
+    code, out = configops(capsys, "import", "--security", "-C", str(imported))
     assert code == 0 and "1 role(s), 1 group(s), 2 user(s), 3 rule(s)" in out, out
     assert "Secret geoserver-users (keys: e2e-alice, e2e-bob)" in out
-    monkeypatch.setenv("GISDATA_GEOSERVER_USERS_E2E_ALICE", os.environ["GISDATA_E2EUSERS_ALICE"])
-    monkeypatch.setenv("GISDATA_GEOSERVER_USERS_E2E_BOB", os.environ["GISDATA_E2EUSERS_BOB"])
-    code, out = gisdata(capsys, "plan", "-C", str(imported))
+    monkeypatch.setenv("CONFIGOPS_GEOSERVER_USERS_E2E_ALICE", os.environ["CONFIGOPS_E2EUSERS_ALICE"])
+    monkeypatch.setenv("CONFIGOPS_GEOSERVER_USERS_E2E_BOB", os.environ["CONFIGOPS_E2EUSERS_BOB"])
+    code, out = configops(capsys, "plan", "-C", str(imported))
     assert code == 0 and not [line for line in out.splitlines() if line.startswith(("  +", "  ~", "  -"))], out
 
 
 def test_unmanaged_left_alone_until_pruned(gs, project, capsys):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     gs.request("POST", "security/usergroup/users", {"user": {"userName": "e2e-carol", "password": "x", "enabled": True}})
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 0 and "? user e2e-carol" in out
-    code, out = gisdata(capsys, "apply", "-C", str(project), "--prune")
+    code, out = configops(capsys, "apply", "-C", str(project), "--prune")
     assert code == 0 and "- user e2e-carol" in out
     assert "e2e-carol" not in str(gs.get("security/usergroup/users"))
     assert "admin" in str(gs.get("security/usergroup/users"))  # GeoServer's own, never pruned

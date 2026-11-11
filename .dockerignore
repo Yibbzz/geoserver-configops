@@ -1,5 +1,5 @@
-# Only pyproject.toml and gisdata/ go into the image
+# Only pyproject.toml and configops/ go into the image
 *
 !pyproject.toml
-!gisdata/
+!configops/
 **/__pycache__

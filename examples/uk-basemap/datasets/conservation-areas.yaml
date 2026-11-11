@@ -1,8 +1,8 @@
 # Surrey Heath conservation areas from data.gov.uk, a CKAN portal. The package
 # has the same data as Shapefile, GeoJSON, GML and GeoPackage; `resource` pins
-# the GeoPackage. `gisdata discover data-gov-uk conservation-areas125` lists
+# the GeoPackage. `configops discover data-gov-uk conservation-areas125` lists
 # them, and the one layer inside: conservation_areas.
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Dataset
 metadata:
   name: conservation-areas
@@ -14,7 +14,7 @@ spec:
   tables:
     conservation_areas: { name: conservation_areas }
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: conservation-areas

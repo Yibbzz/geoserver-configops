@@ -41,21 +41,21 @@ def test_default_images_come_from_docker_hub_with_one_tag():
 
 def test_sync_cronjob_uses_values():
     manifests = helm_template(
-        "--set", "gisdata.sync.schedule=30 4 * * 0",
-        "--set", "gisdata.image.repository=example.com/gisdata",
-        "--set", "gisdata.image.tag=1.2.3",
+        "--set", "configops.sync.schedule=30 4 * * 0",
+        "--set", "configops.image.repository=example.com/configops",
+        "--set", "configops.image.tag=1.2.3",
     )
-    cronjob = by_kind(manifests, "CronJob")["gisdata-sync"]
+    cronjob = by_kind(manifests, "CronJob")["configops-sync"]
     assert cronjob["spec"]["schedule"] == "30 4 * * 0"
     container = containers(cronjob)[0]
-    assert container["image"] == "example.com/gisdata:1.2.3"
+    assert container["image"] == "example.com/configops:1.2.3"
     assert container["args"] == ["sync", "-C", "/project"]
 
 
 def test_project_files_are_in_a_configmap_at_their_paths():
     manifests = helm_template()
-    data = by_kind(manifests, "ConfigMap")["gisdata-project"]["data"]
-    pod = by_kind(manifests, "CronJob")["gisdata-sync"]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    data = by_kind(manifests, "ConfigMap")["configops-project"]["data"]
+    pod = by_kind(manifests, "CronJob")["configops-sync"]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
     volume = next(v for v in pod["volumes"] if v["name"] == "project")
     paths = {item["path"]: data[item["key"]] for item in volume["configMap"]["items"]}
     project = ROOT / "examples" / "uk-basemap"
@@ -66,21 +66,21 @@ def test_project_files_are_in_a_configmap_at_their_paths():
     assert set(paths) == expected
     assert paths["project.yaml"] == (project / "project.yaml").read_text()
     assert paths["styles/os-road-link.sld"] == (project / "styles" / "os-road-link.sld").read_bytes().decode()
-    mounts = {m["name"]: m["mountPath"] for m in containers(by_kind(manifests, "CronJob")["gisdata-sync"])[0]["volumeMounts"]}
+    mounts = {m["name"]: m["mountPath"] for m in containers(by_kind(manifests, "CronJob")["configops-sync"])[0]["volumeMounts"]}
     assert mounts["project"] == "/project"
 
 
 def test_secrets_are_mounted_as_files_and_may_be_missing():
-    manifests = helm_template("--set", "gisdata.secrets={geoserver-pgconfig-secret,os-api}")
-    cronjob = by_kind(manifests, "CronJob")["gisdata-sync"]
+    manifests = helm_template("--set", "configops.secrets={geoserver-pgconfig-secret,os-api}")
+    cronjob = by_kind(manifests, "CronJob")["configops-sync"]
     pod = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]
     secrets = {v["secret"]["secretName"]: v["secret"] for v in pod["volumes"] if "secret" in v}
     assert set(secrets) == {"geoserver-pgconfig-secret", "os-api"}
     assert all(s["optional"] for s in secrets.values())
     container = containers(cronjob)[0]
     mounts = {m["mountPath"] for m in container["volumeMounts"]}
-    assert {"/etc/gisdata/secrets/geoserver-pgconfig-secret", "/etc/gisdata/secrets/os-api"} <= mounts
-    assert {"name": "GISDATA_SECRETS_DIR", "value": "/etc/gisdata/secrets"} in container["env"]
+    assert {"/etc/configops/secrets/geoserver-pgconfig-secret", "/etc/configops/secrets/os-api"} <= mounts
+    assert {"name": "CONFIGOPS_SECRETS_DIR", "value": "/etc/configops/secrets"} in container["env"]
 
 
 def test_secrets_yaml_never_reaches_the_configmap(tmp_path):
@@ -98,28 +98,28 @@ def test_secrets_yaml_never_reaches_the_configmap(tmp_path):
 def test_a_project_directory_without_files_fails_clearly():
     if shutil.which("helm") is None:
         pytest.skip("helm is not installed")
-    result = subprocess.run(["helm", "template", "geoserver", str(ROOT), "--set", "gisdata.project=nowhere"],
+    result = subprocess.run(["helm", "template", "geoserver", str(ROOT), "--set", "configops.project=nowhere"],
                             capture_output=True, text=True)
     assert result.returncode != 0
-    assert "gisdata.project: no project files found in nowhere" in result.stderr
+    assert "configops.project: no project files found in nowhere" in result.stderr
 
 
 def test_apply_job_runs_each_release_and_waits_for_geoserver():
-    manifests = helm_template("--set", "gisdata.apply.waitSeconds=60")
+    manifests = helm_template("--set", "configops.apply.waitSeconds=60")
     [job] = by_kind(manifests, "Job").values()
-    assert job["metadata"]["name"] == "gisdata-apply-1"  # the release revision: a new Job each upgrade
+    assert job["metadata"]["name"] == "configops-apply-1"  # the release revision: a new Job each upgrade
     assert containers(job)[0]["args"] == ["apply", "-C", "/project", "--wait", "60"]
     pod = job["spec"]["template"]["spec"]
     assert pod["restartPolicy"] == "Never" and pod["securityContext"]["runAsNonRoot"] is True
     assert "helm.sh/hook" not in job["metadata"].get("annotations", {})  # Helm doesn't block on it
-    pruning = by_kind(helm_template("--set", "gisdata.apply.prune=true"), "Job")
+    pruning = by_kind(helm_template("--set", "configops.apply.prune=true"), "Job")
     assert containers(next(iter(pruning.values())))[0]["args"][-1] == "--prune"
 
 
 def test_apply_and_sync_share_one_pod():
     manifests = helm_template()
     [job] = by_kind(manifests, "Job").values()
-    cron = by_kind(manifests, "CronJob")["gisdata-sync"]
+    cron = by_kind(manifests, "CronJob")["configops-sync"]
     apply_pod = job["spec"]["template"]["spec"]
     sync_pod = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]
     for pod in (apply_pod, sync_pod):
@@ -128,16 +128,16 @@ def test_apply_and_sync_share_one_pod():
 
 
 def test_drift_check_runs_plan_and_passes_only_waiting_layers():
-    manifests = helm_template("--set", "gisdata.drift.schedule=0 * * * *")
-    cron = by_kind(manifests, "CronJob")["gisdata-drift"]
+    manifests = helm_template("--set", "configops.drift.schedule=0 * * * *")
+    cron = by_kind(manifests, "CronJob")["configops-drift"]
     assert cron["spec"]["schedule"] == "0 * * * *"
     assert cron["spec"]["jobTemplate"]["spec"]["backoffLimit"] == 0
     container = containers(cron)[0]
     assert container["command"] == ["sh", "-c"]
     [script] = container["args"]
-    assert script.startswith("gisdata plan -C /project;") and '"$rc" -eq 3' in script
+    assert script.startswith("configops plan -C /project;") and '"$rc" -eq 3' in script
     drift_pod = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]
-    sync_pod = by_kind(manifests, "CronJob")["gisdata-sync"]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    sync_pod = by_kind(manifests, "CronJob")["configops-sync"]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
     for pod in (drift_pod, sync_pod):
         pod["containers"][0].pop("args")
         pod["containers"][0].pop("command", None)
@@ -145,22 +145,22 @@ def test_drift_check_runs_plan_and_passes_only_waiting_layers():
 
 
 def test_drift_script_exit_codes():
-    """Run the CronJob's script with a stand-in gisdata: drift and errors fail it, waiting layers don't."""
-    [script] = containers(by_kind(helm_template(), "CronJob")["gisdata-drift"])[0]["args"]
+    """Run the CronJob's script with a stand-in configops: drift and errors fail it, waiting layers don't."""
+    [script] = containers(by_kind(helm_template(), "CronJob")["configops-drift"])[0]["args"]
     for plan_code, job_code in [(0, 0), (1, 1), (2, 2), (3, 0)]:
-        stand_in = f"gisdata() {{ return {plan_code}; }}; "
+        stand_in = f"configops() {{ return {plan_code}; }}; "
         assert subprocess.run(["sh", "-c", stand_in + script]).returncode == job_code, plan_code
 
 
 def test_apply_sync_and_drift_can_be_disabled():
-    only_apply = helm_template("--set", "gisdata.sync.enabled=false", "--set", "gisdata.drift.enabled=false")
+    only_apply = helm_template("--set", "configops.sync.enabled=false", "--set", "configops.drift.enabled=false")
     assert not by_kind(only_apply, "CronJob") and by_kind(only_apply, "Job")
-    no_drift = helm_template("--set", "gisdata.drift.enabled=false")
-    assert set(by_kind(no_drift, "CronJob")) == {"gisdata-sync"}
-    none = helm_template("--set", "gisdata.sync.enabled=false", "--set", "gisdata.apply.enabled=false",
-                         "--set", "gisdata.drift.enabled=false")
+    no_drift = helm_template("--set", "configops.drift.enabled=false")
+    assert set(by_kind(no_drift, "CronJob")) == {"configops-sync"}
+    none = helm_template("--set", "configops.sync.enabled=false", "--set", "configops.apply.enabled=false",
+                         "--set", "configops.drift.enabled=false")
     assert not by_kind(none, "CronJob") and not by_kind(none, "Job")
-    assert "gisdata-project" not in by_kind(none, "ConfigMap")
+    assert "configops-project" not in by_kind(none, "ConfigMap")
 
 
 def test_jndi_config_is_rendered_and_mounted():
@@ -216,7 +216,7 @@ def test_no_data_volume_unless_asked():
         assert "/data" not in {m["mountPath"] for m in containers(deployment)[0].get("volumeMounts", [])}, name
 
 
-def test_data_volume_is_mounted_in_every_service_and_gisdata():
+def test_data_volume_is_mounted_in_every_service_and_configops():
     manifests = helm_template("-f", str(ROOT / "values-data-volume.yaml"), "--set", "dataVolume.size=5Gi")
     claim = by_kind(manifests, "PersistentVolumeClaim")["geoserver-data"]
     assert claim["spec"]["resources"]["requests"]["storage"] == "5Gi"

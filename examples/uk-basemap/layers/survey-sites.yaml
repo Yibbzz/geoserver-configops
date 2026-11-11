@@ -1,5 +1,5 @@
-# A layer on a table you load yourself: gisdata publishes it but never changes the table.
-apiVersion: gisdata/v1alpha1
+# A layer on a table you load yourself: configops publishes it but never changes the table.
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: survey-sites

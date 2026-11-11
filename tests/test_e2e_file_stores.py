@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from gisdata.cli import main
-from gisdata.geoserver import GeoServer
+from configops.cli import main
+from configops.geoserver import GeoServer
 
 pytestmark = pytest.mark.e2e
 
@@ -29,7 +29,7 @@ if not URL or not DATA:
 if shutil.which("ogr2ogr") is None or shutil.which("gdal_translate") is None:
     pytest.skip("GDAL's ogr2ogr and gdal_translate not installed", allow_module_level=True)
 
-WS = "gisdata_files"
+WS = "configops_files"
 PASSWORD = os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver")
 DB = dict(host=os.environ.get("E2E_DB_HOST", "localhost"), port=os.environ.get("E2E_DB_PORT", "55433"))
 STORES = [("sites-gpkg", "geopackage", "e2e/sites.gpkg"), ("sites-shp", "shapefile", "e2e/sites.shp"),
@@ -80,12 +80,12 @@ def env(monkeypatch):
     for key, value in {"E2EGS_USERNAME": "admin", "E2EGS_PASSWORD": PASSWORD, "E2EDB_HOST": DB["host"],
                        "E2EDB_PORT": DB["port"], "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": "postgres",
                        "E2EDB_PASSWORD": os.environ.get("E2E_DB_PASSWORD", "postgres")}.items():
-        monkeypatch.setenv(f"GISDATA_{key}", value)
+        monkeypatch.setenv(f"CONFIGOPS_{key}", value)
 
 
 def project_yaml() -> str:
     return f"""\
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata: {{ name: e2e-files }}
 spec:
@@ -99,32 +99,32 @@ spec:
 def project(tmp_path, env):
     docs = [project_yaml()]
     for name, kind, path in STORES:
-        docs.append(f"apiVersion: gisdata/v1alpha1\nkind: Store\nmetadata: {{ name: {name} }}\nspec: {{ type: {kind}, path: {path} }}\n")
-        docs.append(f"apiVersion: gisdata/v1alpha1\nkind: Layer\nmetadata: {{ name: {name} }}\nspec: {{ store: {name} }}\n")
+        docs.append(f"apiVersion: configops/v1alpha1\nkind: Store\nmetadata: {{ name: {name} }}\nspec: {{ type: {kind}, path: {path} }}\n")
+        docs.append(f"apiVersion: configops/v1alpha1\nkind: Layer\nmetadata: {{ name: {name} }}\nspec: {{ store: {name} }}\n")
     (tmp_path / "project.yaml").write_text("---\n".join(docs))
     return tmp_path
 
 
-def gisdata(capsys, *args):
+def configops(capsys, *args):
     code = main(list(args))
     out = capsys.readouterr()
     return code, out.out + out.err
 
 
 def test_every_file_store_then_nothing_to_do(gs, project, capsys):
-    code, out = gisdata(capsys, "apply", "-C", str(project))
+    code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0, out
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     assert gs.get(f"workspaces/{WS}/coveragestores/dem_mosaic/coverages/dem_mosaic")["coverage"]["srs"] == "EPSG:27700"
     assert gs.layer(WS, "sites_gpkg")["layer"]["defaultStyle"]["name"] == "point"
 
 
 def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text(project_yaml())
-    code, out = gisdata(capsys, "import", WS, "-C", str(imported))
+    code, out = configops(capsys, "import", WS, "-C", str(imported))
     assert code == 0 and f"{len(STORES)} store(s), {len(STORES)} layer(s)" in out, out
-    code, out = gisdata(capsys, "plan", "-C", str(imported))
+    code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out

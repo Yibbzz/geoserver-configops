@@ -1,7 +1,7 @@
 # Rasters: OS Terrain 50 (heights of Great Britain on a 50 m grid) made into one
 # Cloud-Optimised GeoTIFF on the shared data volume, and published with a colour ramp.
 # Needs the data volume: deploy with -f values-data-volume.yaml.
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata:
   name: terrain
@@ -16,7 +16,7 @@ spec:
   crs: EPSG:27700
   backups: 1
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Source
 metadata:
   name: os
@@ -24,7 +24,7 @@ spec:
   type: os-downloads
 ---
 # The ASCII Grid download: about 2,800 tiles in zips inside a zip, mosaicked into one file
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Dataset
 metadata:
   name: terrain-50
@@ -37,7 +37,7 @@ spec:
     crs: EPSG:27700                            # the grids carry no CRS of their own
     nodata: -9999                              # where no tile covers: the sea around the coast
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata:
   name: terrain-50
@@ -45,7 +45,7 @@ spec:
   type: geotiff
   dataset: terrain-50                          # the Dataset's file
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: heights

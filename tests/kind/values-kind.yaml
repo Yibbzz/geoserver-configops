@@ -24,8 +24,8 @@ postgresql:
   persistence:
     size: 2Gi
 
-# The runner's CPU is nearly all taken by the GeoServer services; let gisdata's pods still fit
-gisdata:
+# The runner's CPU is nearly all taken by the GeoServer services; let configops's pods still fit
+configops:
   resources:
     requests: { cpu: 10m, memory: 256Mi }
     limits: { memory: 1Gi }

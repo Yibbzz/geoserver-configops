@@ -21,7 +21,7 @@ jobs:
       - name: Validate manifests against Kubernetes schemas
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
-          for extra in "" "-f values-data-volume.yaml" "--set gisdata.sync.enabled=false --set gisdata.apply.enabled=false --set gisdata.drift.enabled=false"; do
+          for extra in "" "-f values-data-volume.yaml" "--set configops.sync.enabled=false --set configops.apply.enabled=false --set configops.drift.enabled=false"; do
             echo "== helm template $extra"
             helm template geoserver . -f values.yaml $extra | ./kubeconform -strict -summary -kubernetes-version 1.37.0 -
           done
@@ -64,19 +64,19 @@ jobs:
           TEST_DB_PASSWORD: postgres
         run: pytest
       - name: Validate the example project
-        run: gisdata validate examples/uk-basemap
+        run: configops validate examples/uk-basemap
 
-  gisdata-image:
+  configops-image:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Build the gisdata image
-        run: docker build -t gisdata:ci .
+      - name: Build the configops image
+        run: docker build -t configops:ci .
       - name: Smoke test
         run: |
-          docker run --rm gisdata:ci --version
-          docker run --rm --entrypoint ogr2ogr gisdata:ci --version
-          docker run --rm -v "$PWD/examples/uk-basemap:/project:ro" gisdata:ci validate /project
+          docker run --rm configops:ci --version
+          docker run --rm --entrypoint ogr2ogr configops:ci --version
+          docker run --rm -v "$PWD/examples/uk-basemap:/project:ro" configops:ci validate /project
 
   # The real GeoServer Cloud REST service (same images and jndi.yml as the chart) in Docker,
   # then the e2e tests against it.

@@ -15,8 +15,8 @@ import os
 import psycopg2
 import pytest
 
-from gisdata.cli import main
-from gisdata.geoserver import GeoServer
+from configops.cli import main
+from configops.geoserver import GeoServer
 
 pytestmark = pytest.mark.e2e
 
@@ -24,7 +24,7 @@ URL = os.environ.get("E2E_GEOSERVER_URL")
 if not URL:
     pytest.skip("E2E_GEOSERVER_URL not set", allow_module_level=True)
 
-WS = "gisdata_stores"
+WS = "configops_stores"
 PASSWORD = os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver")
 DB = dict(host=os.environ.get("E2E_DB_HOST", "localhost"), port=int(os.environ.get("E2E_DB_PORT", 55433)),
           dbname="postgres", user="postgres", password=os.environ.get("E2E_DB_PASSWORD", "postgres"))
@@ -57,12 +57,12 @@ def env(monkeypatch):
                        "E2EDB_PORT": str(DB["port"]), "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": DB["user"],
                        "E2EDB_PASSWORD": DB["password"], "WAREHOUSE_USERNAME": DB["user"], "WAREHOUSE_PASSWORD": DB["password"],
                        "WAREHOUSE_CREDENTIALS_USERNAME": DB["user"], "WAREHOUSE_CREDENTIALS_PASSWORD": DB["password"]}.items():
-        monkeypatch.setenv(f"GISDATA_{key}", value)
+        monkeypatch.setenv(f"CONFIGOPS_{key}", value)
 
 
 def project_yaml() -> str:
     return f"""\
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata: {{ name: e2e-stores }}
 spec:
@@ -75,22 +75,22 @@ spec:
 @pytest.fixture
 def project(tmp_path, env):
     (tmp_path / "project.yaml").write_text(project_yaml() + f"""---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata: {{ name: sentinel-2 }}
 spec: {{ type: cog, url: "{COG}", description: Sentinel-2 true colour }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata: {{ name: eox-wms }}
 spec: {{ type: wms, url: "https://tiles.maps.eox.at/wms?service=WMS&request=GetCapabilities" }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata: {{ name: eox-wmts }}
 spec: {{ type: wmts, url: "https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml" }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata: {{ name: warehouse }}
 spec:
@@ -98,22 +98,22 @@ spec:
   connection: {{ host: {DB_IN_GEOSERVER}, port: 5432, database: postgres, schema: e2e_stores }}
   credentials: {{ secret: warehouse }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: imagery }}
 spec: {{ store: sentinel-2, title: Sentinel-2 }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: cloudless-wms }}
 spec: {{ store: eox-wms, resource: s2cloudless-2024 }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: cloudless-wmts }}
 spec: {{ store: eox-wmts, resource: s2cloudless-2024_3857, cache: true }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: points }}
 spec: {{ store: warehouse, resource: points, style: point }}
@@ -121,16 +121,16 @@ spec: {{ store: warehouse, resource: points, style: point }}
     return tmp_path
 
 
-def gisdata(capsys, *args):
+def configops(capsys, *args):
     code = main(list(args))
     out = capsys.readouterr()
     return code, out.out + out.err
 
 
 def test_apply_then_nothing_to_do(gs, project, capsys):
-    code, out = gisdata(capsys, "apply", "-C", str(project))
+    code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0, out
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     coverage = gs.get(f"workspaces/{WS}/coveragestores/sentinel_2/coverages/imagery")["coverage"]
     assert coverage["nativeCoverageName"] == "geotiff_coverage" and coverage["srs"] == "EPSG:32630"
@@ -138,20 +138,20 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     gs.request("PUT", f"workspaces/{WS}/coveragestores/sentinel_2", {"coverageStore": {"description": "edited"}})
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 2 and 'description: "edited" -> "Sentinel-2 true colour"' in out
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
-    assert gisdata(capsys, "plan", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "plan", "-C", str(project))[0] == 0
 
 
 def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text(project_yaml())
-    code, out = gisdata(capsys, "import", WS, "-C", str(imported))
+    code, out = configops(capsys, "import", WS, "-C", str(imported))
     assert code == 0 and "4 store(s), 4 layer(s)" in out, out
     assert "Secret warehouse-credentials (keys: username, password)" in out
-    code, out = gisdata(capsys, "plan", "-C", str(imported))
+    code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out

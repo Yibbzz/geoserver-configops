@@ -1,6 +1,6 @@
 # What the tool covers
 
-Every page of GeoServer's web UI, and whether `gisdata` can define it in files and apply it with `plan`/`apply`. The aim is everything that can be configured, as code. Update this page in the same PR as any change to what's covered.
+Every page of GeoServer's web UI, and whether `configops` can define it in files and apply it with `plan`/`apply`. The aim is everything that can be configured, as code. Update this page in the same PR as any change to what's covered.
 
 | Status | Meaning |
 | --- | --- |
@@ -158,4 +158,4 @@ Layer preview, demos, server status, the reprojection console and the importer's
 
 ## Deployment (the Helm chart)
 
-Which services run, their images, memory and CPU, health checks, ingress, PostGIS and RabbitMQ, the JNDI datasource, and gisdata's apply Job, sync and drift CronJobs are all in `values.yaml`.
+Which services run, their images, memory and CPU, health checks, ingress, PostGIS and RabbitMQ, the JNDI datasource, and configops's apply Job, sync and drift CronJobs are all in `values.yaml`.
