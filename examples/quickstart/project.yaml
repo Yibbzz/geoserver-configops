@@ -1,0 +1,46 @@
+# The smallest real project: one dataset from data.gov.uk, published as one layer.
+# Loads in about a minute. See the README's quick start; examples/uk-basemap is the full example.
+apiVersion: gisdata/v1alpha1
+kind: Project
+metadata:
+  name: quickstart
+spec:
+  geoserver:
+    url: http://geoserver-gsc-gateway:8080/geoserver-cloud
+    credentials: { secret: geoserver-admin }       # GeoServer's admin login
+  database:
+    jndi: java:comp/env/jdbc/mypostgis              # the chart's datasource
+    connection: { secret: geoserver-pgconfig-secret }
+  workspace: quickstart
+  crs: EPSG:27700
+---
+apiVersion: gisdata/v1alpha1
+kind: Source
+metadata:
+  name: data-gov-uk
+spec:
+  type: ckan
+  url: https://data.gov.uk
+---
+# Surrey Heath conservation areas: `gisdata discover data-gov-uk conservation-areas125`
+# shows the package, its files and the layer inside.
+apiVersion: gisdata/v1alpha1
+kind: Dataset
+metadata:
+  name: conservation-areas
+spec:
+  source: data-gov-uk
+  product: conservation-areas125
+  update: monthly
+  tables:
+    conservation_areas: {}
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: conservation-areas
+spec:
+  dataset: conservation-areas
+  table: conservation_areas
+  title: Conservation areas (Surrey Heath)
+  style: polygon
