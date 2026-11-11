@@ -1,9 +1,10 @@
 {{- /*
 gisdata: the project's files as a ConfigMap, `gisdata apply` as a Job after every
-install and upgrade, and `gisdata sync` as a nightly CronJob. Both run the same pod.
+install and upgrade, `gisdata sync` as a nightly CronJob, and `gisdata plan` as an
+hourly drift check. All run the same pod.
 */ -}}
 {{- $g := .Values.gisdata }}
-{{- if or $g.apply.enabled $g.sync.enabled }}
+{{- if or $g.apply.enabled $g.sync.enabled $g.drift.enabled }}
 {{- /* The project's files, keyed 000-<name> (ConfigMap keys can't hold "/"), mounted back at their paths */ -}}
 {{- $dir := trimSuffix "/" $g.project }}
 {{- $files := dict }}  {{- /* path -> content */}}
@@ -64,6 +65,25 @@ spec:
       template:
         {{- include "gisdata.pod" (merge (dict "args" (list "sync" "-C" "/project")) $ctx) | nindent 8 }}
 {{- end }}
+{{- if $g.drift.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gisdata-drift
+spec:
+  schedule: {{ $g.drift.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        {{- /* plan exits 2 on drift and 1 when it can't run; 3 (only layers waiting for your own tables) isn't drift */}}
+        {{- $script := "gisdata plan -C /project; rc=$?; if [ \"$rc\" -eq 3 ]; then exit 0; fi; exit \"$rc\"" }}
+        {{- include "gisdata.pod" (merge (dict "command" (list "sh" "-c") "args" (list $script)) $ctx) | nindent 8 }}
+{{- end }}
 {{- end }}
 
 {{- define "gisdata.pod" -}}
@@ -80,6 +100,9 @@ spec:
     - name: gisdata
       image: "{{ .g.image.repository }}:{{ .g.image.tag }}"
       imagePullPolicy: {{ .g.image.pullPolicy }}
+      {{- with .command }}
+      command: {{ toJson . }}
+      {{- end }}
       args: {{ toJson .args }}
       env:
         - name: GISDATA_SECRETS_DIR
