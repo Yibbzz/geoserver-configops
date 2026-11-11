@@ -174,7 +174,7 @@ metadata: { name: sentinel-2 }
 spec: { store: sentinel-2-surrey, title: Sentinel-2 true colour }
 ```
 
-Files on the shared data volume (`-f values-data-volume.yaml`: GeoTIFFs, GeoPackages, shapefiles, FlatGeobuf, PMTiles, image mosaics) are `Store`s with `path:`; a raster `Dataset` downloads and builds the GeoTIFF for one ([`examples/terrain`](examples/terrain)).
+Files on the shared data volume (`-f values-data-volume.yaml`: GeoTIFFs, GeoPackages, shapefiles, FlatGeobuf, PMTiles, GeoParquet, CSV, image mosaics and pyramids, app-schema mappings with `-f values-app-schema.yaml`) are `Store`s with `path:`; SQL Server is a `Store` too; a raster `Dataset` downloads and builds the GeoTIFF for one ([`examples/terrain`](examples/terrain)).
 
 **Publish a SQL view:** a Layer with `sql: { schema, query, key, geometry }` instead of a table.
 
@@ -241,6 +241,7 @@ The repository's root is the Helm chart, and the `configops` command sits beside
 | `charts/application/` | Camptocamp's `application` chart, vendored; it templates the GeoServer services |
 | `geoserver-secrets.example.yaml` | The Secrets the chart expects |
 | `values-data-volume.yaml` | Turns on the shared `/data` volume for file stores |
+| `values-app-schema.yaml` | Turns on GeoServer Cloud's app-schema extension, for `appschema` stores |
 | `configops/`, `pyproject.toml`, `Dockerfile` | The `configops` command and its image |
 | `examples/` | Example projects |
 | `docs/spec/datasets.md` | The file format and every command |

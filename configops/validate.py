@@ -346,7 +346,8 @@ def check_security(project: Project) -> list[Problem]:
 
 
 STORES_WITH_ADDRESSES = {"cog", "wms", "wmts", "wfs"}
-STORES_WITH_PATHS = {"geopackage", "shapefile", "shapefiles", "flatgeobuf", "geotiff", "worldimage", "arcgrid", "imagemosaic"}
+STORES_WITH_PATHS = {"geopackage", "shapefile", "shapefiles", "flatgeobuf", "geotiff", "worldimage", "arcgrid", "imagemosaic",
+                     "imagepyramid", "geoparquet", "property", "csv", "appschema"}
 
 
 def check_stores(project: Project) -> list[Problem]:
@@ -377,12 +378,12 @@ def check_stores(project: Project) -> list[Problem]:
             continue
         if kind == "pmtiles" and bool(s.spec.get("path")) == bool(s.spec.get("url")):
             problems.append(Problem(s.file, s.line(("spec",)), "a pmtiles store needs spec.path (on the data volume) or spec.url, not both", s.label))
-        if kind == "postgis":
+        if kind in ("postgis", "sqlserver"):
             missing = [k for k in ("host", "database") if k not in (s.spec.get("connection") or {})]
             if missing:
-                problems.append(Problem(s.file, s.line(("spec",)), f"spec.connection: a postgis store needs {', '.join(missing)}", s.label))
+                problems.append(Problem(s.file, s.line(("spec",)), f"spec.connection: a {kind} store needs {', '.join(missing)}", s.label))
             if s.spec.get("url"):
-                problems.append(Problem(s.file, s.line(("spec", "url")), "spec.url: a postgis store connects with spec.connection", s.label))
+                problems.append(Problem(s.file, s.line(("spec", "url")), f"spec.url: a {kind} store connects with spec.connection", s.label))
     for layer in project.of_kind("Layer"):
         name = layer.spec.get("store")
         if name is None:
@@ -391,6 +392,9 @@ def check_stores(project: Project) -> list[Problem]:
             continue
         if name not in stores:
             problems.append(Problem(layer.file, layer.line(("spec", "store")), f"spec.store: no Store named {name!r}{known(stores)}", layer.label))
+        elif stores[name].spec.get("type") == "appschema" and "resource" not in layer.spec:
+            problems.append(Problem(layer.file, layer.line(("spec",)), "spec.resource: a layer on an appschema store names its feature type, "
+                                    "e.g. Site (GeoServer can't list them)", layer.label))
         for key in ("dataset", "table"):
             if key in layer.spec:
                 problems.append(Problem(layer.file, layer.line(("spec", key)), f"spec.{key}: a layer on a store doesn't take a {key}", layer.label))

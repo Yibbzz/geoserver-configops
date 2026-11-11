@@ -1,0 +1,48 @@
+# Turns on GeoServer Cloud's app-schema extension (complex features: a Store with type appschema),
+# which it ships switched off. Its mapping files are read from the shared data volume, so use it with
+# values-data-volume.yaml:
+#   helm upgrade --install geoserver . -f values.yaml -f values-data-volume.yaml -f values-app-schema.yaml
+geoserver:
+  services:
+    webui:
+      containers:
+        spring:
+          env:
+            GEOSERVER_EXTENSION_APPSCHEMA_ENABLED:
+              value: 'true'
+    rest:
+      containers:
+        spring:
+          env:
+            GEOSERVER_EXTENSION_APPSCHEMA_ENABLED:
+              value: 'true'
+    wfs:
+      containers:
+        spring:
+          env:
+            GEOSERVER_EXTENSION_APPSCHEMA_ENABLED:
+              value: 'true'
+    wms:
+      containers:
+        spring:
+          env:
+            GEOSERVER_EXTENSION_APPSCHEMA_ENABLED:
+              value: 'true'
+    wcs:
+      containers:
+        spring:
+          env:
+            GEOSERVER_EXTENSION_APPSCHEMA_ENABLED:
+              value: 'true'
+    wps:
+      containers:
+        spring:
+          env:
+            GEOSERVER_EXTENSION_APPSCHEMA_ENABLED:
+              value: 'true'
+    gwc:
+      containers:
+        spring:
+          env:
+            GEOSERVER_EXTENSION_APPSCHEMA_ENABLED:
+              value: 'true'

@@ -33,16 +33,17 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | PostGIS through the JNDI datasource | Yes | Made for you: one store per schema the layers use |
 | PostGIS with a password | Yes | `Store` `type: postgis`, login from a Secret |
-| Oracle, SQL Server | Not yet | |
+| SQL Server | Yes | `Store` `type: sqlserver` (tested by hand against SQL Server 2022; not in CI) |
+| Oracle | Can't | GeoServer Cloud's images don't ship Oracle's JDBC driver |
 | GeoPackage, Shapefile, directory of shapefiles, FlatGeobuf, PMTiles | Yes | `Store` with `path:` on the shared data volume (`values-data-volume.yaml`); PMTiles also over `url:` |
-| GeoParquet, property files | Not yet | |
+| GeoParquet, property files, CSV | Yes | `Store` `type: geoparquet`, `property`, `csv` |
 | Remote WFS (cascaded) | Yes | `Store` `type: wfs` |
 | Remote WMS, WMTS (cascaded) | Yes | `Store` `type: wms`, `wmts` |
 | Cloud-Optimised GeoTIFF (HTTP, S3, Azure, Google) | Yes | `Store` `type: cog` |
 | GeoTIFF on disk | Yes | `Store` `type: geotiff` with `path:` |
 | Image mosaic, world image, ArcGrid | Yes | `Store` `type: imagemosaic`, `worldimage`, `arcgrid` |
-| Image pyramid | Not yet | |
-| App-schema (complex features) | Not yet | |
+| Image pyramid | Yes | `Store` `type: imagepyramid` |
+| App-schema (complex features) | Yes | `Store` `type: appschema`; the extension is off in GeoServer Cloud: `-f values-app-schema.yaml` |
 | Store description, enabled | Yes | For `Store`s; the JNDI PostGIS stores have none |
 
 ### Layers

@@ -1,0 +1,11 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:ex="http://example.org/ex"
+           targetNamespace="http://example.org/ex" elementFormDefault="qualified">
+  <xs:import namespace="http://www.opengis.net/gml/3.2" schemaLocation="http://schemas.opengis.net/gml/3.2.1/gml.xsd"/>
+  <xs:element name="Site" type="ex:SiteType" substitutionGroup="gml:AbstractFeature"/>
+  <xs:complexType name="SiteType">
+    <xs:complexContent><xs:extension base="gml:AbstractFeatureType"><xs:sequence>
+      <xs:element name="label" type="xs:string"/>
+      <xs:element name="position" type="gml:PointPropertyType"/>
+    </xs:sequence></xs:extension></xs:complexContent>
+  </xs:complexType>
+</xs:schema>

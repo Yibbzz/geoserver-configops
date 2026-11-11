@@ -36,9 +36,17 @@ TYPES = {
     "worldimage": ("coverage", "WorldImage"),
     "arcgrid": ("coverage", "ArcGrid"),
     "imagemosaic": ("coverage", "ImageMosaic"),
+    "imagepyramid": ("coverage", "ImagePyramid"),
+    "geoparquet": ("data", "GeoParquet"),
+    "property": ("data", "Properties"),
+    "csv": ("data", "CSV"),
+    "appschema": ("data", "Application Schema DataAccess"),  # needs values-app-schema.yaml
+    "sqlserver": ("data", "Microsoft SQL Server"),
 }
 DATA = "/data"  # where values-data-volume.yaml mounts the shared volume
-FILE_PARAMS = {"geopackage": "database", "shapefile": "url", "shapefiles": "url", "flatgeobuf": "url", "pmtiles": "pmtiles"}
+FILE_PARAMS = {"geopackage": "database", "shapefile": "url", "shapefiles": "url", "flatgeobuf": "url", "pmtiles": "pmtiles",
+               "geoparquet": "uri", "property": "directory", "csv": "file", "appschema": "url"}
+DBTYPES = {"postgis": "postgis", "geopackage": "geopkg", "geoparquet": "geoparquet", "appschema": "app-schema", "sqlserver": "sqlserver"}
 FAMILIES = {
     "coverage": {"stores": "coveragestores", "key": "coverageStore", "items": "coverages", "item": "coverage",
                  "native": "nativeCoverageName", "list": "all"},
@@ -51,7 +59,7 @@ FAMILIES = {
 }
 COG_READERS = {"http": "HTTP", "https": "HTTP", "s3": "S3", "gs": "GS", "az": "AZURE", "azure": "AZURE"}
 WFS = "WFSDataStoreFactory:"
-SECRET_PARAMS = {"postgis": ("user", "passwd"), "wfs": (f"{WFS}USERNAME", f"{WFS}PASSWORD")}
+SECRET_PARAMS = {"postgis": ("user", "passwd"), "sqlserver": ("user", "passwd"), "wfs": (f"{WFS}USERNAME", f"{WFS}PASSWORD")}
 
 
 def location(spec: dict) -> str:
@@ -106,13 +114,11 @@ def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict,
         params = {str(k): str(v) for k, v in (spec.get("connection") or {}).items()}
         if kind == "wfs":
             params[f"{WFS}GET_CAPABILITIES_URL"] = spec["url"]
-        if kind == "postgis":
-            params.setdefault("dbtype", "postgis")
+        if kind in DBTYPES:
+            params.setdefault("dbtype", DBTYPES[kind])
         if kind in FILE_PARAMS:
             where = location(spec)
             params[FILE_PARAMS[kind]] = where.removeprefix("file:") if kind == "geopackage" else where
-            if kind == "geopackage":
-                params["dbtype"] = "geopkg"
         compared.update({f"connection.{k}": v for k, v in params.items()})
         if user is not None:
             user_key, password_key = SECRET_PARAMS[kind]
@@ -160,7 +166,10 @@ def plan(planner) -> None:
         key = family(store)["key"]
         target = f"{ws}:{geoserver_name(store)}"
         live = (gs.get(path) or {}).get(key)
-        run = lambda path=path, collection=collection, key=key, body=body: gs.upsert(path, collection, {key: body})
+        def run(path=path, collection=collection, key=key, body=body, spec=spec):
+            if spec["type"] == "appschema":
+                schema_cache(spec["path"])
+            gs.upsert(path, collection, {key: body})
         if live is None:
             where = spec.get("url") or (f"{DATA}/{spec['path'].strip('/')}" if spec.get("path") else "") \
                 or spec.get("connection", {}).get("host", "")
@@ -174,6 +183,16 @@ def plan(planner) -> None:
     for layer in planner.layers.values():
         if "store" in layer.spec:
             plan_layer(planner, layer, stores[layer.spec["store"]])
+
+
+def schema_cache(path: str) -> None:
+    """App-schema downloads the schemas a mapping names into an app-schema-cache folder beside it, if there is one:
+    GeoServer Cloud has no data directory for its own. Made when the data volume is mounted here."""
+    from .raster import data_root
+
+    folder = data_root() / path
+    if folder.parent.is_dir():
+        (folder.parent / "app-schema-cache").mkdir(exist_ok=True)
 
 
 def first_raster(planner, dataset: Resource) -> None:

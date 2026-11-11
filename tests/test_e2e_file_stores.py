@@ -1,6 +1,6 @@
 """File stores on the shared data volume against the real GeoServer Cloud REST service:
-GeoPackage, Shapefile, a directory of shapefiles, FlatGeobuf, PMTiles, GeoTIFF, ArcGrid and an
-image mosaic; then import and a clean plan.
+GeoPackage, Shapefile, a directory of shapefiles, FlatGeobuf, PMTiles, GeoParquet, property files,
+CSV, GeoTIFF, ArcGrid, an image mosaic and an image pyramid; then import and a clean plan.
 
 tests/e2e/up.sh mounts tests/e2e/data at /data in the REST service, as the chart's
 values-data-volume.yaml does. The test writes its files there with GDAL, so it needs
@@ -26,8 +26,8 @@ URL = os.environ.get("E2E_GEOSERVER_URL")
 DATA = os.environ.get("E2E_DATA_DIR")
 if not URL or not DATA:
     pytest.skip("E2E_GEOSERVER_URL or E2E_DATA_DIR not set", allow_module_level=True)
-if shutil.which("ogr2ogr") is None or shutil.which("gdal_translate") is None:
-    pytest.skip("GDAL's ogr2ogr and gdal_translate not installed", allow_module_level=True)
+if shutil.which("ogr2ogr") is None or shutil.which("gdal_translate") is None or shutil.which("gdal_retile.py") is None:
+    pytest.skip("GDAL's ogr2ogr, gdal_translate and gdal_retile.py not installed", allow_module_level=True)
 
 WS = "configops_files"
 PASSWORD = os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver")
@@ -35,7 +35,11 @@ DB = dict(host=os.environ.get("E2E_DB_HOST", "localhost"), port=os.environ.get("
 STORES = [("sites-gpkg", "geopackage", "e2e/sites.gpkg"), ("sites-shp", "shapefile", "e2e/sites.shp"),
           ("vector-dir", "shapefiles", "e2e/shp"), ("sites-fgb", "flatgeobuf", "e2e/sites.fgb"),
           ("sites-pmtiles", "pmtiles", "e2e/sites.pmtiles"), ("dem", "geotiff", "e2e/dem.tif"),
-          ("dem-grid", "arcgrid", "e2e/dem.asc"), ("dem-mosaic", "imagemosaic", "e2e/mosaic")]
+          ("dem-grid", "arcgrid", "e2e/dem.asc"), ("dem-mosaic", "imagemosaic", "e2e/mosaic"),
+          ("sites-parquet", "geoparquet", "e2e/sites.parquet"), ("sites-props", "property", "e2e/props"),
+          ("places-csv", "csv", "e2e/places.csv", "connection: { strategy: LatLon, latField: lat, lngField: lon }"),
+          ("dem-pyramid", "imagepyramid", "e2e/pyramid")]
+FIXTURES = Path(__file__).parent / "e2e" / "fixtures"
 
 
 def run(*cmd):
@@ -48,6 +52,10 @@ def files():
     shutil.rmtree(root, ignore_errors=True)
     (root / "shp").mkdir(parents=True)
     (root / "mosaic").mkdir()
+    (root / "props").mkdir()
+    shutil.copy(FIXTURES / "sites.parquet", root / "sites.parquet")  # GDAL here may not write Parquet
+    (root / "props" / "sites.properties").write_text("_=name:String,geom:Point:srid=27700\nsites.1=a|POINT(517900 151300)\n")
+    (root / "places.csv").write_text("name,lat,lon\nalpha,51.5,-0.1\nbeta,52.2,0.1\n")
     src = root / "sites.geojson"
     src.write_text(json.dumps({"type": "FeatureCollection", "features": [
         {"type": "Feature", "properties": {"name": "a"}, "geometry": {"type": "Point", "coordinates": [517900, 151300]}}]}))
@@ -61,6 +69,11 @@ def files():
     run("gdal_translate", "-q", "-of", "AAIGrid", str(root / "dem.tif"), str(root / "dem.asc"))
     run("gdal_translate", "-q", "-srcwin", "0", "0", "50", "100", str(root / "dem.tif"), str(root / "mosaic/west.tif"))
     run("gdal_translate", "-q", "-srcwin", "50", "0", "50", "100", str(root / "dem.tif"), str(root / "mosaic/east.tif"))
+    (root / "pyramid").mkdir()  # an image pyramid: gdal_retile's levels 1, 2, with the full-size tiles moved into 0
+    run("gdal_retile.py", "-q", "-levels", "2", "-ps", "25", "25", "-targetDir", str(root / "pyramid"), str(root / "dem.tif"))
+    (root / "pyramid" / "0").mkdir()
+    for tile in (root / "pyramid").glob("*.tif"):
+        tile.rename(root / "pyramid" / "0" / tile.name)
     for p in root.rglob("*"):
         p.chmod(0o777 if p.is_dir() else 0o666)  # GeoServer writes a mosaic's index next to its files
     yield root
@@ -98,8 +111,9 @@ spec:
 @pytest.fixture
 def project(tmp_path, env):
     docs = [project_yaml()]
-    for name, kind, path in STORES:
-        docs.append(f"apiVersion: configops/v1alpha1\nkind: Store\nmetadata: {{ name: {name} }}\nspec: {{ type: {kind}, path: {path} }}\n")
+    for name, kind, path, *extra in STORES:
+        more = f", {extra[0]}" if extra else ""
+        docs.append(f"apiVersion: configops/v1alpha1\nkind: Store\nmetadata: {{ name: {name} }}\nspec: {{ type: {kind}, path: {path}{more} }}\n")
         docs.append(f"apiVersion: configops/v1alpha1\nkind: Layer\nmetadata: {{ name: {name} }}\nspec: {{ store: {name} }}\n")
     (tmp_path / "project.yaml").write_text("---\n".join(docs))
     return tmp_path

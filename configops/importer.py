@@ -34,8 +34,11 @@ GEOMETRY_STYLE = {"Point": "point", "MultiPoint": "point", "LineString": "line",
 
 FILE_DATASTORES = {"GeoPackage": ("geopackage", "database"), "Shapefile": ("shapefile", "url"),
                    "Directory of spatial files (shapefiles)": ("shapefiles", "url"), "FlatGeobuf": ("flatgeobuf", "url"),
-                   "PMTiles": ("pmtiles", "pmtiles")}
-FILE_COVERAGES = {"GeoTIFF": "geotiff", "WorldImage": "worldimage", "ArcGrid": "arcgrid", "ImageMosaic": "imagemosaic"}
+                   "PMTiles": ("pmtiles", "pmtiles"), "GeoParquet": ("geoparquet", "uri"), "Properties": ("property", "directory"),
+                   "CSV": ("csv", "file"), "Application Schema DataAccess": ("appschema", "url")}
+FILE_COVERAGES = {"GeoTIFF": "geotiff", "WorldImage": "worldimage", "ArcGrid": "arcgrid", "ImageMosaic": "imagemosaic",
+                  "ImagePyramid": "imagepyramid"}
+CSV_PARAMS = ("strategy", "latField", "lngField", "wktField", "quoteAllFields", "writeprj")
 
 
 def data_path(where: str) -> str | None:
@@ -150,11 +153,11 @@ class Importer:
                 found[name] = entries
                 if entries.get("schema") and name != entries["schema"]:
                     self.notes.append(f"store {name}: apply moves its layers to a store named after their schema ({entries['schema']})")
-            elif entries.get("dbtype") == "postgis":
+            elif entries.get("dbtype") in ("postgis", "sqlserver"):
                 connection = {k: entries[k] for k in ("host", "port", "database", "schema") if entries.get(k)}
                 secret = f"{resource_name(name)[0]}-credentials"
                 self.secrets.append(secret)
-                self.store_resource(store, name, {"type": "postgis", "connection": connection, "credentials": {"secret": secret}})
+                self.store_resource(store, name, {"type": entries["dbtype"], "connection": connection, "credentials": {"secret": secret}})
             elif entries.get("WFSDataStoreFactory:GET_CAPABILITIES_URL"):
                 self.store_resource(store, name, {"type": "wfs", "url": entries["WFSDataStoreFactory:GET_CAPABILITIES_URL"]})
             elif store.get("type") in FILE_DATASTORES:
@@ -162,7 +165,10 @@ class Importer:
                 where = entries.get(param) or ""
                 path = data_path(where)
                 if path:
-                    self.store_resource(store, name, {"type": kind, "path": path})
+                    spec = {"type": kind, "path": path}
+                    if kind == "csv":
+                        spec["connection"] = {k: entries[k] for k in CSV_PARAMS if entries.get(k)}
+                    self.store_resource(store, name, spec)
                 elif kind == "pmtiles" and where and not where.startswith("file:"):
                     self.store_resource(store, name, {"type": kind, "url": where})
                 else:
