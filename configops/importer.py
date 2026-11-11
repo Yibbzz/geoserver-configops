@@ -391,6 +391,17 @@ class Importer:
             links = details.to_spec(g, {}).get("metadataLinks")
             if links:
                 spec["metadataLinks"] = links
+            root = (g.get("rootLayer") or {}).get("name")
+            if root:
+                short = root.split(":", 1)[-1]
+                if short in self.names:
+                    spec["rootLayer"] = self.names[short]
+                    style = self.style((g.get("rootLayerStyle") or {}).get("name"))
+                    root_default = ((self.gs.layer(self.ws, short) or {}).get("layer", {}).get("defaultStyle") or {}).get("name")
+                    if style and style != self.style(root_default):
+                        spec["rootStyle"] = style
+                else:
+                    self.notes.append(f"group {gs_name}: root layer {root} isn't in {self.ws}'s imported layers; left out")
             found.append(resource("LayerGroup", name, spec))
         return found
 

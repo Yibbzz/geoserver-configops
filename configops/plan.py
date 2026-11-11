@@ -497,13 +497,23 @@ class Planner:
                       ("cache", cache)]
             if "abstract" in spec:
                 wanted.append(("abstract", spec["abstract"]))
+            root = None
+            if spec.get("rootLayer") and spec["rootLayer"] not in self.unpublished:
+                root = (self.published(spec["rootLayer"])[1], self.style_ref(spec.get("rootStyle")))
+                wanted.append(("rootLayer", root[0]))
+                if root[1]:
+                    wanted.append(("rootStyle", root[1]))
             extra = {"enabled": spec.get("enabled", True), "advertised": spec.get("advertised", True)}
             links = details.wanted_resource({"metadataLinks": spec["metadataLinks"]}) if "metadataLinks" in spec else {}
             wanted += list(extra.items()) + list(links.items())
 
-            def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache, extra=extra, links=links):
+            def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache, extra=extra, links=links, root=root):
+                if root and not root[1]:  # GeoServer wants a root style: the root layer's own
+                    root_ws, root_name = root[0].split(":", 1)
+                    root = (root[0], ((self.gs.layer(root_ws, root_name) or {}).get("layer", {}).get("defaultStyle") or {}).get("name"))
                 self.gs.upsert_layergroup(gs_name, [(kind, n, self.style_ref(style)) for (kind, n), style in entries], ws=ws,
-                                          title=spec.get("title"), abstract=spec.get("abstract"), mode=spec.get("mode", "single"))
+                                          title=spec.get("title"), abstract=spec.get("abstract"), mode=spec.get("mode", "single"),
+                                          root=root)
                 if extra or links:
                     self.gs.request("PUT", f"workspaces/{ws}/layergroups/{gs_name}",
                                     {"layerGroup": {**extra, **details.patch_resource({}, links)}})
@@ -516,6 +526,7 @@ class Planner:
             g = live["layerGroup"]
             styles = [s.get("name") if isinstance(s, dict) and s.get("name") else None for s in as_list((g.get("styles") or {}).get("style"))]
             current = {"title": g.get("title"), "mode": g.get("mode"), "abstract": g.get("abstractTxt"),
+                       "rootLayer": (g.get("rootLayer") or {}).get("name"), "rootStyle": (g.get("rootLayerStyle") or {}).get("name"),
                        "layers": names_of((g.get("publishables") or {}).get("published")),
                        "styles": styles + [None] * (len(entries) - len(styles)),
                        "cache": cache_name(self.gs, f"{ws}:{gs_name}", cache),

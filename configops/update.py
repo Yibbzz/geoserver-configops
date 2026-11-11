@@ -93,6 +93,8 @@ def normal(kind: str, key: str, value, name: str, default_ws: str | None = None,
         if key == "workspace" and kind in WORKSPACE_KINDS:
             return default_ws
         return DEFAULTS.get(kind, {}).get(key)
+    if key == "dimensions" and isinstance(value, dict):
+        return {k: {"presentation": "list", **(v or {})} for k, v in value.items()}
     if key == "cache" and value is not False:
         setting = {} if value is True else dict(value)
         setting["gridsets"] = sorted(setting.get("gridsets", ["EPSG:4326", "EPSG:900913"]))

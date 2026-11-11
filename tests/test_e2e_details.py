@@ -81,6 +81,21 @@ spec:
   opaque: true
   buffer: 6
   attribution: { title: Readings, link: "https://example.org", logo: { url: "https://example.org/logo.png", width: 16, height: 16, type: image/png } }
+  wms: { path: /water/rivers, interpolation: bicubic }
+  dataLinks: [ { url: "https://example.org/readings.csv", type: text/csv } ]
+---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: kinds }
+spec:
+  table: { schema: e2e_details, name: readings }
+  name: kinds
+  dimensions: { kind: { attribute: kind } }
+---
+apiVersion: configops/v1alpha1
+kind: LayerGroup
+metadata: { name: readings-eo }
+spec: { mode: eo, rootLayer: river-readings, layers: [kinds] }
 """)
     return tmp_path
 
@@ -99,6 +114,13 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     ft = gs.featuretype(WS, "e2e_details", "river_readings")["featureType"]
     assert ft["cqlFilter"] == "kind = 'river'" and ft["maxFeatures"] == 100
     assert gs.layer(WS, "river_readings")["layer"]["attribution"]["logoURL"] == "https://example.org/logo.png"
+    layer = gs.layer(WS, "river_readings")["layer"]
+    assert layer["path"] == "/water/rivers" and layer["defaultWMSInterpolationMethod"] == "Bicubic"
+    assert ft["dataLinks"]["org.geoserver.catalog.impl.DataLinkInfoImpl"]["content"] == "https://example.org/readings.csv"
+    kinds = gs.featuretype(WS, "e2e_details", "kinds")["featureType"]
+    assert kinds["metadata"]["entry"]["@key"] == "dim_kind"
+    group = gs.layergroup("readings_eo", WS)["layerGroup"]
+    assert group["mode"] == "EO" and group["rootLayer"]["name"] == f"{WS}:river_readings"
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):
@@ -117,6 +139,7 @@ def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
     assert configops(capsys, "import", WS, "-C", str(imported))[0] == 0
     text = (imported / f"{WS}.yaml").read_text()
     assert "filter: kind = 'river'" in text and "maxAge: 300" in text and "attribute: observed" in text
+    assert "path: /water/rivers" in text and "readings.csv" in text and "rootLayer: river-readings" in text
     code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
 

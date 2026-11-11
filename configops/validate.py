@@ -220,6 +220,12 @@ def check_groups(project: Project) -> list[Problem]:
             if member and member not in layers and member not in groups:
                 problems.append(Problem(group.file, group.line(("spec", "layers", i)),
                                         f"spec.layers[{i}]: no Layer or LayerGroup named {member!r}", group.label))
+        root = group.spec.get("rootLayer")
+        if (group.spec.get("mode") == "eo") != bool(root):
+            problems.append(Problem(group.file, group.line(("spec",)), "spec.rootLayer: an eo group needs one, and only an eo group has one",
+                                    group.label))
+        elif root and root not in layers:
+            problems.append(Problem(group.file, group.line(("spec", "rootLayer")), f"spec.rootLayer: no Layer named {root!r}", group.label))
 
     def path_back(start: str, target: str, seen: tuple) -> tuple | None:
         for _, member in members(groups[start]):

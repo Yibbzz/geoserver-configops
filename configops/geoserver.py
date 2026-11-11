@@ -29,7 +29,7 @@ STYLE_TYPES = {  # a style file's suffix -> the content type GeoServer reads it 
 
 
 # The spec's layer group modes, as GeoServer names them
-GROUP_MODES = {"single": "SINGLE", "named": "NAMED", "container": "CONTAINER", "opaque": "OPAQUE_CONTAINER"}
+GROUP_MODES = {"single": "SINGLE", "named": "NAMED", "container": "CONTAINER", "opaque": "OPAQUE_CONTAINER", "eo": "EO"}
 
 
 class GeoServerError(Exception):
@@ -293,7 +293,8 @@ class GeoServer:
         return self.get(f"{base}/{q(name)}")
 
     def upsert_layergroup(self, name: str, layers: list[tuple[str, str, str | None]], ws: str | None = None,
-                          title: str | None = None, abstract: str | None = None, mode: str = "single") -> str:
+                          title: str | None = None, abstract: str | None = None, mode: str = "single",
+                          root: tuple[str, str | None] | None = None) -> str:
         """`layers`: (kind "layer" or "layerGroup", qualified name, style or None), first drawn at the bottom."""
         base = f"workspaces/{q(ws)}/layergroups" if ws else "layergroups"
         group: dict = {
@@ -303,6 +304,9 @@ class GeoServer:
         }
         if abstract is not None:
             group["abstractTxt"] = abstract
+        if root:  # an EO group's root layer (qualified name) and its style
+            group["rootLayer"] = {"name": root[0]}
+            group["rootLayerStyle"] = {"name": root[1]} if root[1] else None
         if ws:
             group["workspace"] = {"name": ws}
         return self.upsert(f"{base}/{q(name)}", base, {"layerGroup": group})
