@@ -48,7 +48,7 @@ Open the layer: <http://localhost:8080/geoserver-cloud/wms?service=WMS&version=1
 
 Then change GeoServer's admin password, and put the new one in the `geoserver-admin` Secret.
 
-**Memory.** All seven GeoServer services need about 12 GB. On a machine with 8 GB, leave out the ones you don't need, for example `--set geoserver.services.webui.enabled=false --set geoserver.services.wfs.enabled=false --set geoserver.services.wcs.enabled=false` (gateway, REST, WMS and the tile cache remain).
+**Memory.** The whole chart, with all seven GeoServer services, runs in 8 GB: on an 8 GB VM it used about 5 GB, with 2 GB still free while loading 7 million road features. Their memory limits add up to about 12 GB, so on a smaller machine leave out the services you don't need, for example `--set geoserver.services.webui.enabled=false --set geoserver.services.wfs.enabled=false --set geoserver.services.wcs.enabled=false` (gateway, REST, WMS and the tile cache remain).
 
 **Elsewhere.** On another cluster, push the image to a registry it can pull from (`docker build -t <registry>/gisdata .`, `docker push`) and set `gisdata.image.repository` to it.
 
