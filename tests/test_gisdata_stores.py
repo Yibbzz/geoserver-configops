@@ -94,7 +94,7 @@ class FakeGeoServer:
     def tile_layer(self, name):
         return self.tiles.get(name)
 
-    def put_tile_layer(self, name, gridsets, formats):
+    def put_tile_layer(self, name, gridsets, formats, options=None):
         self.tiles[name] = {"gridSubsets": [{"gridSetName": g} for g in gridsets], "mimeFormats": formats}
 
     def delete_tile_layer(self, name):

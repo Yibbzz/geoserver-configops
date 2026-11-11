@@ -21,14 +21,14 @@ from pathlib import Path
 
 import psycopg2
 
-from . import details, discover, ingest, remote, security, server, stores, sync
+from . import details, discover, ingest, remote, security, server, stores, sync, tiles
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "settings", "service", "role", "user group", "user", "raster", "store", "style", "table", "layer", "group", "rule"]
+ORDER = ["workspace", "settings", "service", "role", "user group", "user", "raster", "store", "style", "gridset", "table", "layer", "group", "rule"]
 DELETE_ORDER = ["rule", "user", "user group", "role", "group", "layer", "style", "store"]
 
 # Every kind of store a workspace can hold: (REST collection, JSON key)
@@ -63,26 +63,37 @@ def names_of(items) -> list[str]:
     return [i.get("name") if isinstance(i, dict) else i for i in as_list(items)]
 
 
+# Tile cache options the files may set, beyond gridsets and formats: spec name -> GeoWebCache's
+CACHE_OPTIONS = {"metaTiles": "metaWidthHeight", "gutter": "gutter", "expireCache": "expireCache", "expireClients": "expireClients"}
+
+
 def wanted_cache(setting) -> dict | bool:
-    """The spec's `cache` as {gridsets, formats}, or False for no cache."""
+    """The spec's `cache` as {gridsets, formats, and any options it sets}, or False for no cache."""
     if not setting:
         return False
     if setting is True:
         setting = {}
-    return {"gridsets": sorted(setting.get("gridsets", DEFAULT_GRIDSETS)), "formats": sorted(setting.get("formats", DEFAULT_FORMATS))}
+    out = {"gridsets": sorted(setting.get("gridsets", DEFAULT_GRIDSETS)), "formats": sorted(setting.get("formats", DEFAULT_FORMATS))}
+    out.update({k: setting[k] for k in CACHE_OPTIONS if k in setting})
+    return out
 
 
-def live_cache(tile_layer: dict | None) -> dict | bool:
+def live_cache(tile_layer: dict | None, wanted: dict | bool = False) -> dict | bool:
+    """A live tile layer in wanted_cache's form, with the options `wanted` sets."""
     if not tile_layer or not tile_layer.get("enabled", True):
         return False
-    return {"gridsets": sorted(g["gridSetName"] for g in as_list(tile_layer.get("gridSubsets"))),
-            "formats": sorted(as_list(tile_layer.get("mimeFormats")))}
+    out = {"gridsets": sorted(g["gridSetName"] for g in as_list(tile_layer.get("gridSubsets"))),
+           "formats": sorted(as_list(tile_layer.get("mimeFormats")))}
+    for key, gwc in CACHE_OPTIONS.items():
+        if isinstance(wanted, dict) and key in wanted:
+            out[key] = tile_layer.get(gwc)
+    return out
 
 
 def set_cache(gs: GeoServer, name: str, wanted: dict | bool) -> None:
     """Cache `name` as wanted; no cache drops the one GeoServer makes for every new layer."""
     if wanted:
-        gs.put_tile_layer(name, wanted["gridsets"], wanted["formats"])
+        gs.put_tile_layer(name, wanted["gridsets"], wanted["formats"], {k: wanted[k] for k in CACHE_OPTIONS if k in wanted})
     else:
         gs.delete_tile_layer(name)
 
@@ -174,6 +185,7 @@ class Planner:
         self.plan_layers()
         self.plan_groups()
         security.plan(self)
+        tiles.plan(self)
         self.plan_unmanaged(managed)
         return self.changes
 
@@ -242,7 +254,8 @@ class Planner:
         current = {"queryable": live.get("queryable", True), "style": (live.get("defaultStyle") or {}).get("name"),
                    "styles": names_of((live.get("styles") or {}).get("style")),
                    "attribution": (live.get("attribution") or {}).get("title"),
-                   "cache": live_cache(self.gs.tile_layer(f"{self.workspace_of(layer)}:{geoserver_name(layer)}"))}
+                   "cache": live_cache(self.gs.tile_layer(f"{self.workspace_of(layer)}:{geoserver_name(layer)}"),
+                                       wanted_cache(layer.spec.get("cache")))}
         current.update(details.live_resource(live_resource or {}, details.wanted_resource(layer.spec)))
         current.update(details.live_layer(live, details.wanted_layer(layer.spec)))
         return current
