@@ -1,0 +1,239 @@
+{
+ "objects": {
+  "AuthFilter/anonymous": {
+   "className": "org.geoserver.security.filter.GeoServerAnonymousAuthenticationFilter",
+   "name": "anonymous"
+  },
+  "AuthFilter/basic": {
+   "className": "org.geoserver.security.filter.GeoServerBasicAuthenticationFilter",
+   "name": "basic",
+   "useRememberMe": "true"
+  },
+  "AuthFilter/contextAsc": {
+   "allowSessionCreation": "true",
+   "className": "org.geoserver.security.filter.GeoServerSecurityContextPersistenceFilter",
+   "name": "contextAsc"
+  },
+  "AuthFilter/contextNoAsc": {
+   "allowSessionCreation": "false",
+   "className": "org.geoserver.security.filter.GeoServerSecurityContextPersistenceFilter",
+   "name": "contextNoAsc"
+  },
+  "AuthFilter/exception": {
+   "accessDeniedErrorPage": "/accessDenied.html",
+   "className": "org.geoserver.security.filter.GeoServerExceptionTranslationFilter",
+   "name": "exception"
+  },
+  "AuthFilter/form": {
+   "className": "org.geoserver.security.filter.GeoServerUserNamePasswordAuthenticationFilter",
+   "name": "form",
+   "passwordParameterName": "password",
+   "usernameParameterName": "username"
+  },
+  "AuthFilter/formLogout": {
+   "className": "org.geoserver.security.filter.GeoServerLogoutFilter",
+   "formLogoutChain": "/j_spring_security_logout,/j_spring_security_logout/,/logout",
+   "name": "formLogout",
+   "redirectURL": "/web/"
+  },
+  "AuthFilter/gateway-shared-auth": {
+   "className": "org.geoserver.cloud.security.gateway.sharedauth.GatewaySharedAuthenticationFilter",
+   "name": "gateway-shared-auth"
+  },
+  "AuthFilter/interceptor": {
+   "allowIfAllAbstainDecisions": "false",
+   "className": "org.geoserver.security.filter.GeoServerSecurityInterceptorFilter",
+   "name": "interceptor",
+   "securityMetadataSource": "geoserverMetadataSource"
+  },
+  "AuthFilter/rememberme": {
+   "className": "org.geoserver.security.filter.GeoServerRememberMeAuthenticationFilter",
+   "name": "rememberme"
+  },
+  "AuthFilter/restInterceptor": {
+   "allowIfAllAbstainDecisions": "false",
+   "className": "org.geoserver.security.filter.GeoServerSecurityInterceptorFilter",
+   "name": "restInterceptor",
+   "securityMetadataSource": "restFilterDefinitionMap"
+  },
+  "AuthFilter/roleFilter": {
+   "className": "org.geoserver.security.filter.GeoServerRoleFilter",
+   "httpResponseHeaderAttrForIncludedRoles": "roles",
+   "name": "roleFilter",
+   "roleConverterName": "roleConverter"
+  },
+  "AuthFilter/sslFilter": {
+   "className": "org.geoserver.security.filter.GeoServerSSLFilter",
+   "name": "sslFilter",
+   "sslPort": "443"
+  },
+  "AuthProvider/default": {
+   "className": "org.geoserver.security.auth.UsernamePasswordAuthenticationProvider",
+   "name": "default",
+   "userGroupServiceName": "default"
+  },
+  "PasswordPolicy/default": {
+   "className": "org.geoserver.security.validation.PasswordValidatorImpl",
+   "digitRequired": "false",
+   "lowercaseRequired": "false",
+   "maxLength": "-1",
+   "minLength": "0",
+   "name": "default",
+   "uppercaseRequired": "false"
+  },
+  "PasswordPolicy/master": {
+   "className": "org.geoserver.security.validation.PasswordValidatorImpl",
+   "digitRequired": "false",
+   "lowercaseRequired": "false",
+   "maxLength": "-1",
+   "minLength": "8",
+   "name": "master",
+   "uppercaseRequired": "false"
+  },
+  "RoleService/default": {
+   "adminRoleName": "ADMIN",
+   "checkInterval": "10000",
+   "className": "org.geoserver.security.xml.XMLRoleService",
+   "fileName": "roles.xml",
+   "groupAdminRoleName": "GROUP_ADMIN",
+   "name": "default",
+   "validating": "true"
+  },
+  "UserGroupService/default": {
+   "checkInterval": "10000",
+   "className": "org.geoserver.security.xml.XMLUserGroupService",
+   "fileName": "users.xml",
+   "name": "default",
+   "passwordEncoderName": "pbePasswordEncoder",
+   "passwordPolicyName": "default",
+   "validating": "true"
+  }
+ },
+ "settings": {
+  "authProviders": [
+   "default"
+  ],
+  "bruteForcePrevention": {
+   "enabled": "true",
+   "maxBlockedThreads": "100",
+   "maxDelaySeconds": "5",
+   "minDelaySeconds": "1",
+   "whitelistedMasks": [
+    "127.0.0.1"
+   ]
+  },
+  "encryptUrlParams": false,
+  "filterChains": [
+   {
+    "allowSessionCreation": true,
+    "class": "org.geoserver.security.HtmlLoginFilterChain",
+    "disabled": false,
+    "exceptionTranslation": "exception",
+    "filters": [
+     "rememberme",
+     "form",
+     "gateway-shared-auth",
+     "anonymous"
+    ],
+    "interceptor": "interceptor",
+    "matchHTTPMethod": false,
+    "name": "web",
+    "paths": [
+     "/web/**",
+     "/gwc/rest/web/**",
+     "/"
+    ],
+    "ssl": false
+   },
+   {
+    "allowSessionCreation": true,
+    "class": "org.geoserver.security.ConstantFilterChain",
+    "disabled": false,
+    "filters": [
+     "form"
+    ],
+    "matchHTTPMethod": false,
+    "name": "webLogin",
+    "paths": [
+     "/j_spring_security_check",
+     "/j_spring_security_check/",
+     "/login"
+    ],
+    "ssl": false
+   },
+   {
+    "allowSessionCreation": false,
+    "class": "org.geoserver.security.LogoutFilterChain",
+    "disabled": false,
+    "filters": [
+     "formLogout"
+    ],
+    "matchHTTPMethod": false,
+    "name": "webLogout",
+    "paths": [
+     "/j_spring_security_logout",
+     "/j_spring_security_logout/",
+     "/logout"
+    ],
+    "ssl": false
+   },
+   {
+    "allowSessionCreation": false,
+    "class": "org.geoserver.security.ServiceLoginFilterChain",
+    "disabled": false,
+    "exceptionTranslation": "exception",
+    "filters": [
+     "basic",
+     "gateway-shared-auth",
+     "anonymous"
+    ],
+    "interceptor": "restInterceptor",
+    "matchHTTPMethod": false,
+    "name": "rest",
+    "paths": [
+     "/rest.*",
+     "/rest/**"
+    ],
+    "ssl": false
+   },
+   {
+    "allowSessionCreation": false,
+    "class": "org.geoserver.security.ServiceLoginFilterChain",
+    "disabled": false,
+    "exceptionTranslation": "exception",
+    "filters": [
+     "basic",
+     "gateway-shared-auth"
+    ],
+    "interceptor": "restInterceptor",
+    "matchHTTPMethod": false,
+    "name": "gwc",
+    "paths": [
+     "/gwc/rest.*",
+     "/gwc/rest/**"
+    ],
+    "ssl": false
+   },
+   {
+    "allowSessionCreation": false,
+    "class": "org.geoserver.security.ServiceLoginFilterChain",
+    "disabled": false,
+    "exceptionTranslation": "exception",
+    "filters": [
+     "basic",
+     "gateway-shared-auth",
+     "anonymous"
+    ],
+    "interceptor": "interceptor",
+    "matchHTTPMethod": false,
+    "name": "default",
+    "paths": [
+     "/**"
+    ],
+    "ssl": false
+   }
+  ],
+  "passwordEncryption": "pbePasswordEncoder",
+  "roleService": "default"
+ }
+}

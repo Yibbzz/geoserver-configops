@@ -32,7 +32,12 @@
         "Store",
         "Workspace",
         "Gridset",
-        "BlobStore"
+        "BlobStore",
+        "PasswordPolicy",
+        "AuthFilter",
+        "AuthProvider",
+        "UserGroupService",
+        "RoleService"
       ]
     },
     "metadata": {
@@ -563,6 +568,86 @@
         "properties": {
           "spec": {
             "$ref": "#/$defs/blobStore"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "PasswordPolicy"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/passwordPolicy"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "AuthFilter"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/securityObject"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "AuthProvider"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/securityObject"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "UserGroupService"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/securityObject"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "RoleService"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/securityObject"
           }
         }
       }
@@ -1812,6 +1897,142 @@
                   "minimum": 0
                 }
               }
+            },
+            "security": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "The web UI's Security > Settings and Authentication pages (security/config.xml)",
+              "properties": {
+                "roleService": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "authProviders": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1,
+                  "description": "the authentication providers, in the order they're tried"
+                },
+                "encryptUrlParams": {
+                  "type": "boolean"
+                },
+                "passwordEncryption": {
+                  "enum": [
+                    "plainTextPasswordEncoder",
+                    "pbePasswordEncoder",
+                    "strongPbePasswordEncoder"
+                  ]
+                },
+                "bruteForcePrevention": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "minDelaySeconds": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "maxDelaySeconds": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "maxBlockedThreads": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "whitelistedMasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "filterChains": {
+                  "type": "array",
+                  "minItems": 1,
+                  "description": "every filter chain, in the order GeoServer tries them",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "paths",
+                      "filters"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "paths": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      "filters": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "class": {
+                        "type": "string",
+                        "description": "default for a new chain: org.geoserver.security.ServiceLoginFilterChain"
+                      },
+                      "interceptor": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "exceptionTranslation": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "roleFilter": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "disabled": {
+                        "type": "boolean"
+                      },
+                      "allowSessionCreation": {
+                        "type": "boolean"
+                      },
+                      "ssl": {
+                        "type": "boolean"
+                      },
+                      "matchHTTPMethod": {
+                        "type": "boolean"
+                      },
+                      "httpMethods": {
+                        "type": "array",
+                        "items": {
+                          "enum": [
+                            "GET",
+                            "POST",
+                            "PUT",
+                            "DELETE",
+                            "HEAD",
+                            "OPTIONS",
+                            "PATCH",
+                            "TRACE"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -2751,6 +2972,60 @@
           }
         }
       ]
+    },
+    "passwordPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "description": "the name in GeoServer, if not metadata.name"
+        },
+        "uppercase": {
+          "type": "boolean"
+        },
+        "lowercase": {
+          "type": "boolean"
+        },
+        "digit": {
+          "type": "boolean"
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": -1,
+          "description": "-1: no limit"
+        }
+      }
+    },
+    "securityObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "description": "the name in GeoServer, if not metadata.name"
+        },
+        "class": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.$]+$",
+          "description": "its configuration class, e.g. org.geoserver.security.config.RequestHeaderAuthenticationFilterConfig; needed to make a new one"
+        },
+        "className": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.$]+$",
+          "description": "the class that does the work, e.g. org.geoserver.security.filter.GeoServerRequestHeaderAuthenticationFilter"
+        },
+        "config": {
+          "type": "object",
+          "description": "its other fields, as GeoServer's own file names them; { class, value } for a field with a class"
+        }
+      }
     }
   }
 }

@@ -43,7 +43,7 @@ def gs():
     gs.delete_workspace(WS)
     folder = Path(DATA) / "e2e-appschema"
     shutil.rmtree(folder, ignore_errors=True)
-    shutil.copytree(FIXTURES, folder)
+    shutil.copytree(FIXTURES, folder, dirs_exist_ok=True)  # what GeoServer wrote may be left, and not ours to delete
     folder.chmod(0o777)  # GeoServer downloads the schemas into app-schema-cache here
     sql("CREATE EXTENSION IF NOT EXISTS postgis; DROP SCHEMA IF EXISTS e2e_appschema CASCADE; CREATE SCHEMA e2e_appschema;"
         "CREATE TABLE e2e_appschema.sites (id serial PRIMARY KEY, geom geometry(Point, 4326));"

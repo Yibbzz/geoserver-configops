@@ -56,8 +56,8 @@ def example(props: dict) -> dict:
     """A spec setting every property in a schema `properties`, from the schema itself."""
     out = {}
     for name, prop in props.items():
-        if name in ("geoserver", "workspace", "masterPassword", "tileCaching", "service"):  # the master password needs a real
-            # Secret; tile caching defaults are a file GeoServer reads when it starts (test_e2e_tiles.py)
+        if name in ("geoserver", "workspace", "masterPassword", "tileCaching", "service", "security"):  # the master password needs a real
+            # Secret; tile caching defaults are a file GeoServer reads when it starts (test_e2e_tiles.py); security: test_e2e_auth.py
             continue
         if name in VALUES:
             out[name] = VALUES[name]

@@ -21,14 +21,14 @@ from pathlib import Path
 
 import psycopg2
 
-from . import details, discover, ingest, remote, security, server, stores, sync, tiles
+from . import auth, details, discover, ingest, remote, security, server, stores, sync, tiles
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "settings", "service", "role", "user group", "user", "raster", "store", "style", "blobstore", "gridset", "table", "layer", "group", "rule"]
+ORDER = ["workspace", "settings", "service", "security", "security settings", "role", "user group", "user", "raster", "store", "style", "blobstore", "gridset", "table", "layer", "group", "rule"]
 DELETE_ORDER = ["rule", "user", "user group", "role", "group", "layer", "style", "store"]
 
 # Every kind of store a workspace can hold: (REST collection, JSON key)
@@ -265,6 +265,7 @@ class Planner:
         for ws, w in workspaces.items():
             self.plan_workspace(ws, w)
         server.plan(self)
+        auth.plan(self)
         self.plan_stores()
         stores.plan(self)
         self.plan_styles()

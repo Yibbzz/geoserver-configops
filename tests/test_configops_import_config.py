@@ -16,11 +16,11 @@ class FakeGeoServer:
         return self.objects.get(f"names:{path}", [])
 
     def request(self, method, path, *args, **kwargs):
-        assert method == "GET" and path in ("resource/security/rest.properties", "resource/gwc-gs.xml")
-        if path == "resource/gwc-gs.xml":
-            gwc = self.objects.get("gwc-gs.xml")
-            return types.SimpleNamespace(status_code=200 if gwc else 404, text=gwc or "")
-        return types.SimpleNamespace(status_code=200, text=self.rest_file)
+        assert method == "GET" and path.startswith("resource/")
+        if path == "resource/security/rest.properties":
+            return types.SimpleNamespace(status_code=200, text=self.rest_file)
+        text = self.objects.get(path.removeprefix("resource/"))  # other files: only those a test gives
+        return types.SimpleNamespace(status_code=200 if text else 404, text=text or "")
 
 
 def fresh():
