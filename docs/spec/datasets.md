@@ -656,7 +656,7 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 | `configops apply [--prune]` | Makes the changes `plan` shows, in order: workspace, store, styles, tables (first sync), layers, layer groups, tile cache |
 | `configops sync [dataset]` | Checks sources for new versions and loads them (stage, validate, back up, swap in), then refreshes extents and clears cached tiles of the layers on them. The nightly job |
 | `configops status` | Per dataset: version loaded, when, rows, last error, next check. Per layer: published, drifted, tiles cached |
-| `configops import` | Reads a live GeoServer workspace and writes the files that describe it; the way in for an existing install |
+| `configops import` | Reads a live GeoServer workspace and writes the files that describe it, or updates the files that do; the way in for an existing install, and for changes made in the web UI |
 
 ### `validate`, and checking files as you type
 
@@ -852,6 +852,24 @@ Wrote server.yaml: 1 Settings, 2 Service(s); security.yaml: 2 role(s), 1 group(s
 ```
 
 `server.yaml` holds the global `Settings`, a `Settings` for each workspace with settings of its own, and a `Service` for each service, with only the fields that differ from a fresh GeoServer Cloud. `security.yaml` holds every role, group, user and access rule that isn't GeoServer's own unchanged default. Fields outside the schema aren't imported. Passwords can't be read back, so each user's comes from Secret `geoserver-users`, under a key named after the user; until it holds them, `plan` stops and says which is missing. With them there, `plan` on the imported files has nothing to do.
+
+### Bringing changes made in GeoServer back into the files
+
+Run in a directory that already describes what's being imported, `import` updates the files instead of writing new ones, so a change made in the web UI can be committed rather than undone by the next `apply`:
+
+```
+$ configops import uk -C examples/uk-basemap
+Updated the files: 1 changed: Layer counties (title); 1 added: Layer parishes; 1 style files written: styles/os-road-node.sld
+Next: git diff, then configops plan -C examples/uk-basemap
+```
+
+- What import reads is matched with the files by what it is in GeoServer (a layer's workspace and name, a user's name, a rule), so the files' own resource names, and the references to them, stay.
+- Only the keys whose meaning changed are rewritten, in place; the rest of the file, its order and its comments are left as written. A value spelled out in a file that is GeoServer's default (`enabled: true`, a title equal to the name, the default style for the geometry) counts as the same.
+- A resource only in GeoServer is added to `<workspace>.yaml`, `server.yaml` or `security.yaml`. A style file is rewritten where the project keeps it, as GeoServer has it, when its content differs.
+- A resource only in the files is listed (`not in GeoServer`); `--prune` takes it out of the files.
+- What GeoServer can't give back stays as the files have it: passwords and keys (the Secrets they name), a layer's `attributes`, its `dataset` and `table`, the master password.
+
+`--force` writes fresh files instead, replacing those that exist. Then `git diff` shows the change, and `plan` on the files has nothing to do.
 
 ## Known problems this spec has to answer
 

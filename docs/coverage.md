@@ -152,6 +152,15 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Password policies | Can't | No REST endpoint in GeoServer Cloud |
 | GeoServer ACL | Chart | Off in the chart (`geoserver.services.acl.enabled`) |
 
+## Workflow
+
+| What | Status | Notes |
+| --- | --- | --- |
+| Export a live GeoServer to files | Yes | `configops import <workspace> --settings --security` |
+| Bring changes made in the web UI back into the files | Yes | `import` in a project folder updates only what changed, keeping names, order and comments; `--prune` removes what GeoServer no longer has |
+| Drift detection | Yes | `plan` (exit code 2), the chart's hourly `configops-drift` CronJob |
+| Promotion between environments | Yes | The same project files applied to each environment: its address with `--geoserver` (or the chart's), its logins from its own Secrets |
+
 ## Not configuration
 
 Layer preview, demos, server status, the reprojection console and the importer's web pages are tools, not settings: nothing to keep in files.

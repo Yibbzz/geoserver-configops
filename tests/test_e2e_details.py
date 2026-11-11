@@ -119,3 +119,16 @@ def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
     assert "filter: kind = 'river'" in text and "maxAge: 300" in text and "attribute: observed" in text
     code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+
+
+def test_import_brings_a_change_made_in_geoserver_back_into_the_files(gs, project, capsys):
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    gs.request("PUT", f"workspaces/{WS}/datastores/e2e_details/featuretypes/river_readings",
+               {"featureType": {"title": "Edited in the web UI"}})
+    before = (project / "project.yaml").read_text()
+    code, out = configops(capsys, "import", WS, "-C", str(project))
+    assert code == 0 and "1 changed: Layer river-readings (title)" in out, out
+    after = (project / "project.yaml").read_text()
+    assert "title: Edited in the web UI" in after and after.replace("  title: Edited in the web UI\n", "") == before
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out

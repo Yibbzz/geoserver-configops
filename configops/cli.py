@@ -89,7 +89,7 @@ def cmd_status(args) -> int:
 def cmd_import(args) -> int:
     try:
         return import_workspace(Path(args.dir), args.workspace, geoserver_url=args.geoserver, force=args.force,
-                                settings=args.settings, security=args.security)
+                                settings=args.settings, security=args.security, prune=args.prune)
     except PlanError as e:
         print(f"configops import: {e}", file=sys.stderr)
         return e.code
@@ -156,14 +156,17 @@ def main(argv: list[str] | None = None) -> int:
         description="Read a GeoServer workspace and write the files that describe it: its layers and groups in "
         "<workspace>.yaml, its styles in styles/, and project.yaml if the directory has none. --settings writes "
         "server.yaml (settings and services), --security writes security.yaml (roles, groups, users, access rules). "
-        "Only what differs from the defaults is written, so `configops plan` on the result has nothing to do.",
+        "In a project that has files already, only what changed in GeoServer is changed in them, wherever it is, and "
+        "new things are added; --prune also removes what GeoServer no longer has. Only what differs from the "
+        "defaults is written, so `configops plan` on the result has nothing to do.",
     )
     im.add_argument("workspace", nargs="?", help="the GeoServer workspace to read")
     im.add_argument("--settings", action="store_true", help="also write server.yaml: GeoServer's settings and services")
     im.add_argument("--security", action="store_true", help="also write security.yaml: roles, groups, users and access rules")
     im.add_argument("-C", "--dir", default=".", help="project directory to write into (default: current)")
     im.add_argument("--geoserver", metavar="URL", help="GeoServer's address (needed when the directory has no Project yet)")
-    im.add_argument("--force", action="store_true", help="replace files that already exist")
+    im.add_argument("--force", action="store_true", help="write fresh files, replacing those that exist, rather than updating them")
+    im.add_argument("--prune", action="store_true", help="also remove from the files what GeoServer no longer has")
     im.set_defaults(func=cmd_import)
 
     s = commands.add_parser(
