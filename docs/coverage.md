@@ -53,19 +53,22 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Enabled, advertised | Yes | |
 | Declared CRS | Partly | The project's `crs`, forced on every layer; not per layer |
 | Bounding boxes | Yes | Worked out from the data on every apply and after every load |
-| Metadata links, data links | Not yet | |
-| Attributes shown, restrict features (CQL filter) | Not yet | |
+| Metadata links | Yes | `metadataLinks` |
+| Data links | Not yet | |
+| Restrict features (CQL filter) | Yes | `filter` |
+| Attributes shown | Not yet | |
 | SQL views | Not yet | |
 | Raster band and coverage parameters | Not yet | GeoServer works them out from the file |
 | **Publishing:** default style, other styles | Yes | |
 | Queryable | Yes | |
-| Opaque | Not yet | |
+| Opaque | Yes | `opaque` |
 | Attribution title | Yes | From the file, or the source's licence for OS data |
-| Attribution link and logo | Not yet | |
-| Rendering buffer, HTTP cache headers | Not yet | |
-| Per-layer WFS settings (max features, decimals, other CRSs) | Not yet | |
+| Attribution link and logo | Yes | `attribution: { title, link, logo }` |
+| Rendering buffer, HTTP cache headers | Yes | `buffer`, `httpCache` |
+| Per-layer WFS settings (max features, decimals, other CRSs) | Yes | `wfs` |
 | Per-layer WMS and WCS settings | Not yet | |
-| **Dimensions:** time, elevation, custom | Not yet | |
+| **Dimensions:** time, elevation | Yes | `dimensions` |
+| Custom dimensions | Not yet | |
 | **Tile caching:** on or off, gridsets, image formats | Yes | `cache:` |
 | Metatiling, gutter, expiry, parameter filters | Not yet | |
 | **Security:** who may read, write, administer | Yes | `AccessRule` with `layer:` |

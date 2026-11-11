@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from . import secrets
+from . import details, secrets
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import default_table, load
 from .plan import DEFAULT_FORMATS, DEFAULT_GRIDSETS, PlanError, as_list, names_of
@@ -209,6 +209,7 @@ class Importer:
         cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
         if cache:
             spec["cache"] = cache
+        spec.update(details.to_spec(item, layer))
         return resource("Layer", name, spec)
 
     def layers(self, stores: dict[str, dict]) -> list[dict]:
@@ -266,6 +267,7 @@ class Importer:
             cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
             if cache:
                 spec["cache"] = cache
+            spec.update(details.to_spec(ft, layer))
             out.append(resource("Layer", name, spec))
         return out
 

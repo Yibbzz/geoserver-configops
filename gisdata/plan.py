@@ -21,7 +21,7 @@ from pathlib import Path
 
 import psycopg2
 
-from . import discover, ingest, remote, security, server, stores, sync
+from . import details, discover, ingest, remote, security, server, stores, sync
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
@@ -140,7 +140,8 @@ class Planner:
     def attribution(self, layer: Resource) -> str | None:
         """The layer's own attribution, else what its dataset's source asks for."""
         if "attribution" in layer.spec:
-            return layer.spec["attribution"]
+            text = layer.spec["attribution"]
+            return None if isinstance(text, dict) else text  # an attribution with a link or logo: details.py
         dataset = self.datasets.get(layer.spec.get("dataset") or "")
         source = self.files.named("Source").get(dataset.spec["source"]) if dataset else None
         text = SOURCE_ATTRIBUTION.get(source.spec.get("type")) if source else None
@@ -198,9 +199,14 @@ class Planner:
             elif live.replace("\r\n", "\n").strip() != text.replace("\r\n", "\n").strip():
                 self.add("~", "style", f"{ws}:{name}", note=f"{path.relative_to(self.root)} differs from GeoServer's copy", run=run)
 
-    def layer_settings(self, layer: Resource) -> tuple[list[tuple[str, object]], Callable[[], None]]:
-        """(the layer's publishing settings as (field, wanted), the call that sets them): styles, queryable, attribution, cache."""
+    def layer_settings(self, layer: Resource, resource: tuple[str, str] | None = None) -> tuple[list[tuple[str, object]], Callable[[], None]]:
+        """
+        (the layer's publishing settings as (field, wanted), the call that sets them): styles,
+        queryable, attribution, cache, and the details (gisdata/details.py). `resource` is the
+        REST path and JSON key of the layer's feature type or coverage.
+        """
         spec, ws, name = layer.spec, self.workspace_of(layer), geoserver_name(layer)
+        resource_wanted, layer_wanted = details.wanted_resource(spec), details.wanted_layer(spec)
         attribution = self.attribution(layer)
         cache = wanted_cache(spec.get("cache"))
         wanted = [("queryable", spec.get("queryable", True)), ("cache", cache)]
@@ -210,20 +216,31 @@ class Planner:
             wanted.append(("style", self.style_ref(spec["style"])))
         if "styles" in spec:
             wanted.append(("styles", [self.style_ref(s) for s in spec["styles"]]))
+        wanted += list(resource_wanted.items()) + list(layer_wanted.items())
 
         def run():
             self.gs.update_layer(ws, name, style=self.style_ref(spec.get("style")),
                                  styles=[self.style_ref(s) for s in spec["styles"]] if "styles" in spec else None,
                                  queryable=spec.get("queryable", True), attribution=attribution)
+            if resource_wanted and resource:
+                path, key = resource
+                live = (self.gs.get(path) or {}).get(key) or {}
+                self.gs.request("PUT", path, {key: details.patch_resource(live, resource_wanted)})
+            if layer_wanted:
+                live = (self.gs.layer(ws, name) or {}).get("layer") or {}
+                self.gs.request("PUT", f"workspaces/{ws}/layers/{name}", {"layer": details.patch_layer(live, layer_wanted)})
             set_cache(self.gs, f"{ws}:{name}", cache)
         return wanted, run
 
-    def live_layer_settings(self, layer: Resource, live_layer: dict) -> dict:
+    def live_layer_settings(self, layer: Resource, live_layer: dict, live_resource: dict | None = None) -> dict:
         live = live_layer["layer"]
-        return {"queryable": live.get("queryable", True), "style": (live.get("defaultStyle") or {}).get("name"),
-                "styles": names_of((live.get("styles") or {}).get("style")),
-                "attribution": (live.get("attribution") or {}).get("title"),
-                "cache": live_cache(self.gs.tile_layer(f"{self.workspace_of(layer)}:{geoserver_name(layer)}"))}
+        current = {"queryable": live.get("queryable", True), "style": (live.get("defaultStyle") or {}).get("name"),
+                   "styles": names_of((live.get("styles") or {}).get("style")),
+                   "attribution": (live.get("attribution") or {}).get("title"),
+                   "cache": live_cache(self.gs.tile_layer(f"{self.workspace_of(layer)}:{geoserver_name(layer)}"))}
+        current.update(details.live_resource(live_resource or {}, details.wanted_resource(layer.spec)))
+        current.update(details.live_layer(live, details.wanted_layer(layer.spec)))
+        return current
 
     def plan_layers(self) -> None:
         for layer in self.layers.values():
@@ -247,7 +264,8 @@ class Planner:
                          ("nativeName", table)]
             if "abstract" in spec:
                 wanted_ft.append(("abstract", spec["abstract"]))
-            wanted_layer, settings = self.layer_settings(layer)
+            wanted_layer, settings = self.layer_settings(
+                layer, (f"workspaces/{ws}/datastores/{schema}/featuretypes/{name}", "featureType"))
 
             def run(ws=ws, name=name, schema=schema, table=table, spec=spec, title=title, settings=settings, old_store=None):
                 if old_store and old_store != schema:
@@ -266,7 +284,7 @@ class Planner:
             current = {
                 "title": ft.get("title"), "enabled": ft.get("enabled", True), "advertised": ft.get("advertised", True),
                 "nativeName": ft.get("nativeName"), "abstract": ft.get("abstract"),
-                **self.live_layer_settings(layer, live_layer),
+                **self.live_layer_settings(layer, live_layer, ft),
             }
             changed = diff([(k, current[k], v) for k, v in wanted_ft + wanted_layer])
             if "keywords" in spec and names_of((ft.get("keywords") or {}).get("string")) != spec["keywords"]:
