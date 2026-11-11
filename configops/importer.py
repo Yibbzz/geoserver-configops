@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -17,7 +18,7 @@ import yaml
 from . import details, secrets
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import default_table, load
-from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, PlanError, as_list, names_of
+from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, SOURCE_ATTRIBUTION, PlanError, as_list, names_of
 from .stores import DATA
 from .validate import BUILT_IN_STYLES
 
@@ -78,14 +79,21 @@ def cache_setting(tile_layer: dict | None):
     return {"gridsets": gridsets, "formats": formats, **options}
 
 
+DEFAULTS_KEY = "x-defaults"  # on an imported resource only while updating files; never written
+
+
 def resource(kind: str, name: str, spec: dict) -> dict:
     return {"apiVersion": API, "kind": kind, "metadata": {"name": name}, "spec": spec}
 
 
 class Importer:
-    def __init__(self, gs: GeoServer, ws: str, project_ws: str | None, live_schema: str, dataset_tables: dict):
+    def __init__(self, gs: GeoServer, ws: str, project_ws: str | None, live_schema: str, dataset_tables: dict,
+                 attributions: dict | None = None, project_crs: str | None = None, full: bool = False):
         self.gs, self.ws, self.project_ws, self.live_schema = gs, ws, project_ws, live_schema
+        self.project_crs = project_crs  # a declared CRS that's the project's is left out when the native one is unknown
+        self.full = full  # write a layer's style even when it's the default for its geometry (updating files that name it)
         self.dataset_tables = dataset_tables  # table -> (dataset, key), from the project's Datasets
+        self.attributions = attributions or {}  # dataset -> the attribution its source gives by itself
         self.notes: list[str] = []
         self.names: dict[str, str] = {}  # GeoServer name -> resource name, for group members
         self.styles: dict[str, tuple[str, str]] = {}  # style name -> (suffix, text)
@@ -310,16 +318,18 @@ class Importer:
                 if live is False:
                     spec[flag] = False
             title = (layer.get("attribution") or {}).get("title")
-            if title:
+            if title and title != self.attributions.get(linked[0] if linked else None):
                 spec["attribution"] = title
             cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
             if cache:
                 spec["cache"] = cache
-            native = (ft.get("nativeCRS") or {}).get("$") if isinstance(ft.get("nativeCRS"), dict) else None
-            if ft.get("projectionPolicy") == "FORCE_DECLARED" and ft.get("srs") and ft["srs"] not in (native or ""):
+            if ft.get("projectionPolicy") == "FORCE_DECLARED" and ft.get("srs") and ft["srs"] != (native_code(ft) or self.project_crs):
                 spec["crs"] = ft["srs"]
             spec.update(details.to_spec(ft, layer))
-            out.append(resource("Layer", name, spec))
+            doc = resource("Layer", name, spec)
+            if self.full:  # what leaving a field out means here, for comparing with files that spell it out
+                doc[DEFAULTS_KEY] = {"style": default_style(ft), "crs": ft.get("srs") if native_code(ft) is None else native_code(ft)}
+            out.append(doc)
         return out
 
     def groups(self) -> list[dict]:
@@ -469,8 +479,34 @@ def dump(resources: list[dict]) -> str:
     return "\n---\n".join(yaml.dump(r, Dumper=Dumper, sort_keys=False, allow_unicode=True, width=120).rstrip() for r in resources) + "\n"
 
 
+def update_files(target: Path, existing, docs: dict[Path, list[dict]], files: dict[Path, str], ws: str | None,
+                 settings: bool, security: bool, prune: bool, notes: list[str]) -> int:
+    """Import into an existing project: change only what's different (configops/update.py)."""
+    from .update import merge
+
+    result = merge(target, existing, docs, ws, settings, security, prune)
+    style_files = {r.name: target / r.spec["file"] for r in existing.of_kind("Style") if r.spec.get("file")}
+    for path, text in files.items():  # style files: rewritten where the project keeps them, if GeoServer's differ
+        name = path.stem
+        where = style_files.get(name, path)
+        current = where.read_text(encoding="utf-8") if where.exists() else None
+        if current is None or current.replace("\r\n", "\n").strip() != text.replace("\r\n", "\n").strip():
+            where.parent.mkdir(parents=True, exist_ok=True)
+            where.write_text(text, encoding="utf-8")
+            result.styles.append(str(where.relative_to(target)))
+    lines = [("changed", result.changed), ("added", result.added), ("removed", result.removed), ("style files written", result.styles)]
+    said = [f"{len(items)} {what}: {', '.join(items)}" for what, items in lines if items]
+    print("Updated the files: " + "; ".join(said) if said else "No changes: the files already match GeoServer.")
+    for item in result.missing:
+        print(f"  not in GeoServer: {item} (plan would make it again; --prune removes it from the files)")
+    for note in dict.fromkeys(notes):
+        print(f"  note: {note}")
+    print(f"Next: git diff, then configops plan -C {target}")
+    return 0
+
+
 def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: bool = False,
-        settings: bool = False, security: bool = False) -> int:
+        settings: bool = False, security: bool = False, prune: bool = False) -> int:
     if not (ws or settings or security):
         raise PlanError("name a workspace, or --settings or --security")
     target.mkdir(parents=True, exist_ok=True)
@@ -496,20 +532,32 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
         gs = GeoServer(geoserver_url, user, password, gwc_url=os.environ.get("CONFIGOPS_GWC_URL"))
         project_ws, live = ws, "data_layers"
 
-    dataset_tables = {}
+    dataset_tables, attributions = {}, {}
+    sources = existing.named("Source")
     for name, d in existing.named("Dataset").items():
         for key, options in (d.spec.get("tables") or {}).items():
             dataset_tables[(options or {}).get("name") or default_table(name, key)] = (name, key)
+        source = sources.get(d.spec.get("source") or "")
+        text = SOURCE_ATTRIBUTION.get(source.spec.get("type")) if source else None
+        if text:
+            attributions[name] = text.format(year=date.today().year)
+    for layer in existing.of_kind("Layer"):  # a Dataset's tables that only its Layers name
+        dataset, key = layer.spec.get("dataset"), layer.spec.get("table")
+        if dataset in existing.named("Dataset") and isinstance(key, str):
+            options = (existing.named("Dataset")[dataset].spec.get("tables") or {}).get(key) or {}
+            dataset_tables.setdefault(options.get("name") or default_table(dataset, key), (dataset, key))
 
     from .import_config import USERS_SECRET, security_resources, settings_resources
 
-    files: dict[Path, str] = {}
+    files: dict[Path, str] = {}  # style files, and a note for a kind with nothing in it
+    docs: dict[Path, list[dict]] = {}  # resources, by the file a fresh import writes them to
     report, notes = [], []
     try:
         if ws:
             if gs.workspace(ws) is None:
                 raise PlanError(f"GeoServer has no workspace {ws}", code=1)
-            imp = Importer(gs, ws, project_ws, live, dataset_tables)
+            imp = Importer(gs, ws, project_ws, live, dataset_tables, attributions,
+                           project_crs=project.spec.get("crs") if project else None, full=project is not None and not force)
             stores = imp.stores()
             layers = imp.layers(stores)
             groups = imp.groups()
@@ -521,8 +569,8 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             for name, legend in imp.legends.items():  # a legend graphic needs the style named, with its file
                 suffix = imp.styles[name][0]
                 styles.append(resource("Style", name, {"file": f"styles/{name}{suffix}", "legend": legend}))
-            files[target / f"{ws}.yaml"] = dump(imp.workspace() + list(imp.store_resources.values()) + layers + groups + styles
-                                                + imp.gridsets(layers + groups) + imp.blob_stores(layers + groups))
+            docs[target / f"{ws}.yaml"] = (imp.workspace() + list(imp.store_resources.values()) + layers + groups + styles
+                                           + imp.gridsets(layers + groups) + imp.blob_stores(layers + groups))
             for name, (suffix, text) in imp.styles.items():
                 files[target / "styles" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
             linked = sum(1 for r in layers if "dataset" in r["spec"])
@@ -534,13 +582,13 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
                              "(keys: username, password), and add it to configops.secrets")
         if settings:
             found, more = settings_resources(gs)
-            files[target / "server.yaml"] = dump(found) if found else "# GeoServer's settings and services are as a fresh install has them\n"
+            docs[target / "server.yaml"] = found
             kinds = [r["kind"] for r in found]
             report.append(f"server.yaml: {kinds.count('Settings')} Settings, {kinds.count('Service')} Service(s)")
             notes += more
         if security:
             found, more, keys = security_resources(gs)
-            files[target / "security.yaml"] = dump(found) if found else "# GeoServer's security is as a fresh install has it\n"
+            docs[target / "security.yaml"] = found
             kinds = [r["kind"] for r in found]
             report.append(f"security.yaml: {kinds.count('Role')} role(s), {kinds.count('Group')} group(s), "
                           f"{kinds.count('User')} user(s), {kinds.count('AccessRule')} rule(s)")
@@ -551,6 +599,16 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
     except GeoServerError as e:
         raise PlanError(str(e), code=1) from None
 
+    if project is not None and not force:
+        from .update import in_scope
+
+        default_ws = project.spec.get("workspace")
+        if any(p.exists() for p in docs) or any(in_scope(r, ws, settings, security, default_ws) for r in existing.resources):
+            return update_files(target, existing, docs, files, ws, settings, security, prune, notes)
+
+    for path, found in docs.items():
+        found = [{k: v for k, v in r.items() if k != DEFAULTS_KEY} for r in found]
+        files[path] = dump(found) if found else "# As a fresh GeoServer install has it\n"
     if project is None:
         jndi = next((e["jndiReferenceName"] for e in stores.values() if e.get("jndiReferenceName")), "java:comp/env/jdbc/mypostgis")
         report.append("project.yaml")
@@ -571,3 +629,15 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
         print(f"  note: {note}")
     print(f"Next: configops validate {target} && configops plan -C {target}")
     return 0
+
+
+def native_code(ft: dict) -> str | None:
+    """The feature type's native CRS as EPSG:<code>, read from its WKT (the last AUTHORITY is the CRS's own)."""
+    native = ft.get("nativeCRS")
+    text = native.get("$") if isinstance(native, dict) else native
+    if not isinstance(text, str):
+        return None
+    if text.startswith("EPSG:"):
+        return text
+    codes = re.findall(r'AUTHORITY\["EPSG",\s*"(\d+)"\]', text)
+    return f"EPSG:{codes[-1]}" if codes else None

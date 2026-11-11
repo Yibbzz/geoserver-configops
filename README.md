@@ -204,6 +204,8 @@ spec: { layer: { workspace: uk, layer: flood_zones, access: read }, roles: [EDIT
 
 **Bring in an existing GeoServer:** `configops import <workspace> --settings --security -C my-project` writes the files that describe the workspace, GeoServer's settings and services, and its security, so `plan` on them has nothing to do. Passwords can't be read back: put each user's in Secret `geoserver-users`, as the import's note says.
 
+**Keep a change made in the web UI:** run the same `import` in the project folder. It updates the files in place, only what changed, keeping your names, order and comments; review it with `git diff` and commit. `--prune` also takes out what GeoServer no longer has.
+
 ## How it fits together
 
 ```

@@ -437,7 +437,7 @@ class Planner:
                       ("cache", cache)]
             if "abstract" in spec:
                 wanted.append(("abstract", spec["abstract"]))
-            extra = {k: spec[k] for k in ("enabled", "advertised") if k in spec}
+            extra = {"enabled": spec.get("enabled", True), "advertised": spec.get("advertised", True)}
             links = details.wanted_resource({"metadataLinks": spec["metadataLinks"]}) if "metadataLinks" in spec else {}
             wanted += list(extra.items()) + list(links.items())
 
