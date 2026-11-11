@@ -4,7 +4,8 @@ GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https:/
 
 - **choose open datasets** from the Ordnance Survey, CKAN portals such as data.gov.uk, WFS and OGC API Features services, or plain links;
 - **load them into PostGIS** and keep them up to date: a nightly job checks each one for a new version and loads it with staging, checks and backups;
-- **publish them** as GeoServer layers, styles and layer groups, set GeoServer's own settings and services (contact details, titles, limits), and its security (users, groups, roles, who may see and do what), with an OpenTofu-style `plan` and `apply`.
+- **publish them** as GeoServer layers, styles and layer groups, alongside other stores (Cloud-Optimised GeoTIFFs, GeoPackages and other files, cascaded WMS, WMTS and WFS, other PostGIS databases), SQL views and tile caching; set GeoServer's own settings and services (contact details, titles, limits), and its security (users, groups, roles, who may see and do what, the master password), with an OpenTofu-style `plan` and `apply`;
+- **catch drift and keep it:** an hourly check shows when GeoServer no longer matches the files, `apply` puts it back, and `import` brings a change made in the web UI back into the files instead.
 
 > **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI. Expect breaking changes. [docs/coverage.md](docs/coverage.md) tracks which of GeoServer's settings the tool covers so far.
 
@@ -150,7 +151,7 @@ kubectl -n gscloud get jobs -l batch.kubernetes.io/cronjob-name=configops-drift 
 kubectl -n gscloud logs job/<the failed one>                                    # what differs
 ```
 
-`configops apply`, or the next `helm upgrade`, puts GeoServer back. Turn it off with `configops.drift.enabled=false`.
+`configops apply`, or the next `helm upgrade`, puts GeoServer back; or keep the change by running `configops import` (below) and committing it. Turn it off with `configops.drift.enabled=false`.
 
 **Load new data now** instead of waiting for the nightly job:
 
@@ -172,6 +173,12 @@ kind: Layer
 metadata: { name: sentinel-2 }
 spec: { store: sentinel-2-surrey, title: Sentinel-2 true colour }
 ```
+
+Files on the shared data volume (`-f values-data-volume.yaml`: GeoTIFFs, GeoPackages, shapefiles, FlatGeobuf, PMTiles, image mosaics) are `Store`s with `path:`; a raster `Dataset` downloads and builds the GeoTIFF for one ([`examples/terrain`](examples/terrain)).
+
+**Publish a SQL view:** a Layer with `sql: { schema, query, key, geometry }` instead of a table.
+
+**Cache tiles:** `cache: true` on a layer or group, or `cache: { gridsets, formats, metaTiles, blobStore, ... }`; a `Gridset` adds your own (British National Grid in uk-basemap) and a `BlobStore` keeps tiles in a folder on the data volume or in S3.
 
 **Publish a table you load yourself:** a Layer with `table: { schema: field_data, name: sites }` and no `dataset`. Until the table exists, `plan` shows it as `!` (can't be done yet) and `apply` leaves it, and its place in groups, for later.
 
