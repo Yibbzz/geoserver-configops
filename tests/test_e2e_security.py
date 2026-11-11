@@ -148,6 +148,20 @@ def test_a_new_password_is_applied(gs, project, capsys, monkeypatch):
     assert gisdata(capsys, "plan", "-C", str(project))[0] == 0
 
 
+def test_import_round_trip(gs, project, tmp_path_factory, capsys, monkeypatch):
+    """What apply set, import writes back; with the passwords in the Secret it names, plan has nothing to do."""
+    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    imported = tmp_path_factory.mktemp("imported")
+    (imported / "project.yaml").write_text((project / "project.yaml").read_text().split("\n---\n")[0] + "\n")
+    code, out = gisdata(capsys, "import", "--security", "-C", str(imported))
+    assert code == 0 and "1 role(s), 1 group(s), 2 user(s), 3 rule(s)" in out, out
+    assert "Secret geoserver-users (keys: e2e-alice, e2e-bob)" in out
+    monkeypatch.setenv("GISDATA_GEOSERVER_USERS_E2E_ALICE", os.environ["GISDATA_E2EUSERS_ALICE"])
+    monkeypatch.setenv("GISDATA_GEOSERVER_USERS_E2E_BOB", os.environ["GISDATA_E2EUSERS_BOB"])
+    code, out = gisdata(capsys, "plan", "-C", str(imported))
+    assert code == 0 and not [line for line in out.splitlines() if line.startswith(("  +", "  ~", "  -"))], out
+
+
 def test_unmanaged_left_alone_until_pruned(gs, project, capsys):
     assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
     gs.request("POST", "security/usergroup/users", {"user": {"userName": "e2e-carol", "password": "x", "enabled": True}})

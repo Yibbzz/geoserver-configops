@@ -88,7 +88,8 @@ def cmd_status(args) -> int:
 
 def cmd_import(args) -> int:
     try:
-        return import_workspace(Path(args.dir), args.workspace, geoserver_url=args.geoserver, force=args.force)
+        return import_workspace(Path(args.dir), args.workspace, geoserver_url=args.geoserver, force=args.force,
+                                settings=args.settings, security=args.security)
     except PlanError as e:
         print(f"gisdata import: {e}", file=sys.stderr)
         return e.code
@@ -151,12 +152,15 @@ def main(argv: list[str] | None = None) -> int:
     st.set_defaults(func=cmd_status)
 
     im = commands.add_parser(
-        "import", help="write the files that describe a live GeoServer workspace",
+        "import", help="write the files that describe a live GeoServer: a workspace, its settings, its security",
         description="Read a GeoServer workspace and write the files that describe it: its layers and groups in "
-        "<workspace>.yaml, its styles in styles/, and project.yaml if the directory has none. Only what differs "
-        "from the defaults is written, so `gisdata plan` on the result has nothing to do.",
+        "<workspace>.yaml, its styles in styles/, and project.yaml if the directory has none. --settings writes "
+        "server.yaml (settings and services), --security writes security.yaml (roles, groups, users, access rules). "
+        "Only what differs from the defaults is written, so `gisdata plan` on the result has nothing to do.",
     )
-    im.add_argument("workspace", help="the GeoServer workspace to read")
+    im.add_argument("workspace", nargs="?", help="the GeoServer workspace to read")
+    im.add_argument("--settings", action="store_true", help="also write server.yaml: GeoServer's settings and services")
+    im.add_argument("--security", action="store_true", help="also write security.yaml: roles, groups, users and access rules")
     im.add_argument("-C", "--dir", default=".", help="project directory to write into (default: current)")
     im.add_argument("--geoserver", metavar="URL", help="GeoServer's address (needed when the directory has no Project yet)")
     im.add_argument("--force", action="store_true", help="replace files that already exist")

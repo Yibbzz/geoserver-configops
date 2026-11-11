@@ -207,7 +207,10 @@ def dump(resources: list[dict]) -> str:
     return "\n---\n".join(yaml.safe_dump(r, sort_keys=False, allow_unicode=True, width=120).rstrip() for r in resources) + "\n"
 
 
-def run(target: Path, ws: str, geoserver_url: str | None = None, force: bool = False) -> int:
+def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: bool = False,
+        settings: bool = False, security: bool = False) -> int:
+    if not (ws or settings or security):
+        raise PlanError("name a workspace, or --settings or --security")
     target.mkdir(parents=True, exist_ok=True)
     existing = load(target)
     projects = existing.of_kind("Project")
@@ -222,6 +225,8 @@ def run(target: Path, ws: str, geoserver_url: str | None = None, force: bool = F
     else:
         if not geoserver_url:
             raise PlanError("no Project in this directory: give GeoServer's address with --geoserver")
+        if not ws:
+            raise PlanError("no Project in this directory: name a workspace too, for the project.yaml the import writes")
         user, password = secrets.lookup(SECRET, "username", target), secrets.lookup(SECRET, "password", target)
         if not user or not password:
             raise PlanError(f"GeoServer's login: set ${secrets.env_name(SECRET, 'username')} and "
@@ -234,22 +239,48 @@ def run(target: Path, ws: str, geoserver_url: str | None = None, force: bool = F
         for key, options in (d.spec.get("tables") or {}).items():
             dataset_tables[(options or {}).get("name") or default_table(name, key)] = (name, key)
 
+    from .import_config import USERS_SECRET, security_resources, settings_resources
+
+    files: dict[Path, str] = {}
+    report, notes = [], []
     try:
-        if gs.workspace(ws) is None:
-            raise PlanError(f"GeoServer has no workspace {ws}", code=1)
-        imp = Importer(gs, ws, project_ws, live, dataset_tables)
-        stores = imp.stores()
-        layers = imp.layers(stores)
-        groups = imp.groups()
-        imp.workspace_styles()
+        if ws:
+            if gs.workspace(ws) is None:
+                raise PlanError(f"GeoServer has no workspace {ws}", code=1)
+            imp = Importer(gs, ws, project_ws, live, dataset_tables)
+            stores = imp.stores()
+            layers = imp.layers(stores)
+            groups = imp.groups()
+            imp.workspace_styles()
+            files[target / f"{ws}.yaml"] = dump(layers + groups)
+            for name, (suffix, text) in imp.styles.items():
+                files[target / "styles" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
+            linked = sum(1 for r in layers if "dataset" in r["spec"])
+            report.append(f"{ws}.yaml: {len(layers)} layer(s) ({linked} on a Dataset's table), {len(groups)} group(s); "
+                          f"{len(imp.styles)} style(s) in styles/")
+            notes += imp.notes
+        if settings:
+            found, more = settings_resources(gs)
+            files[target / "server.yaml"] = dump(found) if found else "# GeoServer's settings and services are as a fresh install has them\n"
+            kinds = [r["kind"] for r in found]
+            report.append(f"server.yaml: {kinds.count('Settings')} Settings, {kinds.count('Service')} Service(s)")
+            notes += more
+        if security:
+            found, more, keys = security_resources(gs)
+            files[target / "security.yaml"] = dump(found) if found else "# GeoServer's security is as a fresh install has it\n"
+            kinds = [r["kind"] for r in found]
+            report.append(f"security.yaml: {kinds.count('Role')} role(s), {kinds.count('Group')} group(s), "
+                          f"{kinds.count('User')} user(s), {kinds.count('AccessRule')} rule(s)")
+            notes += more
+            if keys:
+                notes.append(f"passwords can't be read from GeoServer: put each user's in Secret {USERS_SECRET} "
+                             f"(keys: {', '.join(keys)}), and add it to gisdata.secrets; plan stops until it's there")
     except GeoServerError as e:
         raise PlanError(str(e), code=1) from None
 
-    files: dict[Path, str] = {target / f"{ws}.yaml": dump(layers + groups)}
-    for name, (suffix, text) in imp.styles.items():
-        files[target / "styles" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
     if project is None:
         jndi = next((e["jndiReferenceName"] for e in stores.values() if e.get("jndiReferenceName")), "java:comp/env/jdbc/mypostgis")
+        report.append("project.yaml")
         files[target / "project.yaml"] = dump([resource("Project", resource_name(ws)[0], {
             "geoserver": {"url": geoserver_url, "credentials": {"secret": SECRET}},
             "database": {"jndi": jndi, "connection": {"secret": "geoserver-pgconfig-secret"}},
@@ -262,10 +293,8 @@ def run(target: Path, ws: str, geoserver_url: str | None = None, force: bool = F
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
 
-    linked = sum(1 for r in layers if "dataset" in r["spec"])
-    print(f"Wrote {ws}.yaml: {len(layers)} layer(s) ({linked} on a Dataset's table), {len(groups)} group(s); "
-          f"{len(imp.styles)} style(s) in styles/" + ("; project.yaml" if project is None else ""))
-    for note in dict.fromkeys(imp.notes):
+    print("Wrote " + "; ".join(report))
+    for note in dict.fromkeys(notes):
         print(f"  note: {note}")
     print(f"Next: gisdata validate {target} && gisdata plan -C {target}")
     return 0
