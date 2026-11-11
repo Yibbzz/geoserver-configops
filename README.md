@@ -50,6 +50,8 @@ Then change GeoServer's admin password, and put the new one in the `geoserver-ad
 
 **Memory.** The whole chart, with all seven GeoServer services, runs in 8 GB: on an 8 GB VM it used about 5 GB, with 2 GB still free while loading 7 million road features. Their memory limits add up to about 12 GB, so on a smaller machine leave out the services you don't need, for example `--set geoserver.services.webui.enabled=false --set geoserver.services.wfs.enabled=false --set geoserver.services.wcs.enabled=false` (gateway, REST, WMS and the tile cache remain).
 
+**Files.** For data kept as files (GeoPackage, Shapefile, GeoTIFF, image mosaics), add `-f values-data-volume.yaml`: it makes a volume (`dataVolume` in `values.yaml`, 20 Gi) and mounts it at `/data` in every GeoServer service and in gisdata's Jobs. On a cluster with several nodes, give it a storage class that allows `ReadWriteMany`.
+
 **Elsewhere.** On another cluster, push the image to a registry it can pull from (`docker build -t <registry>/gisdata .`, `docker push`) and set `gisdata.image.repository` to it.
 
 ## A project
@@ -229,6 +231,7 @@ The repository's root is the Helm chart, and the `gisdata` command sits beside i
 | `Chart.yaml`, `values.yaml`, `templates/` | The Helm chart: GeoServer Cloud's services, PostGIS, RabbitMQ, the JNDI datasource, and the gisdata Job and CronJobs |
 | `charts/application/` | Camptocamp's `application` chart, vendored; it templates the GeoServer services |
 | `geoserver-secrets.example.yaml` | The Secrets the chart expects |
+| `values-data-volume.yaml` | Turns on the shared `/data` volume for file stores |
 | `gisdata/`, `pyproject.toml`, `Dockerfile` | The `gisdata` command and its image |
 | `examples/` | Example projects |
 | `docs/spec/datasets.md` | The file format and every command |

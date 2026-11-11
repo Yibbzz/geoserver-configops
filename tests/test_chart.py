@@ -207,3 +207,27 @@ def test_pgconfig_jndi_datasource_sets_its_schema():
     jndi = yaml.safe_load(by_kind(helm_template(), "ConfigMap")["geoserver-jndi-config"]["data"]["jndi.yml"])
     pgconfig = jndi["jndi"]["datasources"]["pgconfig"]
     assert pgconfig["schema"] == "${PGCONFIG_SCHEMA}"
+
+
+def test_no_data_volume_unless_asked():
+    manifests = helm_template()
+    assert not by_kind(manifests, "PersistentVolumeClaim")
+    for name, deployment in by_kind(manifests, "Deployment").items():
+        assert "/data" not in {m["mountPath"] for m in containers(deployment)[0].get("volumeMounts", [])}, name
+
+
+def test_data_volume_is_mounted_in_every_service_and_gisdata():
+    manifests = helm_template("-f", str(ROOT / "values-data-volume.yaml"), "--set", "dataVolume.size=5Gi")
+    claim = by_kind(manifests, "PersistentVolumeClaim")["geoserver-data"]
+    assert claim["spec"]["resources"]["requests"]["storage"] == "5Gi"
+    assert claim["metadata"]["annotations"]["helm.sh/resource-policy"] == "keep"
+    pods = {n: d["spec"]["template"]["spec"] for n, d in by_kind(manifests, "Deployment").items() if n.startswith("geoserver-gsc-")}
+    [job] = by_kind(manifests, "Job").values()
+    pods["apply"] = job["spec"]["template"]["spec"]
+    for n, cron in by_kind(manifests, "CronJob").items():
+        pods[n] = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    assert len(pods) == 7 + 3  # seven GeoServer services, the apply Job, sync and drift
+    for name, pod in pods.items():
+        claims = {v["name"]: v["persistentVolumeClaim"]["claimName"] for v in pod["volumes"] if "persistentVolumeClaim" in v}
+        mounted = {m["mountPath"]: m["name"] for m in pod["containers"][0]["volumeMounts"]}
+        assert claims.get(mounted.get("/data")) == "geoserver-data", name

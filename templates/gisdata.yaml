@@ -24,7 +24,7 @@ hourly drift check. All run the same pod.
 {{- if gt $size 900000 }}
 {{- fail (printf "gisdata.project: %s holds %d bytes of files, more than a ConfigMap can (about 1 MB)" $dir $size) }}
 {{- end }}
-{{- $ctx := dict "g" $g "dir" $dir "keys" $keys "checksum" (toJson $files | sha256sum) }}
+{{- $ctx := dict "g" $g "dir" $dir "keys" $keys "checksum" (toJson $files | sha256sum) "data" .Values.dataVolume.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -114,6 +114,10 @@ spec:
           readOnly: true
         - name: work
           mountPath: /tmp
+        {{- if .data }}
+        - name: data  # the shared data volume: file stores, raster files
+          mountPath: /data
+        {{- end }}
         {{- range .g.secrets }}
         - name: secret-{{ . }}
           mountPath: /etc/gisdata/secrets/{{ . }}
@@ -130,6 +134,11 @@ spec:
         {{- end }}
     - name: work  # downloads are unpacked here
       emptyDir: {}
+    {{- if .data }}
+    - name: data
+      persistentVolumeClaim:
+        claimName: geoserver-data
+    {{- end }}
     {{- range .g.secrets }}
     - name: secret-{{ . }}
       secret:
