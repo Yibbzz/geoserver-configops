@@ -173,7 +173,7 @@ def test_groups_leave_out_layers_that_cant_be_published(project, tables):
 
 
 def test_apply_succeeds_when_only_your_own_tables_are_missing(project, tables, monkeypatch, capsys):
-    """plan exits 1 so CI notices; apply does what it can and exits 0, since you load these tables yourself."""
+    """plan exits 3 so CI notices (1 is for errors); apply does what it can and exits 0, since you load these tables yourself."""
     from gisdata import plan as plan_module
 
     tables.discard(("field", "sites"))
@@ -187,9 +187,11 @@ def test_apply_succeeds_when_only_your_own_tables_are_missing(project, tables, m
             pass
 
     monkeypatch.setattr(plan_module, "connect", lambda root, url, wait: (load(root), gs, Conn(), ingest.Database("h", 5432, "d", "u", "p")))
-    assert plan_module.run(project) == 1
+    assert plan_module.run(project) == 3
     assert plan_module.run(project, apply=True) == 0
     assert "Left for later: the layers marked ! wait for tables you load yourself" in capsys.readouterr().out
+    gs.layers[("uk", "road_links")]["layer"]["queryable"] = True  # drift as well: plan says 2, as CI expects
+    assert plan_module.run(project) == 2
 
 
 def test_converged_means_no_changes(project, tables, capsys):

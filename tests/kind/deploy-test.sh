@@ -93,6 +93,14 @@ if ! kubectl -n "$NS" wait --for=condition=complete job/sync-now --timeout=10m; 
 fi
 kubectl -n "$NS" logs job/sync-now
 
+echo "== Drift check, run from its CronJob: GeoServer matches the files"
+kubectl -n "$NS" create job drift-now --from=cronjob/gisdata-drift
+if ! kubectl -n "$NS" wait --for=condition=complete job/drift-now --timeout=5m; then
+  kubectl -n "$NS" logs job/drift-now --tail=100 || true
+  echo "FAIL the drift check found drift, or couldn't run"; exit 1
+fi
+kubectl -n "$NS" logs job/drift-now
+
 echo "== e2e tests (pytest -m e2e) against the deployment"
 E2E_GEOSERVER_URL=$BASE/rest E2E_DB_HOST=localhost E2E_DB_PORT=15432 E2E_DB_PASSWORD="$PG_PASS" \
   python3 -m pytest -m e2e -v -p no:cacheprovider

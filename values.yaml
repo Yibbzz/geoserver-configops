@@ -530,3 +530,8 @@ gisdata:
   sync:
     enabled: true
     schedule: '0 2 * * *'
+  # `gisdata plan` hourly: its Job fails when GeoServer has drifted from the files (say a layer
+  # changed in the web UI), so drift shows in `kubectl get jobs` and in alerts on failed Jobs.
+  drift:
+    enabled: true
+    schedule: '30 * * * *'

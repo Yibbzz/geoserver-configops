@@ -140,6 +140,15 @@ gisdata plan   -C my-project --geoserver http://localhost:8080/geoserver-cloud  
 gisdata status -C my-project --geoserver http://localhost:8080/geoserver-cloud    # datasets, layers, drift, tile caches
 ```
 
+**Catch drift.** The `gisdata-drift` CronJob runs `gisdata plan` hourly. Its Job fails when GeoServer no longer matches the files, say a layer changed in the web UI, so drift shows in `kubectl get jobs` and in any alerts on failed Jobs:
+
+```bash
+kubectl -n gscloud get jobs -l batch.kubernetes.io/cronjob-name=gisdata-drift   # Failed = drift
+kubectl -n gscloud logs job/<the failed one>                                    # what differs
+```
+
+`gisdata apply`, or the next `helm upgrade`, puts GeoServer back. Turn it off with `gisdata.drift.enabled=false`.
+
 **Load new data now** instead of waiting for the nightly job:
 
 ```bash
@@ -157,7 +166,8 @@ kubectl -n gscloud logs -f job/sync-now
  project files (YAML, SLD) ──► gisdata-project ConfigMap
                                        │
               gisdata-apply Job ◄──────┤ (every helm install/upgrade)
-              gisdata-sync CronJob ◄───┘ (nightly)
+              gisdata-sync CronJob ◄───┤ (nightly)
+              gisdata-drift CronJob ◄──┘ (hourly: plan, fails on drift)
                        │
  Open data sources ──► │ load: stage, check, back up, swap in
   (OS, CKAN, WFS, …)   ▼
@@ -174,7 +184,7 @@ The repository's root is the Helm chart, and the `gisdata` command sits beside i
 
 | Path | What |
 | --- | --- |
-| `Chart.yaml`, `values.yaml`, `templates/` | The Helm chart: GeoServer Cloud's services, PostGIS, RabbitMQ, the JNDI datasource, and the gisdata Job and CronJob |
+| `Chart.yaml`, `values.yaml`, `templates/` | The Helm chart: GeoServer Cloud's services, PostGIS, RabbitMQ, the JNDI datasource, and the gisdata Job and CronJobs |
 | `charts/application/` | Camptocamp's `application` chart, vendored; it templates the GeoServer services |
 | `geoserver-secrets.example.yaml` | The Secrets the chart expects |
 | `gisdata/`, `pyproject.toml`, `Dockerfile` | The `gisdata` command and its image |
@@ -184,7 +194,7 @@ The repository's root is the Helm chart, and the `gisdata` command sits beside i
 
 ## Testing
 
-CI runs on every pull request and push to `main`: `helm lint` and schema checks of the rendered chart (lint), the unit tests and a real-PostGIS `sync` (test), the image build (gisdata-image), the e2e tests against GeoServer Cloud's REST service in Docker (e2e-rest), and the whole chart deployed on kind with `examples/smoke` applied, synced and drawn (kind-deploy).
+CI runs on every pull request and push to `main`: `helm lint` and schema checks of the rendered chart (lint), the unit tests and a real-PostGIS `sync` (test), the image build (gisdata-image), the e2e tests against GeoServer Cloud's REST service in Docker (e2e-rest), and the whole chart deployed on kind with `examples/smoke` applied, synced, drift-checked and drawn (kind-deploy).
 
 Locally (with `helm`, `jq`, `curl` and `ogr2ogr`):
 

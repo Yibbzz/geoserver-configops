@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     d.set_defaults(func=cmd_discover)
 
     for name, what in (
-        ("plan", "show what apply would change in GeoServer (exit code 2 when there are changes)"),
+        ("plan", "show what apply would change in GeoServer (exit code 2 when there are changes, 3 when only layers wait for your own tables)"),
         ("apply", "make GeoServer match the files: workspace, stores, styles, first loads, layers, groups"),
     ):
         c = commands.add_parser(name, help=what, description=what[0].upper() + what[1:] + ".")

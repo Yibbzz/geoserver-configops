@@ -127,12 +127,40 @@ def test_apply_and_sync_share_one_pod():
     assert apply_pod == sync_pod
 
 
-def test_apply_and_sync_can_be_disabled():
-    only_apply = helm_template("--set", "gisdata.sync.enabled=false")
+def test_drift_check_runs_plan_and_passes_only_waiting_layers():
+    manifests = helm_template("--set", "gisdata.drift.schedule=0 * * * *")
+    cron = by_kind(manifests, "CronJob")["gisdata-drift"]
+    assert cron["spec"]["schedule"] == "0 * * * *"
+    assert cron["spec"]["jobTemplate"]["spec"]["backoffLimit"] == 0
+    container = containers(cron)[0]
+    assert container["command"] == ["sh", "-c"]
+    [script] = container["args"]
+    assert script.startswith("gisdata plan -C /project;") and '"$rc" -eq 3' in script
+    drift_pod = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    sync_pod = by_kind(manifests, "CronJob")["gisdata-sync"]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    for pod in (drift_pod, sync_pod):
+        pod["containers"][0].pop("args")
+        pod["containers"][0].pop("command", None)
+    assert drift_pod == sync_pod  # same image, project and secrets
+
+
+def test_drift_script_exit_codes():
+    """Run the CronJob's script with a stand-in gisdata: drift and errors fail it, waiting layers don't."""
+    [script] = containers(by_kind(helm_template(), "CronJob")["gisdata-drift"])[0]["args"]
+    for plan_code, job_code in [(0, 0), (1, 1), (2, 2), (3, 0)]:
+        stand_in = f"gisdata() {{ return {plan_code}; }}; "
+        assert subprocess.run(["sh", "-c", stand_in + script]).returncode == job_code, plan_code
+
+
+def test_apply_sync_and_drift_can_be_disabled():
+    only_apply = helm_template("--set", "gisdata.sync.enabled=false", "--set", "gisdata.drift.enabled=false")
     assert not by_kind(only_apply, "CronJob") and by_kind(only_apply, "Job")
-    neither = helm_template("--set", "gisdata.sync.enabled=false", "--set", "gisdata.apply.enabled=false")
-    assert not by_kind(neither, "CronJob") and not by_kind(neither, "Job")
-    assert "gisdata-project" not in by_kind(neither, "ConfigMap")
+    no_drift = helm_template("--set", "gisdata.drift.enabled=false")
+    assert set(by_kind(no_drift, "CronJob")) == {"gisdata-sync"}
+    none = helm_template("--set", "gisdata.sync.enabled=false", "--set", "gisdata.apply.enabled=false",
+                         "--set", "gisdata.drift.enabled=false")
+    assert not by_kind(none, "CronJob") and not by_kind(none, "Job")
+    assert "gisdata-project" not in by_kind(none, "ConfigMap")
 
 
 def test_jndi_config_is_rendered_and_mounted():

@@ -450,7 +450,8 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
         blocked = any(c.action == "!" for c in changes)
         todo = [c for c in changes if c.run is not None]
         if not apply:
-            return 1 if blocked else (2 if todo else 0)
+            # 1 is kept for errors; 3 says only layers waiting for your own tables are left
+            return 2 if todo else (3 if blocked else 0)
         if todo:
             print("\nApplying:")
         for c in todo:
@@ -465,7 +466,7 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
         if todo:
             print(f"\nApplied {len(todo)} change(s).")
         if blocked:
-            # Not a failure: the tables are yours to load, often after the deploy. plan still exits 1.
+            # Not a failure: the tables are yours to load, often after the deploy. plan exits 3 for them.
             print("Left for later: the layers marked ! wait for tables you load yourself; apply again once they exist.")
         return 0
     finally:
