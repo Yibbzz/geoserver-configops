@@ -95,7 +95,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | What | Status | Notes |
 | --- | --- | --- |
 | Vector data from Ordnance Survey, CKAN portals, WFS, OGC API Features, links | Yes | `Dataset`: staged, checked, backed up, swapped in, on a schedule |
-| Raster data | Not yet | |
+| Raster data | Yes | A `Dataset` with `raster:` makes one Cloud-Optimised GeoTIFF on the data volume (OS, CKAN, links), backed up and swapped in; a `Store` with `dataset:` publishes it |
 | Tables you load yourself | Yes | A Layer with `table:` and no `dataset`; it waits until the table exists |
 | The importer extension | — | `Dataset` does this job |
 

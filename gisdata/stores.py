@@ -81,9 +81,10 @@ def credentials(store: Resource, root) -> tuple[str | None, str | None]:
     return user, password
 
 
-def wanted_store(store: Resource, root) -> tuple[dict, dict]:
+def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict, dict]:
     """(the body GeoServer takes, the fields compared: name -> value)."""
-    spec, kind = store.spec, store.spec["type"]
+    spec = spec or store.spec
+    kind = spec["type"]
     fam, gs_type = TYPES[kind]
     body: dict = {"name": geoserver_name(store), "type": gs_type, "enabled": spec.get("enabled", True)}
     compared: dict = {"enabled": body["enabled"]}
@@ -145,18 +146,24 @@ def plan(planner) -> None:
     """Stores, then the layers published from them."""
     gs, add = planner.gs, planner.add
     stores = planner.files.named("Store")
+    datasets = planner.files.named("Dataset")
     for store in stores.values():
         ws = planner.workspace_of(store)
         path, collection = store_path(ws, store)
-        body, wanted = wanted_store(store, planner.root)
+        spec = dict(store.spec)
+        if spec.get("dataset"):  # a raster Dataset's file: loaded first if it never has been
+            dataset = datasets[spec["dataset"]]
+            spec["path"] = dataset.spec["raster"]["path"]
+            first_raster(planner, dataset)
+        body, wanted = wanted_store(store, planner.root, spec)
         body["workspace"] = {"name": ws}  # coverage stores won't be made without it
         key = family(store)["key"]
         target = f"{ws}:{geoserver_name(store)}"
         live = (gs.get(path) or {}).get(key)
         run = lambda path=path, collection=collection, key=key, body=body: gs.upsert(path, collection, {key: body})
         if live is None:
-            where = store.spec.get("url") or (f"{DATA}/{store.spec['path'].strip('/')}" if store.spec.get("path") else "") \
-                or store.spec.get("connection", {}).get("host", "")
+            where = spec.get("url") or (f"{DATA}/{spec['path'].strip('/')}" if spec.get("path") else "") \
+                or spec.get("connection", {}).get("host", "")
             add("+", "store", target, note=f"{store.spec['type']}: {where}", run=run)
             continue
         current = live_store(live, store.spec["type"])
@@ -167,6 +174,18 @@ def plan(planner) -> None:
     for layer in planner.layers.values():
         if "store" in layer.spec:
             plan_layer(planner, layer, stores[layer.spec["store"]])
+
+
+def first_raster(planner, dataset: Resource) -> None:
+    """A raster Dataset that has never loaded is loaded before the store on its file is made."""
+    from . import ingest
+
+    path = dataset.spec["raster"]["path"]
+    last = ingest.last_load(planner.conn, dataset.name) if planner.conn is not None else None
+    if (last is None or last.tables != [path]) and dataset.name not in planner.synced:
+        planner.synced.add(dataset.name)
+        planner.add("+", "raster", f"{DATA}/{path}", note=f"first sync of dataset {dataset.name}",
+                    run=lambda d=dataset.name: planner.first_sync(d))
 
 
 def available(gs, ws: str, store: Resource) -> list[str]:

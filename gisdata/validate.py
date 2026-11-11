@@ -45,6 +45,7 @@ def validate(project: Project) -> list[Problem]:
     problems += check_settings(project)
     problems += check_security(project)
     problems += check_stores(project)
+    problems += check_rasters(project)
     return sorted(problems, key=lambda p: (str(p.file), p.line, p.severity, p.message))
 
 
@@ -269,7 +270,7 @@ def check_unused(project: Project) -> list[Problem]:
     for s in project.of_kind("Source"):
         if s.name not in used_sources:
             problems.append(Problem(s.file, s.line(), "no Dataset uses this source", s.label, "warning"))
-    published = {layer.spec.get("dataset") for layer in project.of_kind("Layer")}
+    published = {layer.spec.get("dataset") for layer in project.of_kind("Layer")} | {s.spec.get("dataset") for s in project.of_kind("Store")}
     for d in project.of_kind("Dataset"):
         if d.name not in published:
             problems.append(Problem(d.file, d.line(), "loaded but no Layer publishes it", d.label, "warning"))
@@ -350,10 +351,22 @@ def check_stores(project: Project) -> list[Problem]:
             problems.append(Problem(s.file, s.line(("spec",)), f"spec.url: a {kind} store needs its address", s.label))
         if kind in STORES_WITH_ADDRESSES and s.spec.get("path"):
             problems.append(Problem(s.file, s.line(("spec", "path")), f"spec.path: a {kind} store is read from spec.url", s.label))
-        if kind in STORES_WITH_PATHS and not s.spec.get("path"):
+        if kind in STORES_WITH_PATHS and not s.spec.get("path") and not s.spec.get("dataset"):
             problems.append(Problem(s.file, s.line(("spec",)), f"spec.path: a {kind} store needs its file's path on the data volume, e.g. rasters/surrey.tif", s.label))
         if kind in STORES_WITH_PATHS and s.spec.get("url"):
             problems.append(Problem(s.file, s.line(("spec", "url")), f"spec.url: a {kind} store reads a file on the data volume: use spec.path", s.label))
+        if s.spec.get("dataset"):
+            dataset = project.named("Dataset").get(s.spec["dataset"])
+            if dataset is None:
+                problems.append(Problem(s.file, s.line(("spec", "dataset")), f"spec.dataset: no Dataset named {s.spec['dataset']!r}{known(project.named('Dataset'))}", s.label))
+            elif "raster" not in dataset.spec:
+                problems.append(Problem(s.file, s.line(("spec", "dataset")), f"spec.dataset: {dataset.name} loads tables, not a raster: publish its tables with Layers", s.label))
+            if kind != "geotiff":
+                problems.append(Problem(s.file, s.line(("spec", "type")), "spec.type: a store on a raster Dataset is a geotiff", s.label))
+            for key in ("path", "url"):
+                if key in s.spec:
+                    problems.append(Problem(s.file, s.line(("spec", key)), f"spec.{key}: a store on a raster Dataset reads the Dataset's file", s.label))
+            continue
         if kind == "pmtiles" and bool(s.spec.get("path")) == bool(s.spec.get("url")):
             problems.append(Problem(s.file, s.line(("spec",)), "a pmtiles store needs spec.path (on the data volume) or spec.url, not both", s.label))
         if kind == "postgis":
@@ -373,4 +386,19 @@ def check_stores(project: Project) -> list[Problem]:
         for key in ("dataset", "table"):
             if key in layer.spec:
                 problems.append(Problem(layer.file, layer.line(("spec", key)), f"spec.{key}: a layer on a store doesn't take a {key}", layer.label))
+    return problems
+
+
+def check_rasters(project: Project) -> list[Problem]:
+    """A Dataset loads tables or a raster, not both; no two raster Datasets write one file."""
+    problems, paths = [], {}
+    for d in project.of_kind("Dataset"):
+        if "raster" not in d.spec:
+            continue
+        if "tables" in d.spec:
+            problems.append(Problem(d.file, d.line(("spec", "raster")), "spec.raster: a Dataset loads tables or a raster, not both", d.label))
+        path = d.spec["raster"].get("path")
+        if path in paths:
+            problems.append(Problem(d.file, d.line(("spec", "raster", "path")), f"spec.raster.path: {path} is also written by {paths[path].label}", d.label))
+        paths.setdefault(path, d)
     return problems

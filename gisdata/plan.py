@@ -28,7 +28,7 @@ from .sources import SourceError
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "settings", "service", "role", "user group", "user", "store", "style", "table", "layer", "group", "rule"]
+ORDER = ["workspace", "settings", "service", "role", "user group", "user", "raster", "store", "style", "table", "layer", "group", "rule"]
 DELETE_ORDER = ["rule", "user", "user group", "role", "group", "layer", "style", "store"]
 
 # Every kind of store a workspace can hold: (REST collection, JSON key)

@@ -585,6 +585,28 @@
               "minimum": 0
             }
           }
+        },
+        "raster": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false,
+          "description": "make the download one Cloud-Optimised GeoTIFF on the data volume, instead of tables",
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)\\S+\\.tif$",
+              "description": "a .tif path under the data volume, like rasters/terrain50.tif"
+            },
+            "crs": {
+              "$ref": "#/$defs/crs"
+            },
+            "nodata": {
+              "type": "number",
+              "description": "the value for where no raster covers, and the rasters' own gaps"
+            }
+          }
         }
       }
     },
@@ -1529,6 +1551,9 @@
           "type": "string",
           "pattern": "^(?!/)(?!.*\\.\\.)\\S+$",
           "description": "a path under the shared data volume (/data), like rasters/surrey.tif"
+        },
+        "dataset": {
+          "$ref": "#/$defs/resourceName"
         }
       }
     }
