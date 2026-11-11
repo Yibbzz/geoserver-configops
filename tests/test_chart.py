@@ -39,15 +39,6 @@ def test_default_images_come_from_docker_hub_with_one_tag():
         assert image.endswith(f":{GEOSERVER_TAG}"), name
 
 
-def test_local_registry_override_repoints_every_image():
-    manifests = helm_template("-f", str(ROOT / "values.yaml"), "-f", str(ROOT / "values-local-registry.yaml"))
-    registry = "k3d-k3d-registry.localhost:5000/"
-    for name, image in geoserver_images(manifests).items():
-        assert image.startswith(registry), name
-    cronjob = by_kind(manifests, "CronJob")["gisdata-sync"]
-    assert containers(cronjob)[0]["image"].startswith(registry)
-
-
 def test_sync_cronjob_uses_values():
     manifests = helm_template(
         "--set", "gisdata.sync.schedule=30 4 * * 0",

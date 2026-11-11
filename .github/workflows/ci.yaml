@@ -21,12 +21,12 @@ jobs:
       - name: Validate manifests against Kubernetes schemas
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
-          for extra in "" "-f values-local-registry.yaml" "--set gisdata.sync.enabled=false --set gisdata.apply.enabled=false"; do
+          for extra in "" "--set gisdata.sync.enabled=false --set gisdata.apply.enabled=false"; do
             echo "== helm template $extra"
             helm template geoserver . -f values.yaml $extra | ./kubeconform -strict -summary -kubernetes-version 1.37.0 -
           done
       - name: Shellcheck
-        run: shellcheck *.sh tests/e2e/*.sh tests/kind/*.sh
+        run: shellcheck tests/e2e/*.sh tests/kind/*.sh
 
   test:
     runs-on: ubuntu-latest
@@ -54,7 +54,7 @@ jobs:
       - name: Install GDAL
         run: sudo apt-get update && sudo apt-get install -y gdal-bin
       - name: Install Python dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -e '.[dev]'
       - name: Run tests
         env:
           TEST_DB_HOST: localhost
@@ -93,7 +93,7 @@ jobs:
       - name: Install GDAL (plan/apply load a dataset)
         run: sudo apt-get update && sudo apt-get install -y gdal-bin
       - name: Install Python dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -e '.[dev]'
       - name: Start GeoServer Cloud REST, PostGIS and RabbitMQ
         run: tests/e2e/up.sh
       - name: e2e tests
@@ -120,7 +120,7 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install Python dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -e '.[dev]'
       - name: Install GDAL (plan/apply load a dataset)
         run: sudo apt-get update && sudo apt-get install -y gdal-bin
       - uses: helm/kind-action@v1.15.2

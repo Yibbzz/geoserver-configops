@@ -40,8 +40,6 @@ __pycache__/
 /.secretignore
 Makefile
 .pytest_cache/
-pytest.ini
-requirements-dev.txt
 docs/
 gisdata/
 pyproject.toml
