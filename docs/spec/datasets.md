@@ -205,7 +205,7 @@ spec:
 
 ### Layer
 
-How data is published in GeoServer. A layer is on a dataset's table, on any table you load yourself, or on a `Store` (below).
+How data is published in GeoServer. A layer is on a dataset's table, on any table you load yourself, on a SQL view (`sql:`), or on a `Store` (below).
 
 ```yaml
 apiVersion: gisdata/v1alpha1
@@ -229,6 +229,20 @@ spec:
   table: { schema: field_data, name: sites }   # a table gisdata doesn't load
   title: Survey sites
   style: point
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: big-counties
+spec:
+  sql:                               # a SQL view
+    schema: data_layers
+    query: |
+      select fid, name, geom from data_layers.boundary_line_county
+      where hectares > 300000
+    key: fid
+    geometry: { column: geom, type: MultiPolygon, crs: EPSG:27700 }
+  attributes: [name]                 # publish only these (and the geometry)
 ```
 
 | Field | Required | Default | Meaning |
@@ -236,7 +250,10 @@ spec:
 | `dataset` + `table` | one of the forms | | A table loaded by a Dataset |
 | `table.schema` + `table.name` | one of the forms | | Any existing table |
 | `store` + `resource` | one of the forms | `resource`: the store's only one | Something a `Store` offers (below) |
+| `sql` | one of the forms | | A SQL view: `{ schema, query, key, geometry: { column, type, crs } }`, published from the schema's store |
 | `name` (in GeoServer) | no | `metadata.name` with dashes as underscores | Layer name clients use |
+| `crs` | no | the data's own | The declared CRS, forced on the layer |
+| `attributes` | no | all | The attributes published, in this order; the geometry always is |
 | `workspace` | no | the project's `workspace` | |
 | `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents |
 | `style` | no | GeoServer's default for the geometry | Default style |
@@ -348,6 +365,8 @@ spec:
   file: styles/global/house-colours.sld   # not in styles/ itself, which holds the workspace's
   global: true                        # a global style, in no workspace; layers name it without one
 ```
+
+A Style resource can also give a legend graphic of its own, which GetLegendGraphic serves and capabilities point to: `legend: { url, width, height, format }`.
 
 Formats: SLD (`.sld`) and MBStyle (`.mbstyle`); CSS (`.css`) if the GeoServer images include it and the client gains support. Files are uploaded exactly as written, never re-encoded by GeoServer.
 
