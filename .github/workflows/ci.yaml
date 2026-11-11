@@ -26,7 +26,7 @@ jobs:
             helm template geoserver . -f values.yaml $extra | ./kubeconform -strict -summary -kubernetes-version 1.37.0 -
           done
       - name: Shellcheck
-        run: shellcheck tests/e2e/*.sh tests/kind/*.sh
+        run: shellcheck tests/e2e/*.sh tests/kind/*.sh tests/ci/*.sh
 
   test:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install GDAL
-        run: sudo apt-get update && sudo apt-get install -y gdal-bin
+        run: tests/ci/install-gdal.sh
       - name: Install Python dependencies
         run: pip install -e '.[dev]'
       - name: Run tests
@@ -91,7 +91,7 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install GDAL (plan/apply load a dataset)
-        run: sudo apt-get update && sudo apt-get install -y gdal-bin
+        run: tests/ci/install-gdal.sh
       - name: Install Python dependencies
         run: pip install -e '.[dev]'
       - name: Start GeoServer Cloud REST, PostGIS and RabbitMQ
@@ -123,7 +123,7 @@ jobs:
       - name: Install Python dependencies
         run: pip install -e '.[dev]'
       - name: Install GDAL (plan/apply load a dataset)
-        run: sudo apt-get update && sudo apt-get install -y gdal-bin
+        run: tests/ci/install-gdal.sh
       - uses: helm/kind-action@v1.15.2
         with:
           cluster_name: gscloud
