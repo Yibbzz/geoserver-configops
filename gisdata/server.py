@@ -12,6 +12,8 @@ the whole object, merges the files' fields in, and writes it back.
 
 from __future__ import annotations
 
+from . import secrets
+from .geoserver import GeoServerError, MissingCredentials
 from .loader import Resource
 
 SERVICES = ("wms", "wfs", "wcs", "wmts")
@@ -94,6 +96,7 @@ def plan_settings(planner, gs, r: Resource) -> None:
     contact = to_geoserver(spec.pop("contact", None) or {})
     top_spec = dict(spec.pop("global", None) or {})
     catalog_mode = top_spec.pop("catalogMode", None)
+    master = top_spec.pop("masterPassword", None)
     top = to_geoserver(top_spec)
     settings = to_geoserver(spec)
     path, key = settings_paths(ws)
@@ -114,6 +117,15 @@ def plan_settings(planner, gs, r: Resource) -> None:
         live_mode = ((gs.get("security/acl/catalog") or {}).get("mode") or "").lower()
         if live_mode != catalog_mode:
             changed.append(("global.catalogMode", live_mode, catalog_mode))
+    new_master = None
+    if master:
+        new_master = secrets.lookup(master["secret"], master["key"], planner.root)
+        if new_master is None:
+            raise MissingCredentials(f"Settings {r.name}: no master password in secret {master['secret']}, key {master['key']}")
+        if (gs.get("security/masterpw") or {}).get("oldMasterPassword") != new_master:
+            changed.append(("global.masterPassword", "(differs)", f"(from secret {master['secret']}, key {master['key']})"))
+        else:
+            new_master = None
     if exists and not changed:
         return
 
@@ -128,6 +140,13 @@ def plan_settings(planner, gs, r: Resource) -> None:
         gs.request("PUT", path, {key: body})
         if catalog_mode:
             gs.request("PUT", "security/acl/catalog", {"mode": catalog_mode.upper()})
+        if new_master:
+            # GeoServer Cloud sometimes answers 422 though it made the change: what counts is what it reads back
+            old = (gs.get("security/masterpw") or {}).get("oldMasterPassword")
+            gs.request("PUT", "security/masterpw", {"oldMasterPassword": old, "newMasterPassword": new_master}, ok=(200, 201, 422))
+            if (gs.get("security/masterpw") or {}).get("oldMasterPassword") != new_master:
+                raise GeoServerError("PUT", "security/masterpw", 422,
+                                     "GeoServer refused the new master password (its policy wants at least 8 characters)")
         if not ws and contact:  # the contact has its own endpoint, which is what the services read
             current_contact = (gs.get("settings/contact") or {}).get("contact") or {}
             gs.request("PUT", "settings/contact", {"contact": merge(current_contact, contact)})
