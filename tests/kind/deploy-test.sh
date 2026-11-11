@@ -102,7 +102,7 @@ fi
 kubectl -n "$NS" logs job/drift-now
 
 echo "== e2e tests (pytest -m e2e) against the deployment"
-E2E_GEOSERVER_URL=$BASE/rest E2E_DB_HOST=localhost E2E_DB_PORT=15432 E2E_DB_PASSWORD="$PG_PASS" \
+E2E_GEOSERVER_URL=$BASE/rest E2E_DB_HOST=localhost E2E_DB_PORT=15432 E2E_DB_PASSWORD="$PG_PASS" E2E_DB_HOST_IN_GEOSERVER="$RELEASE-postgresql" \
   python3 -m pytest -m e2e -v -p no:cacheprovider
 
 echo "All deployment checks passed."
