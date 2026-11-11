@@ -265,11 +265,16 @@ spec:
 | `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …] }`: this layer's WFS settings |
 | `metadataLinks` | no | none | `[{ url, type, standard }]`: links to metadata records, shown in capabilities. `type` defaults to `text/html`, `standard` to `ISO19115:2003` |
 | `httpCache` | no | none | `{ maxAge }`: a `Cache-Control: max-age` (seconds) on this layer's maps |
-| `dimensions` | no | none | `{ time: {…}, elevation: {…} }`, each `{ attribute, endAttribute, presentation: list \| continuous \| interval, resolution, units, unitSymbol, nearestMatch }` |
+| `dimensions` | no | none | `{ time: {…}, elevation: {…}, <any other name>: {…} }`, each `{ attribute, endAttribute, presentation: list \| continuous \| interval, resolution, units, unitSymbol, nearestMatch }`. Another name is a custom dimension, which clients ask for as `DIM_<name>` |
 | `opaque` | no | `false` | Tells clients nothing shows through the layer |
 | `buffer` | no | none | Rendering buffer in pixels, for symbols that spill over tile edges |
+| `wms` | no | none | `{ path, interpolation }`: where the layer sits in the WMS capabilities tree (`/base/roads`), and `nearest`, `bilinear` or `bicubic` resampling |
+| `dataLinks` | no | none | `[{ url, type }]`: links to the data itself. `type` defaults to `text/html` |
+| `wcs` | no | the WCS service's | Rasters: `{ requestCRS, responseCRS, formats, interpolations, defaultInterpolation }` |
+| `bands` | no | from the file | Rasters: `[{ name, description, unit, nullValues: [...], range: [min, max] }]`, in band order, as WCS shows them |
+| `parameters` | no | none | Rasters: the reading parameters of the web UI's *Coverage Parameters*, e.g. `{ InputTransparentColor: "#000000" }` |
 
-Every field above works the same on a layer on a `Store`, except `filter` and `wfs`, which are for feature types. Only the fields a file sets are compared; GeoServer's own metadata entries on a layer are kept. Not in the file, worked out on apply: native and lat/lon bounding boxes (computed from the table), attribute list and types (from the table), projection definition (from the CRS), store, links, timestamps.
+Every field above works the same on a layer on a `Store`, except `filter` and `wfs`, which are for feature types, and `wcs`, `bands` and `parameters`, which are for rasters. Only the fields a file sets are compared; GeoServer's own metadata entries on a layer are kept. Not in the file, worked out on apply: native and lat/lon bounding boxes (computed from the table), attribute list and types (from the table), projection definition (from the CRS), store, links, timestamps.
 
 **Parameter filters and seeding.** A request parameter makes tiles of its own only if the layer's cache has a filter for it:
 
@@ -442,6 +447,7 @@ spec:
 | `cache` | no | `false` | Tile caching for the group as a whole, in the same form as a Layer's |
 | `enabled`, `advertised` | no | `true` | An unadvertised group works but isn't listed in capabilities |
 | `metadataLinks` | no | none | As on a Layer |
+| `rootLayer`, `rootStyle` | `eo` only | the root layer's own style | The layer drawn for the group as a whole |
 
 | `mode` | GeoServer mode | Clients see |
 | --- | --- | --- |
@@ -449,6 +455,7 @@ spec:
 | `named` | NAMED | The group as a layer, with its members listed under it |
 | `container` | CONTAINER | A folder of its members; the group itself can't be requested |
 | `opaque` | OPAQUE_CONTAINER | One layer; its members are hidden from capabilities |
+| `eo` | EO | Earth observation: the `rootLayer` drawn for the group, its members (products, masks) listed under it |
 
 Not in the file, worked out on apply: the group's bounding box (from its members) and its projection.
 

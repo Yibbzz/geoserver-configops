@@ -995,7 +995,47 @@
         },
         "dimensions": {
           "type": "object",
-          "additionalProperties": false,
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "attribute"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "attribute": {
+                "type": "string",
+                "minLength": 1
+              },
+              "endAttribute": {
+                "type": "string",
+                "minLength": 1
+              },
+              "presentation": {
+                "enum": [
+                  "list",
+                  "continuous",
+                  "interval"
+                ]
+              },
+              "resolution": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "units": {
+                "type": "string",
+                "minLength": 1
+              },
+              "unitSymbol": {
+                "type": "string",
+                "minLength": 1
+              },
+              "nearestMatch": {
+                "type": "boolean"
+              }
+            }
+          },
           "properties": {
             "time": {
               "type": "object",
@@ -1079,7 +1119,8 @@
                 }
               }
             }
-          }
+          },
+          "description": "time, elevation, or any other name for a custom dimension (DIM_<name> in WMS requests)"
         },
         "opaque": {
           "type": "boolean"
@@ -1150,6 +1191,139 @@
           },
           "minItems": 1,
           "description": "the attributes to publish (the geometry always is)"
+        },
+        "wms": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The layer's own WMS settings",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "where the layer sits in the WMS capabilities tree, e.g. /base/roads"
+            },
+            "interpolation": {
+              "enum": [
+                "nearest",
+                "bilinear",
+                "bicubic"
+              ],
+              "description": "how the layer's images are resampled when scaled"
+            }
+          }
+        },
+        "wcs": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "A raster layer's own WCS settings",
+          "properties": {
+            "requestCRS": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "responseCRS": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "formats": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "interpolations": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "nearest neighbor",
+                  "bilinear",
+                  "bicubic"
+                ]
+              }
+            },
+            "defaultInterpolation": {
+              "enum": [
+                "nearest neighbor",
+                "bilinear",
+                "bicubic"
+              ]
+            }
+          }
+        },
+        "dataLinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "url"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "description": "the linked file's media type; default text/html"
+              }
+            }
+          },
+          "description": "links to the data itself"
+        },
+        "bands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              },
+              "nullValues": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "range": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "description": "a raster layer's bands, in order: names, units, no-data values and ranges as WCS shows them"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "a raster layer's reading parameters, as the web UI's Coverage Parameters (InputTransparentColor, BackgroundValues, ...)"
         }
       },
       "if": {
@@ -1229,7 +1403,8 @@
             "single",
             "named",
             "container",
-            "opaque"
+            "opaque",
+            "eo"
           ]
         },
         "name": {
@@ -1284,6 +1459,16 @@
               }
             }
           }
+        },
+        "rootLayer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "eo: the layer drawn for the group as a whole (a Layer's name)"
+        },
+        "rootStyle": {
+          "type": "string",
+          "minLength": 1,
+          "description": "eo: the root layer's style"
         }
       }
     },

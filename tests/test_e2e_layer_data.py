@@ -131,7 +131,7 @@ def test_drift_is_shown_and_put_back(gs, project, capsys):
     entry["virtualTable"]["sql"] = "select id, name, height, geom from e2e_layer_data.sites"
     gs.request("PUT", path, {"featureType": {"metadata": ft["metadata"]}})
     code, out = configops(capsys, "plan", "-C", str(project))
-    assert code == 2 and "sql:" in out, out
+    assert code == 2 and "sql.query:" in out, out
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
     assert configops(capsys, "plan", "-C", str(project))[0] == 0
 

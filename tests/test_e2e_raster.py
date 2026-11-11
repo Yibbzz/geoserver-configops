@@ -121,7 +121,12 @@ spec: {{ type: geotiff, dataset: e2e-heights }}
 apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: heights }}
-spec: {{ store: heights, title: Heights }}
+spec:
+  store: heights
+  title: Heights
+  wcs: {{ requestCRS: [EPSG:27700, EPSG:4326], responseCRS: [EPSG:27700], formats: [GeoTIFF, PNG], defaultInterpolation: bilinear }}
+  bands: [ {{ name: HEIGHT, description: Height above sea level, unit: m, nullValues: [-9999] }} ]
+  parameters: {{ InputTransparentColor: "#000000", SUGGESTED_TILE_SIZE: "256,256" }}
 """)
     return tmp_path
 
@@ -142,6 +147,20 @@ def test_first_load_then_publish_then_nothing_to_do(gs, project, capsys):
     coverage = gs.get(f"workspaces/{WS}/coveragestores/heights/coverages/heights")["coverage"]
     assert coverage["srs"] == "EPSG:27700"  # the project's, since the grids have none
     assert coverage["nativeBoundingBox"]["minx"] == 510000 and coverage["nativeBoundingBox"]["maxx"] == 511000
+    assert coverage["supportedFormats"]["string"] == ["GeoTIFF", "PNG"] and coverage["defaultInterpolationMethod"] == "bilinear"
+    band = coverage["dimensions"]["coverageDimension"]
+    assert band["name"] == "HEIGHT" and band["unit"] == "m"
+
+
+def test_import_round_trip(gs, project, tmp_path_factory, capsys):
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    imported = tmp_path_factory.mktemp("imported")
+    (imported / "project.yaml").write_text((project / "project.yaml").read_text().split("\n---\n")[0] + "\n")
+    assert configops(capsys, "import", WS, "-C", str(imported))[0] == 0
+    text = (imported / f"{WS}.yaml").read_text()
+    assert "name: HEIGHT" in text and "InputTransparentColor" in text and "defaultInterpolation: bilinear" in text
+    code, out = configops(capsys, "plan", "-C", str(imported))
+    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
 
 
 def test_a_new_load_is_swapped_in_and_geoserver_refreshed(gs, project, capsys):

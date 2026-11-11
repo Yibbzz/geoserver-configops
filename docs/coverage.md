@@ -54,11 +54,11 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Declared CRS | Yes | `crs`, forced on the layer |
 | Bounding boxes | Yes | Worked out from the data on every apply and after every load |
 | Metadata links | Yes | `metadataLinks` |
-| Data links | Not yet | |
+| Data links | Yes | `dataLinks` |
 | Restrict features (CQL filter) | Yes | `filter` |
 | Attributes shown | Partly | `attributes`; `import` doesn't write them (REST can't tell a narrowed list from the full one) |
 | SQL views | Yes | `sql: { schema, query, key, geometry }` |
-| Raster band and coverage parameters | Not yet | GeoServer works them out from the file |
+| Raster bands and coverage parameters | Yes | `bands`, `parameters` |
 | **Publishing:** default style, other styles | Yes | |
 | Queryable | Yes | |
 | Opaque | Yes | `opaque` |
@@ -66,9 +66,9 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Attribution link and logo | Yes | `attribution: { title, link, logo }` |
 | Rendering buffer, HTTP cache headers | Yes | `buffer`, `httpCache` |
 | Per-layer WFS settings (max features, decimals, other CRSs) | Yes | `wfs` |
-| Per-layer WMS and WCS settings | Not yet | |
+| Per-layer WMS and WCS settings | Yes | `wms: { path, interpolation }`, `wcs` |
 | **Dimensions:** time, elevation | Yes | `dimensions` |
-| Custom dimensions | Not yet | |
+| Custom dimensions | Yes | Any other name under `dimensions` |
 | **Tile caching:** on or off, gridsets, image formats | Yes | `cache:` |
 | Metatiling, gutter, expiry | Yes | `cache: { metaTiles, gutter, expireCache, expireClients }` |
 | Parameter filters | Yes | `cache.parameterFilters` |
@@ -84,7 +84,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Bounds, CRS | Yes | Worked out from the members |
 | Tile caching | Yes | |
 | Enabled, advertised, metadata links | Yes | |
-| Root layer (EO groups) | Not yet | The EO mode isn't offered |
+| Earth observation groups (root layer) | Yes | `mode: eo`, `rootLayer`, `rootStyle` |
 
 ### Styles
 

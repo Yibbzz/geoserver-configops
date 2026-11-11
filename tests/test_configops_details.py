@@ -63,3 +63,35 @@ def test_import_writes_only_what_differs_from_the_defaults():
     assert spec["attribution"] == {"title": "EA", "link": "https://ea.example", "logo": {"url": "https://ea.example/logo.png", "width": 20}}
     # and what import writes, plan reads back the same
     assert details.live_resource(RESOURCE, details.wanted_resource(spec)) == details.wanted_resource(spec)
+
+
+def test_custom_dimensions_are_named_as_geoserver_names_them():
+    vector, raster = {}, {"grid": {}}
+    assert details.dimension_key(vector, "depth") == "dim_depth"
+    assert details.dimension_key(raster, "depth") == "custom_dimension_DEPTH"
+    assert details.dimension_key(raster, "time") == "time"
+
+
+def test_bands_compare_only_what_the_files_set():
+    spec = {"bands": [{"name": "HEIGHT", "nullValues": [-9999]}]}
+    wanted = details.wanted_resource(spec)
+    coverage = {"grid": {}, "dimensions": {"coverageDimension": {"name": "HEIGHT", "unit": "m", "nullValues": {"double": -9999},
+                                                                  "range": {"min": "-Infinity", "max": "Infinity"}}}}
+    assert details.live_resource(coverage, wanted) == wanted
+    body = details.patch_resource(coverage, {"bands": [{"name": "H", "unit": "ft"}]})
+    assert body["dimensions"]["coverageDimension"][0] == {"name": "H", "unit": "ft", "nullValues": {"double": -9999},
+                                                          "range": {"min": "-Infinity", "max": "Infinity"}}
+    assert details.to_spec(coverage, {})["bands"] == [{"name": "HEIGHT", "unit": "m", "nullValues": [-9999.0]}]
+
+
+def test_wcs_settings_are_only_read_from_rasters():
+    feature_type = {"responseSRS": {"string": ["4326"]}, "overridingServiceSRS": True}
+    assert "wcs" not in details.to_spec(feature_type, {})
+    coverage = {"grid": {}, "supportedFormats": {"string": ["GeoTIFF"]}, "defaultInterpolationMethod": "bilinear"}
+    assert details.to_spec(coverage, {})["wcs"] == {"formats": ["GeoTIFF"], "defaultInterpolation": "bilinear"}
+
+
+def test_wms_path_and_interpolation_on_the_layer():
+    wanted = details.wanted_layer({"wms": {"path": "/a/b", "interpolation": "bicubic"}})
+    assert details.patch_layer({}, wanted) == {"path": "/a/b", "defaultWMSInterpolationMethod": "Bicubic"}
+    assert details.to_spec({}, {"path": "/a/b", "defaultWMSInterpolationMethod": "Bicubic"})["wms"] == {"path": "/a/b", "interpolation": "bicubic"}
