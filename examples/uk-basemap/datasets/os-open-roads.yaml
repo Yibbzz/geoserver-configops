@@ -21,7 +21,8 @@ spec:
   table: road_link
   title: OS Open Roads, road links
   style: os-road-link
-  cache: true
+  cache:
+    gridsets: [EPSG:900913, british-national-grid]   # web maps, and British National Grid (layer-groups.yaml)
 ---
 apiVersion: gisdata/v1alpha1
 kind: Layer

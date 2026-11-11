@@ -17,7 +17,7 @@ import yaml
 from . import details, secrets
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import default_table, load
-from .plan import DEFAULT_FORMATS, DEFAULT_GRIDSETS, PlanError, as_list, names_of
+from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, PlanError, as_list, names_of
 from .stores import DATA
 from .validate import BUILT_IN_STYLES
 
@@ -60,14 +60,22 @@ def default_style(ft: dict) -> str:
     return "generic"
 
 
+# GeoWebCache's own gridsets; any other a layer is cached in is written as a Gridset
+BUILT_IN_GRIDSETS = re.compile(r"^(EPSG:(4326|900913|3857|4258)|GlobalCRS84(Pixel|Scale|Geometric)|GoogleCRS84Quad|"
+                               r"WebMercatorQuad|WorldCRS84Quad|UPS(Arctic|Antarctic)WGS84Quad(x2)?|UTM\d\dWGS84Quad(x2)?)$")
+GWC_DEFAULTS = {"metaWidthHeight": [4, 4], "gutter": 0, "expireCache": 0, "expireClients": 0}
+
+
 def cache_setting(tile_layer: dict | None):
     if not tile_layer or not tile_layer.get("enabled", True):
         return None
     gridsets = sorted(g["gridSetName"] for g in as_list(tile_layer.get("gridSubsets")))
     formats = sorted(as_list(tile_layer.get("mimeFormats")))
-    if gridsets == sorted(DEFAULT_GRIDSETS) and formats == sorted(DEFAULT_FORMATS):
+    options = {key: tile_layer[gwc] for key, gwc in CACHE_OPTIONS.items()
+               if tile_layer.get(gwc) is not None and tile_layer.get(gwc) != GWC_DEFAULTS[gwc]}
+    if gridsets == sorted(DEFAULT_GRIDSETS) and formats == sorted(DEFAULT_FORMATS) and not options:
         return True
-    return {"gridsets": gridsets, "formats": formats}
+    return {"gridsets": gridsets, "formats": formats, **options}
 
 
 def resource(kind: str, name: str, spec: dict) -> dict:
@@ -318,11 +326,8 @@ class Importer:
                 continue
             spec["layers"] = members
             cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
-            if cache is True:
-                spec["cache"] = True
-            elif cache:
-                self.notes.append(f"group {gs_name}: tile cache with its own gridsets or formats; groups only take cache: true")
-                spec["cache"] = True
+            if cache:
+                spec["cache"] = cache
             for flag in ("enabled", "advertised"):
                 if g.get(flag) is False:
                     spec[flag] = False
@@ -331,6 +336,26 @@ class Importer:
                 spec["metadataLinks"] = links
             found.append(resource("LayerGroup", name, spec))
         return found
+
+    def gridsets(self, resources: list[dict]) -> list[dict]:
+        """Gridset resources for the gridsets the imported layers are cached in that aren't GeoWebCache's own."""
+        names = {g for r in resources if isinstance(r["spec"].get("cache"), dict) for g in r["spec"]["cache"]["gridsets"]}
+        out = []
+        for name in sorted(n for n in names if not BUILT_IN_GRIDSETS.match(n)):
+            g = self.gs.gridset(name)
+            if g is None:
+                continue
+            meta, explicit = resource_name(name)
+            spec = {"name": name} if (explicit or meta != name) else {}
+            spec.update({"crs": f"EPSG:{g['srs']['number']}", "extent": g["extent"]["coords"], "resolutions": g["resolutions"]})
+            if g.get("tileWidth", 256) != 256:
+                spec["tileSize"] = g["tileWidth"]
+            if g.get("alignTopLeft"):
+                spec["alignTopLeft"] = True
+            if float(g.get("metersPerUnit") or 1) != 1:
+                spec["metersPerUnit"] = g["metersPerUnit"]
+            out.append(resource("Gridset", meta, spec))
+        return out
 
     def workspace(self) -> list[dict]:
         """A Workspace resource, when its namespace, isolation or being the default isn't GeoServer's default."""
@@ -412,7 +437,8 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             for name, (suffix, text) in imp.global_styles.items():  # not in styles/ itself, which holds the workspace's
                 files[target / "styles" / "global" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
                 styles.append(resource("Style", resource_name(name)[0], {"file": f"styles/global/{name}{suffix}", "global": True}))
-            files[target / f"{ws}.yaml"] = dump(imp.workspace() + list(imp.store_resources.values()) + layers + groups + styles)
+            files[target / f"{ws}.yaml"] = dump(imp.workspace() + list(imp.store_resources.values()) + layers + groups + styles
+                                                + imp.gridsets(layers + groups))
             for name, (suffix, text) in imp.styles.items():
                 files[target / "styles" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
             linked = sum(1 for r in layers if "dataset" in r["spec"])

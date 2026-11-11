@@ -23,3 +23,13 @@ spec:
   layers:
     - uk-basemap
     - survey-sites
+---
+# Tiles on British National Grid, as OS's own maps use: the same origin and zoom levels
+apiVersion: gisdata/v1alpha1
+kind: Gridset
+metadata:
+  name: british-national-grid
+spec:
+  crs: EPSG:27700
+  extent: [-238375, 0, 900000, 1376256]
+  resolutions: [896, 448, 224, 112, 56, 28, 14, 7, 3.5, 1.75, 0.875, 0.4375, 0.21875, 0.109375]

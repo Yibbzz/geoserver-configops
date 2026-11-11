@@ -312,9 +312,19 @@ class GeoServer:
             return None
         raise GeoServerError("GET", f"gwc/layers/{name}", r.status_code, r.text)
 
-    def put_tile_layer(self, name: str, gridsets: list[str], formats: list[str]) -> None:
-        """Cache `name` in these gridsets and image formats (creating or replacing its settings)."""
-        xml = (f"<GeoServerLayer><name>{escape(name)}</name><enabled>true</enabled>"
+    def put_tile_layer(self, name: str, gridsets: list[str], formats: list[str], options: dict | None = None) -> None:
+        """
+        Cache `name` in these gridsets and image formats (creating or replacing its settings).
+        `options`: metaTiles [w, h], gutter (pixels), expireCache and expireClients (seconds).
+        """
+        options = options or {}
+        extra = ""
+        if "metaTiles" in options:
+            extra += f"<metaWidthHeight><int>{int(options['metaTiles'][0])}</int><int>{int(options['metaTiles'][1])}</int></metaWidthHeight>"
+        for key in ("gutter", "expireCache", "expireClients"):
+            if key in options:
+                extra += f"<{key}>{int(options[key])}</{key}>"
+        xml = (f"<GeoServerLayer><name>{escape(name)}</name><enabled>true</enabled>{extra}"
                f"<mimeFormats>{''.join(f'<string>{escape(f)}</string>' for f in formats)}</mimeFormats>"
                f"<gridSubsets>{''.join(f'<gridSubset><gridSetName>{escape(g)}</gridSetName></gridSubset>' for g in gridsets)}"
                "</gridSubsets></GeoServerLayer>")
@@ -330,6 +340,26 @@ class GeoServer:
         if "Unknown layer" in r.text:
             return False
         raise GeoServerError("DELETE", f"gwc/layers/{name}", r.status_code, r.text)
+
+    def gridset(self, name: str) -> dict | None:
+        r = self.gwc_request("GET", f"gridsets/{q(name)}")
+        if r.status_code == 200:
+            return r.json().get("gridSet")
+        if r.status_code in (400, 404) or "does not exist" in r.text:  # GeoServer Cloud's REST service answers 500
+            return None
+        raise GeoServerError("GET", f"gwc/gridsets/{name}", r.status_code, r.text)
+
+    def put_gridset(self, name: str, epsg: int, extent: list[float], resolutions: list[float], tile_size: int,
+                    align_top_left: bool, meters_per_unit: float) -> None:
+        doubles = lambda values: "".join(f"<double>{v}</double>" for v in values)
+        xml = (f"<gridSet><name>{escape(name)}</name><srs><number>{epsg}</number></srs>"
+               f"<extent><coords>{doubles(extent)}</coords></extent><alignTopLeft>{str(align_top_left).lower()}</alignTopLeft>"
+               f"<resolutions>{doubles(resolutions)}</resolutions><metersPerUnit>{meters_per_unit}</metersPerUnit>"
+               f"<pixelSize>2.8E-4</pixelSize><tileHeight>{tile_size}</tileHeight><tileWidth>{tile_size}</tileWidth>"
+               "<yCoordinateFirst>false</yCoordinateFirst></gridSet>")
+        r = self.gwc_request("PUT", f"gridsets/{q(name)}.xml", xml)
+        if r.status_code not in (200, 201):
+            raise GeoServerError("PUT", f"gwc/gridsets/{name}", r.status_code, r.text)
 
     def truncate(self, name: str) -> None:
         """Throw away `name`'s cached tiles, so they are drawn again from the new data."""

@@ -70,7 +70,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | **Dimensions:** time, elevation | Yes | `dimensions` |
 | Custom dimensions | Not yet | |
 | **Tile caching:** on or off, gridsets, image formats | Yes | `cache:` |
-| Metatiling, gutter, expiry, parameter filters | Not yet | |
+| Metatiling, gutter, expiry | Yes | `cache: { metaTiles, gutter, expireCache, expireClients }` |
+| Parameter filters | Not yet | GeoWebCache adds the STYLES one by itself |
 | **Security:** who may read, write, administer | Yes | `AccessRule` with `layer:` |
 
 ### Layer groups
@@ -128,8 +129,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | Tile layers | Yes | Each layer's and group's `cache:` |
 | Caching defaults | Not yet | |
-| Gridsets (your own) | Not yet | |
-| Disk quota | Not yet | |
+| Gridsets (your own) | Yes | `Gridset`, e.g. British National Grid |
+| Disk quota | Can't | `/gwc/rest/diskquota` answers 404 in GeoServer Cloud |
 | Blob stores (S3, Azure, Google Cloud Storage) | Not yet | |
 | Seeding, truncating | Partly | Cached tiles are cleared after each load; seeding isn't built |
 

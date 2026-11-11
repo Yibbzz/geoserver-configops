@@ -30,7 +30,8 @@
         "User",
         "AccessRule",
         "Store",
-        "Workspace"
+        "Workspace",
+        "Gridset"
       ]
     },
     "metadata": {
@@ -394,6 +395,22 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Gridset"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/gridset"
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -717,6 +734,28 @@
                     "type": "string"
                   },
                   "minItems": 1
+                },
+                "metaTiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "[columns, rows] of tiles drawn at once"
+                },
+                "gutter": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "expireCache": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "expireClients": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               }
             }
@@ -1033,7 +1072,53 @@
           "$ref": "#/$defs/keywords"
         },
         "cache": {
-          "type": "boolean"
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "gridsets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "formats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "metaTiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "[columns, rows] of tiles drawn at once"
+                },
+                "gutter": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "expireCache": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "expireClients": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          ]
         },
         "enabled": {
           "type": "boolean"
@@ -1839,6 +1924,54 @@
         },
         "default": {
           "type": "boolean"
+        }
+      }
+    },
+    "gridset": {
+      "type": "object",
+      "required": [
+        "crs",
+        "extent",
+        "resolutions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "crs": {
+          "type": "string",
+          "pattern": "^EPSG:[0-9]+$"
+        },
+        "extent": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[minx, miny, maxx, maxy] in the CRS"
+        },
+        "resolutions": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 1,
+          "description": "units per pixel, biggest first"
+        },
+        "tileSize": {
+          "type": "integer",
+          "minimum": 16
+        },
+        "alignTopLeft": {
+          "type": "boolean"
+        },
+        "metersPerUnit": {
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       }
     }
