@@ -172,6 +172,26 @@ def test_groups_leave_out_layers_that_cant_be_published(project, tables):
     assert changes[1].note == "none of its layers can be published yet"
 
 
+def test_apply_succeeds_when_only_your_own_tables_are_missing(project, tables, monkeypatch, capsys):
+    """plan exits 1 so CI notices; apply does what it can and exits 0, since you load these tables yourself."""
+    from gisdata import plan as plan_module
+
+    tables.discard(("field", "sites"))
+    gs = converged()  # as apply leaves it: everything but what waits for field.sites
+    del gs.layers[("uk", "sites")], gs.groups[("uk", "inner")]
+    base = gs.groups[("uk", "base")]["layerGroup"]
+    base["publishables"]["published"], base["styles"]["style"] = [{"@type": "layer", "name": "uk:road_links"}], [{"name": "line"}]
+
+    class Conn:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(plan_module, "connect", lambda root, url, wait: (load(root), gs, Conn(), ingest.Database("h", 5432, "d", "u", "p")))
+    assert plan_module.run(project) == 1
+    assert plan_module.run(project, apply=True) == 0
+    assert "Left for later: the layers marked ! wait for tables you load yourself" in capsys.readouterr().out
+
+
 def test_converged_means_no_changes(project, tables, capsys):
     assert plan(project, converged()) == []
     print_plan([])
