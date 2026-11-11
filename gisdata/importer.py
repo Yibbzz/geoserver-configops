@@ -92,6 +92,7 @@ class Importer:
         self.store_resources: dict[str, dict] = {}  # GeoServer store name -> Store resource, for stores that aren't the JNDI PostGIS
         self.secrets: list[str] = []  # Secrets the imported stores name
         self.global_styles: dict[str, tuple[str, str]] = {}  # global style name -> (suffix, text)
+        self.legends: dict[str, dict] = {}  # workspace style name -> its legend graphic
 
     def style(self, ref: str | None) -> str | None:
         """A live style reference as the files write it, or None if it can't be."""
@@ -194,6 +195,30 @@ class Importer:
                     return store, next(iter(found.values()))
         return None, {}
 
+    def sql_layer(self, gs_name: str, layer: dict, ft: dict, schema: str, view: dict) -> dict:
+        """A SQL view, as a Layer with sql:."""
+        name, explicit = resource_name(gs_name)
+        self.names[gs_name] = name
+        spec: dict = {"name": explicit} if explicit else {}
+        if self.ws != self.project_ws:
+            spec["workspace"] = self.ws
+        sql: dict = {"schema": schema, "query": str(view.get("sql", "")).strip()}
+        if view.get("keyColumn"):
+            sql["key"] = view["keyColumn"]
+        geometry = view.get("geometry")
+        if geometry:
+            sql["geometry"] = {"column": geometry["name"], "type": geometry.get("type", "Geometry"), "crs": f"EPSG:{geometry.get('srid', 4326)}"}
+        spec["sql"] = sql
+        if ft.get("title") and ft["title"] != gs_name:
+            spec["title"] = ft["title"]
+        if ft.get("abstract"):
+            spec["abstract"] = ft["abstract"]
+        style = self.style((layer.get("defaultStyle") or {}).get("name"))
+        if style and style not in BUILT_IN_STYLES:
+            spec["style"] = style
+        spec.update(details.to_spec(ft, layer))
+        return resource("Layer", name, spec)
+
     def store_layer(self, gs_name: str, layer: dict, store: str, item: dict) -> dict:
         name, explicit = resource_name(gs_name)
         self.names[gs_name] = name
@@ -247,6 +272,11 @@ class Importer:
                 continue  # its store was left out, with a note
             ft = self.gs.featuretype(self.ws, store, gs_name)["featureType"]
             schema, table = stores.get(store, {}).get("schema") or "public", ft["nativeName"]
+            view = next((e.get("virtualTable") for e in as_list((ft.get("metadata") or {}).get("entry"))
+                         if isinstance(e, dict) and e.get("@key") == "JDBC_VIRTUAL_TABLE"), None)
+            if view:
+                out.append(self.sql_layer(gs_name, layer, ft, schema, view))
+                continue
             if not TABLE_NAME.match(table) or not TABLE_NAME.match(schema):
                 self.notes.append(f"layer {gs_name}: table {schema}.{table} isn't a name the files allow (lowercase); left out")
                 continue
@@ -285,6 +315,9 @@ class Importer:
             cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
             if cache:
                 spec["cache"] = cache
+            native = (ft.get("nativeCRS") or {}).get("$") if isinstance(ft.get("nativeCRS"), dict) else None
+            if ft.get("projectionPolicy") == "FORCE_DECLARED" and ft.get("srs") and ft["srs"] not in (native or ""):
+                spec["crs"] = ft["srs"]
             spec.update(details.to_spec(ft, layer))
             out.append(resource("Layer", name, spec))
         return out
@@ -382,10 +415,21 @@ class Importer:
                 self.notes.append(f"style {name}: format {info.get('format')} isn't supported; left out")
                 continue
             self.styles[name] = (suffix, self.gs.style_body(name, self.ws))
+            legend = info.get("legend") or {}
+            if legend.get("onlineResource"):
+                self.legends[name] = {"url": legend["onlineResource"], "width": legend.get("width", 20),
+                                      "height": legend.get("height", 20), "format": legend.get("format", "image/png")}
+
+
+class Dumper(yaml.SafeDumper):
+    """Writes text with line breaks (a SQL view's query) as a | block."""
+
+
+Dumper.add_representer(str, lambda d, text: d.represent_scalar("tag:yaml.org,2002:str", text, style="|" if "\n" in text else None))
 
 
 def dump(resources: list[dict]) -> str:
-    return "\n---\n".join(yaml.safe_dump(r, sort_keys=False, allow_unicode=True, width=120).rstrip() for r in resources) + "\n"
+    return "\n---\n".join(yaml.dump(r, Dumper=Dumper, sort_keys=False, allow_unicode=True, width=120).rstrip() for r in resources) + "\n"
 
 
 def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: bool = False,
@@ -437,6 +481,9 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             for name, (suffix, text) in imp.global_styles.items():  # not in styles/ itself, which holds the workspace's
                 files[target / "styles" / "global" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
                 styles.append(resource("Style", resource_name(name)[0], {"file": f"styles/global/{name}{suffix}", "global": True}))
+            for name, legend in imp.legends.items():  # a legend graphic needs the style named, with its file
+                suffix = imp.styles[name][0]
+                styles.append(resource("Style", name, {"file": f"styles/{name}{suffix}", "legend": legend}))
             files[target / f"{ws}.yaml"] = dump(imp.workspace() + list(imp.store_resources.values()) + layers + groups + styles
                                                 + imp.gridsets(layers + groups))
             for name, (suffix, text) in imp.styles.items():

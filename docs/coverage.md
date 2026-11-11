@@ -51,13 +51,13 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | **Data:** name, title, abstract, keywords | Yes | |
 | Enabled, advertised | Yes | |
-| Declared CRS | Partly | The project's `crs`, forced on every layer; not per layer |
+| Declared CRS | Yes | `crs`, forced on the layer |
 | Bounding boxes | Yes | Worked out from the data on every apply and after every load |
 | Metadata links | Yes | `metadataLinks` |
 | Data links | Not yet | |
 | Restrict features (CQL filter) | Yes | `filter` |
-| Attributes shown | Not yet | |
-| SQL views | Not yet | |
+| Attributes shown | Partly | `attributes`; `import` doesn't write them (REST can't tell a narrowed list from the full one) |
+| SQL views | Yes | `sql: { schema, query, key, geometry }` |
 | Raster band and coverage parameters | Not yet | GeoServer works them out from the file |
 | **Publishing:** default style, other styles | Yes | |
 | Queryable | Yes | |
@@ -93,7 +93,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | SLD, CSS, MBStyle files | Yes | Files in `styles/`, uploaded as written |
 | Workspace styles | Yes | |
 | Global styles | Yes | `Style` `global: true`; GeoServer's built-in ones are used without defining them |
-| Legend graphic | Not yet | |
+| Legend graphic | Yes | `Style` `legend` |
 
 ### Loading data
 

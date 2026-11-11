@@ -387,6 +387,11 @@ def check_stores(project: Project) -> list[Problem]:
         for key in ("dataset", "table"):
             if key in layer.spec:
                 problems.append(Problem(layer.file, layer.line(("spec", key)), f"spec.{key}: a layer on a store doesn't take a {key}", layer.label))
+    for layer in project.of_kind("Layer"):
+        if "sql" in layer.spec:
+            for key in ("dataset", "table", "store"):
+                if key in layer.spec:
+                    problems.append(Problem(layer.file, layer.line(("spec", key)), f"spec.{key}: a SQL view doesn't take a {key}", layer.label))
     return problems
 
 

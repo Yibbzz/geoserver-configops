@@ -98,6 +98,29 @@ def set_cache(gs: GeoServer, name: str, wanted: dict | bool) -> None:
         gs.delete_tile_layer(name)
 
 
+def is_geometry(attribute: dict) -> bool:
+    return str(attribute.get("binding", "")).startswith("org.locationtech.jts.geom.")
+
+
+def virtual_table(name: str, sql: dict) -> dict:
+    """A Layer's sql: as GeoServer's virtual table."""
+    view = {"name": name, "sql": sql["query"].strip(), "escapeSql": False}
+    if sql.get("key"):
+        view["keyColumn"] = sql["key"]
+    geometry = sql.get("geometry")
+    if geometry:
+        view["geometry"] = {"name": geometry["column"], "type": geometry.get("type", "Geometry"),
+                            "srid": int(str(geometry.get("crs", "EPSG:4326")).split(":")[-1])}
+    return view
+
+
+def sql_fields(view: dict) -> dict:
+    """What's compared of a virtual table: GeoServer adds a newline to the query."""
+    geometry = view.get("geometry") or {}
+    return {"query": " ".join(str(view.get("sql", "")).split()), "key": view.get("keyColumn"),
+            "geometry": [geometry.get("name"), geometry.get("type"), geometry.get("srid")] if geometry else None}
+
+
 def diff(pairs: list[tuple[str, object, object]]) -> list[tuple[str, object, object]]:
     return [(name, live, wanted) for name, live, wanted in pairs if live != wanted]
 
@@ -141,7 +164,9 @@ class Planner:
         return f"{ws}:{name}" if ws else name  # a global style is named without a workspace
 
     def table_of(self, layer: Resource) -> tuple[str, str, str | None]:
-        """(schema, table, dataset) a layer publishes."""
+        """(schema, table, dataset) a layer publishes; a SQL view is named after the layer."""
+        if "sql" in layer.spec:
+            return layer.spec["sql"]["schema"], geoserver_name(layer), None
         table = layer.spec["table"]
         if isinstance(table, dict):
             return table["schema"], table["name"], None
@@ -206,10 +231,24 @@ class Planner:
                 self.add("~", "store", f"{ws}:{schema}", changed, run=run)
 
     def plan_styles(self) -> None:
+        resources = self.files.named("Style")
         for name, (path, ws) in self.styles.items():
             text = path.read_text(encoding="utf-8")
             live = self.gs.style_body(name, ws)
-            run = (lambda name=name, text=text, suffix=path.suffix, ws=ws: self.gs.upsert_style(name, text, suffix, ws))
+            legend = (resources[name].spec.get("legend") if name in resources else None)
+            wanted_legend = {"onlineResource": legend["url"], "width": legend.get("width", 20), "height": legend.get("height", 20),
+                             "format": legend.get("format", "image/png")} if legend else None
+
+            def run(name=name, text=text, suffix=path.suffix, ws=ws, wanted_legend=wanted_legend):
+                self.gs.upsert_style(name, text, suffix, ws)
+                if wanted_legend:
+                    self.gs.request("PUT", self.gs.style_path(name, ws)[0], {"style": {"legend": wanted_legend}})
+            if live is not None and wanted_legend:
+                have = ((self.gs.style(name, ws) or {}).get("style") or {}).get("legend") or {}
+                have = {k: have.get(k) for k in wanted_legend}
+                if have != wanted_legend:
+                    self.add("~", "style", f"{ws}:{name}" if ws else f"{name} (global)", [("legend", have, wanted_legend)], run=run)
+                    continue
             target = f"{ws}:{name}" if ws else f"{name} (global)"
             if live is None:
                 self.add("+", "style", target, note=str(path.relative_to(self.root)), run=run)
@@ -267,7 +306,8 @@ class Planner:
             ws, name, spec = self.workspace_of(layer), geoserver_name(layer), layer.spec
             schema, table, dataset = self.table_of(layer)
             target = f"{ws}:{name}"
-            if not ingest.tables_exist(self.conn, schema, [table]):
+            view = virtual_table(name, spec["sql"]) if "sql" in spec else None
+            if view is None and not ingest.tables_exist(self.conn, schema, [table]):
                 if dataset is None:
                     self.add("!", "layer", target, note=f"table {schema}.{table} doesn't exist; gisdata only publishes it")
                     self.unpublished.add(layer.name)
@@ -282,15 +322,25 @@ class Planner:
                          ("nativeName", table)]
             if "abstract" in spec:
                 wanted_ft.append(("abstract", spec["abstract"]))
-            wanted_layer, settings = self.layer_settings(
-                layer, (f"workspaces/{ws}/datastores/{schema}/featuretypes/{name}", "featureType"))
+            if "crs" in spec:
+                wanted_ft.append(("crs", spec["crs"]))
+            if view:
+                wanted_ft.append(("sql", sql_fields(view)))
+            if "attributes" in spec:
+                wanted_ft.append(("attributes", list(spec["attributes"])))
+            ft_path = f"workspaces/{ws}/datastores/{schema}/featuretypes/{name}"
+            wanted_layer, settings = self.layer_settings(layer, (ft_path, "featureType"))
 
-            def run(ws=ws, name=name, schema=schema, table=table, spec=spec, title=title, settings=settings, old_store=None):
+            def run(ws=ws, name=name, schema=schema, table=table, spec=spec, title=title, settings=settings, view=view,
+                    ft_path=ft_path, old_store=None):
                 if old_store and old_store != schema:
                     self.gs.delete_featuretype(ws, old_store, name)
+                extra = {"metadata": {"entry": {"@key": "JDBC_VIRTUAL_TABLE", "virtualTable": view}}} if view else None
                 self.gs.upsert_featuretype(ws, schema, name, table, title=title, abstract=spec.get("abstract"),
                                            keywords=spec.get("keywords"), enabled=spec.get("enabled", True),
-                                           advertised=spec.get("advertised", True))
+                                           advertised=spec.get("advertised", True), srs=spec.get("crs"), extra=extra)
+                if "attributes" in spec:
+                    self.set_attributes(ft_path, spec["attributes"])
                 settings()
 
             live_layer = self.gs.layer(ws, name)
@@ -299,9 +349,14 @@ class Planner:
                 continue
             store = self.store_of(live_layer)
             ft = (self.gs.featuretype(ws, store, name) or {}).get("featureType", {}) if store else {}
+            live_view = next((e.get("virtualTable") for e in as_list((ft.get("metadata") or {}).get("entry"))
+                              if isinstance(e, dict) and e.get("@key") == "JDBC_VIRTUAL_TABLE"), None)
             current = {
                 "title": ft.get("title"), "enabled": ft.get("enabled", True), "advertised": ft.get("advertised", True),
                 "nativeName": ft.get("nativeName"), "abstract": ft.get("abstract"),
+                "crs": ft.get("srs") if ft.get("projectionPolicy") == "FORCE_DECLARED" else None,
+                "sql": sql_fields(live_view) if live_view else None,
+                "attributes": [a["name"] for a in as_list((ft.get("attributes") or {}).get("attribute")) if not is_geometry(a)],
                 **self.live_layer_settings(layer, live_layer, ft),
             }
             changed = diff([(k, current[k], v) for k, v in wanted_ft + wanted_layer])
@@ -311,6 +366,14 @@ class Planner:
                 changed.append(("store", store, schema))
             if changed:
                 self.add("~", "layer", target, changed, run=lambda run=run, store=store: run(old_store=store))
+
+    def set_attributes(self, path: str, names: list[str]) -> None:
+        """Publish only these attributes, and the geometry: clearing the list makes GeoServer list them all again."""
+        self.gs.request("PUT", path, {"featureType": {"attributes": {"attribute": []}}})
+        every = as_list(((self.gs.get(path) or {}).get("featureType") or {}).get("attributes", {}).get("attribute"))
+        kept = [a for a in every if is_geometry(a) or a["name"] in names]
+        kept.sort(key=lambda a: names.index(a["name"]) if a["name"] in names else -1)  # geometry first, then the files' order
+        self.gs.request("PUT", path, {"featureType": {"attributes": {"attribute": kept}}})
 
     @staticmethod
     def store_of(live_layer: dict) -> str | None:

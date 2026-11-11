@@ -979,6 +979,68 @@
           "type": "integer",
           "minimum": 0,
           "description": "rendering buffer in pixels"
+        },
+        "sql": {
+          "type": "object",
+          "required": [
+            "schema",
+            "query"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "schema": {
+              "$ref": "#/$defs/tableName"
+            },
+            "query": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "geometry": {
+              "type": "object",
+              "required": [
+                "column"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "column": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": {
+                  "enum": [
+                    "Geometry",
+                    "Point",
+                    "LineString",
+                    "Polygon",
+                    "MultiPoint",
+                    "MultiLineString",
+                    "MultiPolygon",
+                    "GeometryCollection"
+                  ]
+                },
+                "crs": {
+                  "$ref": "#/$defs/crs"
+                }
+              }
+            }
+          },
+          "description": "a SQL view: the query's rows published as a layer"
+        },
+        "crs": {
+          "$ref": "#/$defs/crs"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "the attributes to publish (the geometry always is)"
         }
       },
       "if": {
@@ -1010,9 +1072,14 @@
           "required": [
             "store"
           ]
+        },
+        {
+          "required": [
+            "sql"
+          ]
         }
       ],
-      "description": "a table (with or without dataset), or store"
+      "description": "a table (with or without dataset), a store, or sql"
     },
     "layerGroup": {
       "type": "object",
@@ -1174,6 +1241,31 @@
         "global": {
           "type": "boolean",
           "description": "a global style, in no workspace"
+        },
+        "legend": {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "format": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },

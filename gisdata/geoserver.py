@@ -180,7 +180,7 @@ class GeoServer:
 
     def upsert_featuretype(self, ws: str, store: str, name: str, table: str, title: str | None = None,
                            abstract: str | None = None, keywords: list[str] | None = None, srs: str | None = None,
-                           enabled: bool = True, advertised: bool = True) -> str:
+                           enabled: bool = True, advertised: bool = True, extra: dict | None = None) -> str:
         """
         Publish `table` as `name`. GeoServer works out the attributes, and the
         bounding boxes are recalculated from the data each time.
@@ -193,6 +193,7 @@ class GeoServer:
         if srs:
             ft["srs"] = srs
             ft["projectionPolicy"] = "FORCE_DECLARED"
+        ft.update(extra or {})
         path = f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}"
         result = self.upsert(path, f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes", {"featureType": ft})
         self.recalculate(ws, store, name)
