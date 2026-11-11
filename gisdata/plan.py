@@ -100,6 +100,7 @@ class Planner:
         self.styles = self.style_files()
         self.changes: list[Change] = []
         self.synced: set[str] = set()
+        self.unpublished: set[str] = set()  # layers and groups that can't be published yet ("!")
 
     # --- what the files say
 
@@ -199,6 +200,7 @@ class Planner:
             if not ingest.tables_exist(self.conn, schema, [table]):
                 if dataset is None:
                     self.add("!", "layer", target, note=f"table {schema}.{table} doesn't exist; gisdata only publishes it")
+                    self.unpublished.add(layer.name)
                     continue
                 if dataset not in self.synced:
                     self.synced.add(dataset)
@@ -275,8 +277,14 @@ class Planner:
         for name in self.group_order():
             group = self.groups[name]
             ws, gs_name, spec = self.workspace_of(group), geoserver_name(group), group.spec
+            # Members that can't be published yet are left out: GeoServer drops them anyway, and
+            # asking for them would show the group as changed on every plan.
             entries = [(self.published(member), entry.get("style") if isinstance(entry, dict) else None)
-                       for (_, member), entry in zip(members(group), spec["layers"])]
+                       for (_, member), entry in zip(members(group), spec["layers"]) if member not in self.unpublished]
+            if not entries:
+                self.add("!", "group", f"{ws}:{gs_name}", note="none of its layers can be published yet")
+                self.unpublished.add(name)
+                continue
             cache = wanted_cache(spec.get("cache"))
             wanted = [("title", spec.get("title") or gs_name), ("mode", GROUP_MODES[spec.get("mode", "single")]),
                       ("layers", [n for (_, n), _ in entries]), ("styles", [self.style_ref(s) for _, s in entries]),
