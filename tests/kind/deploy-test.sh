@@ -50,6 +50,7 @@ kubectl -n "$NS" apply -f tests/kind/smoke-files.yaml   # the smoke project's da
 
 echo "Installing the chart (pulls about 7 GB of images on first run)..."
 helm upgrade --install "$RELEASE" . -n "$NS" -f values.yaml -f tests/kind/values-kind.yaml \
+  -f values-data-volume.yaml -f values-app-schema.yaml --set dataVolume.size=2Gi \
   --set configops.project=examples/smoke \
   --set configops.image.repository=configops --set configops.image.tag=kind --set configops.image.pullPolicy=Never \
   --wait --timeout 25m
@@ -102,7 +103,11 @@ fi
 kubectl -n "$NS" logs job/drift-now
 
 echo "== e2e tests (pytest -m e2e) against the deployment"
-E2E_GEOSERVER_URL=$BASE/rest E2E_DB_HOST=localhost E2E_DB_PORT=15432 E2E_DB_PASSWORD="$PG_PASS" E2E_DB_HOST_IN_GEOSERVER="$RELEASE-postgresql" \
+# The whole chart is here: the tests also check WMS, WFS, WCS and the tile cache (E2E_SERVICES_URL), and put
+# their files on the data volume through the REST service's pod (E2E_DATA_POD)
+REST_POD=$(kubectl -n "$NS" get pod -l app.kubernetes.io/component=rest -o jsonpath='{.items[0].metadata.name}')
+E2E_GEOSERVER_URL=$BASE/rest E2E_SERVICES_URL=$BASE E2E_DATA_POD="$NS/$REST_POD" \
+E2E_DB_HOST=localhost E2E_DB_PORT=15432 E2E_DB_PASSWORD="$PG_PASS" E2E_DB_HOST_IN_GEOSERVER="$RELEASE-postgresql" \
   python3 -m pytest -m e2e -v -p no:cacheprovider
 
 echo "All deployment checks passed."

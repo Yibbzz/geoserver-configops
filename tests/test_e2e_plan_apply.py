@@ -100,7 +100,7 @@ spec: {{ source: web, url: "{served}", tables: {{ areas: {{ name: e2e_areas }} }
 apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: areas }}
-spec: {{ dataset: e2e-areas, table: areas, title: Areas, style: areas, attribution: Test data, cache: {{ gridsets: [EPSG:900913] }} }}
+spec: {{ dataset: e2e-areas, table: areas, title: Areas, style: areas, attribution: Test data, cache: {{ gridsets: [EPSG:900913], seed: {{ zoom: [0, 3] }} }} }}
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -171,7 +171,26 @@ def test_apply_from_nothing_then_nothing_to_do(project, gs, capsys):
 def test_sync_refreshes_geoserver_after_a_load(project, capsys):
     code, out = configops(capsys, "sync", "-C", str(project), "e2e-areas", "--force")
     assert code == 0, out
-    assert "GeoServer: bounds of 1 layer(s) worked out again, cached tiles of 1 layer(s) or group(s) cleared" in out
+    assert "GeoServer: bounds of 1 layer(s) worked out again, cached tiles of 1 layer(s) or group(s) cleared; seeding 1 again" in out
+
+
+def test_tiles_are_seeded_again_after_a_load(project, gs, capsys):
+    """After the load clears the tiles, the seed the file asks for runs again; with the tile cache service, a tile is there."""
+    import time
+
+    import requests
+
+    assert configops(capsys, "sync", "-C", str(project), "e2e-areas", "--force")[0] == 0
+    end = time.time() + 120
+    while gs.gwc_request("GET", f"seed/{WS}:areas.json").json().get("long-array-array") and time.time() < end:
+        time.sleep(2)
+    assert gs.gwc_request("GET", f"seed/{WS}:areas.json").json().get("long-array-array") == []  # finished
+    services = os.environ.get("E2E_SERVICES_URL")
+    if services:
+        tile = requests.get(f"{services}/gwc/service/wmts", timeout=60, params={
+            "SERVICE": "WMTS", "REQUEST": "GetTile", "VERSION": "1.0.0", "LAYER": f"{WS}:areas", "STYLE": "",
+            "TILEMATRIXSET": "EPSG:900913", "TILEMATRIX": "EPSG:900913:0", "TILEROW": 0, "TILECOL": 0, "FORMAT": "image/png"})
+        assert tile.headers.get("geowebcache-cache-result") == "HIT", tile.headers
 
 
 def test_drift_is_shown_and_put_back(project, gs, capsys):

@@ -3,8 +3,9 @@ GeoPackage, Shapefile, a directory of shapefiles, FlatGeobuf, PMTiles, GeoParque
 CSV, GeoTIFF, ArcGrid, an image mosaic and an image pyramid; then import and a clean plan.
 
 tests/e2e/up.sh mounts tests/e2e/data at /data in the REST service, as the chart's
-values-data-volume.yaml does. The test writes its files there with GDAL, so it needs
-ogr2ogr and gdal_translate, and E2E_DATA_DIR set to that directory:
+values-data-volume.yaml does. The test makes its files with GDAL (ogr2ogr, gdal_translate,
+gdal_retile.py) and puts them there: E2E_DATA_DIR is that folder, or E2E_DATA_POD a GeoServer
+pod that mounts the volume. With E2E_SERVICES_URL (the gateway), each layer is drawn through WMS.
 
     E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data pytest -m e2e
 """
@@ -16,6 +17,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import requests
 
 from configops.cli import main
 from configops.geoserver import GeoServer
@@ -23,9 +25,9 @@ from configops.geoserver import GeoServer
 pytestmark = pytest.mark.e2e
 
 URL = os.environ.get("E2E_GEOSERVER_URL")
-DATA = os.environ.get("E2E_DATA_DIR")
-if not URL or not DATA:
-    pytest.skip("E2E_GEOSERVER_URL or E2E_DATA_DIR not set", allow_module_level=True)
+SERVICES = os.environ.get("E2E_SERVICES_URL")
+if not URL:
+    pytest.skip("E2E_GEOSERVER_URL not set", allow_module_level=True)
 if shutil.which("ogr2ogr") is None or shutil.which("gdal_translate") is None or shutil.which("gdal_retile.py") is None:
     pytest.skip("GDAL's ogr2ogr, gdal_translate and gdal_retile.py not installed", allow_module_level=True)
 
@@ -37,7 +39,7 @@ STORES = [("sites-gpkg", "geopackage", "e2e/sites.gpkg"), ("sites-shp", "shapefi
           ("sites-pmtiles", "pmtiles", "e2e/sites.pmtiles"), ("dem", "geotiff", "e2e/dem.tif"),
           ("dem-grid", "arcgrid", "e2e/dem.asc"), ("dem-mosaic", "imagemosaic", "e2e/mosaic"),
           ("sites-parquet", "geoparquet", "e2e/sites.parquet"), ("sites-props", "property", "e2e/props"),
-          ("places-csv", "csv", "e2e/places.csv", "connection: { strategy: LatLon, latField: lat, lngField: lon }"),
+          ("places-csv", "csv", "e2e/places.csv", "connection: { strategy: specify, latField: lat, lngField: lon }"),
           ("dem-pyramid", "imagepyramid", "e2e/pyramid")]
 FIXTURES = Path(__file__).parent / "e2e" / "fixtures"
 
@@ -47,9 +49,8 @@ def run(*cmd):
 
 
 @pytest.fixture(scope="module")
-def files():
-    root = Path(DATA) / "e2e"
-    shutil.rmtree(root, ignore_errors=True)
+def files(data_volume, tmp_path_factory):
+    root = tmp_path_factory.mktemp("files") / "e2e"
     (root / "shp").mkdir(parents=True)
     (root / "mosaic").mkdir()
     (root / "props").mkdir()
@@ -74,10 +75,9 @@ def files():
     (root / "pyramid" / "0").mkdir()
     for tile in (root / "pyramid").glob("*.tif"):
         tile.rename(root / "pyramid" / "0" / tile.name)
-    for p in root.rglob("*"):
-        p.chmod(0o777 if p.is_dir() else 0o666)  # GeoServer writes a mosaic's index next to its files
+    data_volume.put(root, "e2e")
     yield root
-    shutil.rmtree(root, ignore_errors=True)
+    data_volume.remove("e2e")
 
 
 @pytest.fixture(scope="module")
@@ -132,6 +132,17 @@ def test_every_file_store_then_nothing_to_do(gs, project, capsys):
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     assert gs.get(f"workspaces/{WS}/coveragestores/dem_mosaic/coverages/dem_mosaic")["coverage"]["srs"] == "EPSG:27700"
     assert gs.layer(WS, "sites_gpkg")["layer"]["defaultStyle"]["name"] == "point"
+
+
+@pytest.mark.skipif(not SERVICES, reason="E2E_SERVICES_URL not set: no WMS to draw with")
+def test_every_layer_draws(gs, project, capsys):
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    for name, *_ in STORES:
+        layer = name.replace("-", "_")
+        r = requests.get(f"{SERVICES}/{WS}/wms", timeout=120, params={
+            "service": "WMS", "version": "1.1.1", "request": "GetMap", "layers": layer, "styles": "", "srs": "EPSG:4326",
+            "bbox": "-180,-90,180,90", "width": 64, "height": 64, "format": "image/png"})
+        assert r.headers["content-type"] == "image/png", f"{layer}: {r.text[:300]}"
 
 
 def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):

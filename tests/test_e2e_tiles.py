@@ -167,3 +167,41 @@ def test_drift_and_import_round_trip(gs, project, tmp_path_factory, capsys, env)
     assert "kind: Gridset" in text and "metaTiles:" in text
     code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+
+
+@pytest.mark.skipif(not os.environ.get("E2E_REST_CONTAINER"), reason="E2E_REST_CONTAINER not set: can't restart GeoServer")
+def test_caching_defaults_apply_after_a_restart(gs, project, capsys):
+    """With cacheLayersByDefault off and GeoServer restarted, a new layer isn't cached by itself."""
+    import subprocess
+    import time
+
+    container = os.environ["E2E_REST_CONTAINER"]
+
+    def restart():
+        subprocess.run(["docker", "restart", container], check=True, capture_output=True)
+        end = time.time() + 300
+        while time.time() < end:
+            try:
+                if gs.request("GET", "about/version.json", ok=(200, 401, 403, 404, 502, 503)).status_code == 200:
+                    return
+            except Exception:
+                pass
+            time.sleep(5)
+        raise AssertionError("GeoServer didn't come back")
+
+    saved = gs.request("GET", "resource/gwc-gs.xml").text
+    sql("CREATE TABLE IF NOT EXISTS e2e_tiles.later (id serial PRIMARY KEY, geom geometry(Point, 27700))")
+    try:
+        (project / "settings.yaml").write_text("""\
+apiVersion: configops/v1alpha1
+kind: Settings
+metadata: { name: global }
+spec: { global: { tileCaching: { cacheLayersByDefault: false } } }
+""")
+        assert configops(capsys, "apply", "-C", str(project))[0] == 0
+        restart()
+        gs.request("POST", f"workspaces/{WS}/datastores/e2e_tiles/featuretypes", {"featureType": {"name": "later", "nativeName": "later"}})
+        assert gs.tile_layer(f"{WS}:later") is None  # GeoServer made no cache for it
+    finally:
+        gs.request("PUT", "resource/gwc-gs.xml", saved, content_type="application/xml")
+        restart()

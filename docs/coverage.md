@@ -148,7 +148,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Settings (active role service, encryption) | Yes | `Settings` `global.security` |
 | Authentication: providers, filters, brute force prevention | Yes | `AuthProvider`, `AuthFilter`, `global.security.authProviders`, `bruteForcePrevention` |
 | Filter chains, role services | Yes | `global.security.filterChains`, `RoleService`: written as GeoServer's own files through `/rest/resource` |
-| Other user/group and role services (LDAP, JDBC) | Yes | `UserGroupService`, `RoleService` with their class; tested with GeoServer's XML services, not against LDAP |
+| Other user/group and role services (LDAP, JDBC) | Yes | `UserGroupService`, `RoleService`, `AuthProvider` with their class; tested: logins through an LDAP directory and a JDBC user database |
 | Master password | Yes | `Settings` `global.masterPassword` from a Secret; `import` doesn't write it |
 | Password policies | Yes | `PasswordPolicy` |
 | GeoServer ACL | Chart | Off in the chart (`geoserver.services.acl.enabled`) |

@@ -365,6 +365,11 @@ geoserver:
             <<: *geoserver-spring-livenessProbe
           readinessProbe:
             <<: *geoserver-spring-readinessProbe
+          resources:  # the REST service reads every store it makes (GeoParquet through DuckDB, outside the Java heap)
+            <<: *common-resources
+            limits:
+              memory: 1Gi
+              cpu: 4.0
           image:
             <<: *common-image-stuff
             repository: docker.io/geoservercloud/geoserver-cloud-rest

@@ -29,4 +29,5 @@ echo "GeoServer Cloud $GEOSERVER_TAG, $POSTGIS_IMAGE, $RABBITMQ_IMAGE"
 mkdir -p data  # made by Docker it would be root's, and the file store test couldn't write to it
 mkdir -p gcs/e2e-tiles  # the fake Google Cloud Storage starts with this bucket
 docker compose up -d --wait --wait-timeout 420 || { docker compose logs rest | tail -50; exit 1; }
+docker compose exec -T ldap ldapadd -x -c -H ldap://localhost -D cn=admin,dc=example,dc=org -w admin -f /e2e/users.ldif >/dev/null || true  # -c: already there is fine
 echo "REST API ready at http://localhost:${E2E_REST_PORT:-59090}/rest"

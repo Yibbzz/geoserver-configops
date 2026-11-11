@@ -102,6 +102,8 @@ jobs:
           E2E_DB_PORT: '55433'
           E2E_GWC_URL: http://localhost:59090/geoserver-cloud/gwc/rest  # REST service reached without its gateway
           E2E_DATA_DIR: tests/e2e/data  # mounted at /data in the REST service
+          E2E_LDAP_URL: ldap://ldap:389  # the directory up.sh starts, as GeoServer reaches it
+          E2E_REST_CONTAINER: gscloud-e2e-rest-1  # restarted by the caching defaults test
         run: pytest -m e2e -v
       - name: Logs on failure
         if: failure()
