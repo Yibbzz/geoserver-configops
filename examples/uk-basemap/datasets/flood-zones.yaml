@@ -1,13 +1,15 @@
-# Flood zones 2 and 3 (rivers and sea) from the Environment Agency's OGC API.
-# `gisdata discover ea-flood-map` lists the collection; the layer inside is
-# named after it, and loaded here as table flood_zones.
+# Flood zones 2 and 3 (rivers and sea): the Environment Agency's GeoPackage
+# download (about 1 GB) on data.gov.uk. `gisdata discover data-gov-uk
+# flood-map-for-planning-flood-zones1` shows the package; the layer inside is
+# loaded as table flood_zones. Not the EA's OGC API: paging 415k features
+# through it takes hours and its server drops pages (504s, broken connections).
 apiVersion: gisdata/v1alpha1
 kind: Dataset
 metadata:
   name: flood-zones
 spec:
-  source: ea-flood-map
-  product: Flood_Zones_2_3_Rivers_and_Sea
+  source: data-gov-uk
+  product: flood-map-for-planning-flood-zones1
   update: monthly
   tables:
     Flood_Zones_2_3_Rivers_and_Sea: { name: flood_zones }

@@ -426,6 +426,7 @@ Known gaps:
 
 - Some data needs fixing in flight: a shapefile with impossible dates (`0000/00/00`) has its date columns loaded as text, with a note.
 - Some WFS servers can't serve features in pages, and fail. The BGS geology service is one: it serves complex (GeoSciML) features and asks for a sort order.
+- WFS and OGC API Features suit small and medium layers. A large one is fetched page by page, each page slower than the last on servers that skip ahead by offset, and one failed page fails the load. The EA's flood zones (415k features) took hours over its OGC API and kept failing; its 1 GB file download loads in minutes. Use the file when there is one.
 - Private CKAN files, which need the API token on the file's own server, can't be downloaded yet.
 
 ### `plan` and `apply`
