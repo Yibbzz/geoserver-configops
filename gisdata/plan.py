@@ -28,7 +28,7 @@ from .sources import SourceError
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "settings", "service", "role", "user group", "user", "raster", "store", "style", "gridset", "table", "layer", "group", "rule"]
+ORDER = ["workspace", "settings", "service", "role", "user group", "user", "raster", "store", "style", "blobstore", "gridset", "table", "layer", "group", "rule"]
 DELETE_ORDER = ["rule", "user", "user group", "role", "group", "layer", "style", "store"]
 
 # Every kind of store a workspace can hold: (REST collection, JSON key)
@@ -64,7 +64,8 @@ def names_of(items) -> list[str]:
 
 
 # Tile cache options the files may set, beyond gridsets and formats: spec name -> GeoWebCache's
-CACHE_OPTIONS = {"metaTiles": "metaWidthHeight", "gutter": "gutter", "expireCache": "expireCache", "expireClients": "expireClients"}
+CACHE_OPTIONS = {"metaTiles": "metaWidthHeight", "gutter": "gutter", "expireCache": "expireCache", "expireClients": "expireClients",
+                 "blobStore": "blobStoreId"}
 
 
 def wanted_cache(setting) -> dict | bool:

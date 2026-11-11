@@ -293,9 +293,9 @@ class GeoServer:
 
     # --- tile cache (GeoWebCache). Its REST API reads JSON well but writes XML only.
 
-    def gwc_request(self, method: str, path: str, body: str | None = None) -> requests.Response:
+    def gwc_request(self, method: str, path: str, body: str | None = None, accept: str = "application/json") -> requests.Response:
         url = f"{self.gwc}/{path}"
-        headers = {"Accept": "application/json"}
+        headers = {"Accept": accept}
         if body is not None:
             headers["Content-Type"] = "text/xml"
         try:
@@ -325,6 +325,8 @@ class GeoServer:
         for key in ("gutter", "expireCache", "expireClients"):
             if key in options:
                 extra += f"<{key}>{int(options[key])}</{key}>"
+        if options.get("blobStore"):
+            extra += f"<blobStoreId>{escape(options['blobStore'])}</blobStoreId>"
         xml = (f"<GeoServerLayer><name>{escape(name)}</name><enabled>true</enabled>{extra}"
                f"<mimeFormats>{''.join(f'<string>{escape(f)}</string>' for f in formats)}</mimeFormats>"
                f"<gridSubsets>{''.join(f'<gridSubset><gridSetName>{escape(g)}</gridSetName></gridSubset>' for g in gridsets)}"

@@ -31,7 +31,8 @@
         "AccessRule",
         "Store",
         "Workspace",
-        "Gridset"
+        "Gridset",
+        "BlobStore"
       ]
     },
     "metadata": {
@@ -411,6 +412,22 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "BlobStore"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/blobStore"
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -756,6 +773,11 @@
                 "expireClients": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "blobStore": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "a BlobStore's name: where the tiles are kept"
                 }
               }
             }
@@ -1182,6 +1204,11 @@
                 "expireClients": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "blobStore": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "a BlobStore's name: where the tiles are kept"
                 }
               }
             }
@@ -2064,6 +2091,71 @@
         "metersPerUnit": {
           "type": "number",
           "exclusiveMinimum": 0
+        }
+      }
+    },
+    "blobStore": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "file",
+            "s3"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)\\S+$",
+          "description": "file: a folder under the data volume"
+        },
+        "blockSize": {
+          "type": "integer",
+          "minimum": 512
+        },
+        "bucket": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "region": {
+          "type": "string",
+          "minLength": 1
+        },
+        "access": {
+          "enum": [
+            "private",
+            "public-read"
+          ]
+        },
+        "maxConnections": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "gzip": {
+          "type": "boolean"
+        },
+        "credentials": {
+          "$ref": "#/$defs/secretRef"
         }
       }
     }

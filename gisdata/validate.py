@@ -47,6 +47,7 @@ def validate(project: Project) -> list[Problem]:
     problems += check_stores(project)
     problems += check_rasters(project)
     problems += check_workspaces_and_styles(project)
+    problems += check_blob_stores(project)
     return sorted(problems, key=lambda p: (str(p.file), p.line, p.severity, p.message))
 
 
@@ -115,7 +116,7 @@ def check_project(project: Project) -> list[Problem]:
     for extra in projects[1:]:
         problems.append(Problem(extra.file, extra.line(), "a second Project: every directory has exactly one", extra.label))
 
-    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store", "Workspace", "Gridset"):
+    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store", "Workspace", "Gridset", "BlobStore"):
         first: dict[str, Resource] = {}
         for r in project.of_kind(kind):
             if r.name in first and kind != "Project":
@@ -423,4 +424,25 @@ def check_workspaces_and_styles(project: Project) -> list[Problem]:
             problems.append(Problem(s.file, s.line(("spec", "workspace")), "spec.workspace: a global style is in no workspace", s.label))
         if s.name in BUILT_IN_STYLES:
             problems.append(Problem(s.file, s.line(), f"{s.name} is one of GeoServer's own styles: use it without defining it", s.label))
+    return problems
+
+
+def check_blob_stores(project: Project) -> list[Problem]:
+    """Each blob store has what its type needs, at most one is the default, and caches name ones that exist."""
+    problems = []
+    stores = {(b.spec.get("name") or b.name): b for b in project.of_kind("BlobStore")}
+    for b in project.of_kind("BlobStore"):
+        kind = b.spec.get("type")
+        if kind == "file" and not b.spec.get("path"):
+            problems.append(Problem(b.file, b.line(("spec",)), "spec.path: a file blob store needs a folder on the data volume, e.g. gwc", b.label))
+        if kind == "s3" and not b.spec.get("bucket"):
+            problems.append(Problem(b.file, b.line(("spec",)), "spec.bucket: an s3 blob store needs its bucket", b.label))
+    defaults = [b for b in project.of_kind("BlobStore") if b.spec.get("default")]
+    for b in defaults[1:]:
+        problems.append(Problem(b.file, b.line(("spec", "default")), f"spec.default: {defaults[0].label} is already the default", b.label))
+    for r in project.of_kind("Layer") + project.of_kind("LayerGroup"):
+        cache = r.spec.get("cache")
+        name = cache.get("blobStore") if isinstance(cache, dict) else None
+        if name and name not in stores:
+            problems.append(Problem(r.file, r.line(("spec", "cache", "blobStore")), f"spec.cache.blobStore: no BlobStore named {name!r}{known(stores)}", r.label))
     return problems

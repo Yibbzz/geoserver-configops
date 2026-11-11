@@ -259,7 +259,7 @@ spec:
 | `style` | no | GeoServer's default for the geometry | Default style |
 | `styles` | no | none | Extra styles |
 | `enabled`, `advertised`, `queryable` | no | `true` | Publishing switches |
-| `cache` | no | `false` | `true`, or `{ gridsets, formats, metaTiles: [w, h], gutter, expireCache, expireClients }`: the gridsets (GeoWebCache's own, or a `Gridset`), image formats, tiles drawn at once, pixels drawn around each tile, and how long (seconds) the cache and clients keep a tile. Only the options set are compared |
+| `cache` | no | `false` | `true`, or `{ gridsets, formats, metaTiles: [w, h], gutter, expireCache, expireClients }`: the gridsets (GeoWebCache's own, or a `Gridset`), image formats, tiles drawn at once, pixels drawn around each tile, how long (seconds) the cache and clients keep a tile, and `blobStore`: the `BlobStore` the tiles go in. Only the options set are compared |
 | `attribution` | no | from the dataset's source, where known | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026"; or `{ title, link, logo: { url, width, height, type } }` |
 | `filter` | no | none | A CQL filter: only these features are published, e.g. `"flood_zone = 'FZ3'"` |
 | `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …] }`: this layer's WFS settings |
@@ -454,6 +454,36 @@ spec:
 ```
 
 A layer's `cache.gridsets` names it. GeoWebCache's own gridsets are never compared or removed.
+
+### BlobStore
+
+Where GeoWebCache keeps tiles. By default each tile cache pod keeps them in its own temporary folder, lost on a restart and not shared; a blob store keeps them on the shared data volume or in S3:
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: BlobStore
+metadata:
+  name: tiles-on-volume
+spec:
+  type: file
+  path: gwc                                # under /data
+  default: true                            # GeoWebCache's default for every layer
+---
+apiVersion: gisdata/v1alpha1
+kind: BlobStore
+metadata:
+  name: tiles-in-s3
+spec:
+  type: s3
+  bucket: tiles
+  prefix: gscloud
+  endpoint: https://s3.eu-west-2.amazonaws.com   # any S3-compatible service; http:// turns HTTPS off
+  region: eu-west-2
+  access: private                          # or public-read
+  credentials: { secret: tiles-s3 }        # keys accessKey and secretKey; add the Secret to gisdata.secrets
+```
+
+A layer's `cache.blobStore` names one. `maxConnections` and `gzip` are there too. GeoWebCache gives the keys back as they are, so `plan` compares the secret key too, without printing it. Only the blob stores the files name are compared; none is removed.
 
 ### Workspace
 
