@@ -339,6 +339,14 @@ metadata:
 spec:
   file: styles/os/road-link-detailed.sld
   workspace: uk                       # default: the project's workspace
+---
+apiVersion: gisdata/v1alpha1
+kind: Style
+metadata:
+  name: house-colours
+spec:
+  file: styles/global/house-colours.sld   # not in styles/ itself, which holds the workspace's
+  global: true                        # a global style, in no workspace; layers name it without one
 ```
 
 Formats: SLD (`.sld`) and MBStyle (`.mbstyle`); CSS (`.css`) if the GeoServer images include it and the client gains support. Files are uploaded exactly as written, never re-encoded by GeoServer.
@@ -398,6 +406,8 @@ spec:
 | `workspace` | no | the project's `workspace` | |
 | `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents |
 | `cache` | no | `false` | Tile caching for the group as a whole |
+| `enabled`, `advertised` | no | `true` | An unadvertised group works but isn't listed in capabilities |
+| `metadataLinks` | no | none | As on a Layer |
 
 | `mode` | GeoServer mode | Clients see |
 | --- | --- | --- |
@@ -407,6 +417,23 @@ spec:
 | `opaque` | OPAQUE_CONTAINER | One layer; its members are hidden from capabilities |
 
 Not in the file, worked out on apply: the group's bounding box (from its members) and its projection.
+
+### Workspace
+
+Only needed for a workspace's own settings in the web UI's *Edit Workspace* page; workspaces are made for you wherever a resource names one.
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: Workspace
+metadata:
+  name: uk
+spec:
+  namespace: https://example.org/uk   # the namespace URI; GeoServer's default is http://<name>
+  isolated: false                     # an isolated workspace is only reached through its own services
+  default: true                       # the default workspace
+```
+
+A Workspace resource makes its workspace the project's, as if a layer were in it. At most one is the default.
 
 ### Settings
 

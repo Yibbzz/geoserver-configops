@@ -46,6 +46,7 @@ def validate(project: Project) -> list[Problem]:
     problems += check_security(project)
     problems += check_stores(project)
     problems += check_rasters(project)
+    problems += check_workspaces_and_styles(project)
     return sorted(problems, key=lambda p: (str(p.file), p.line, p.severity, p.message))
 
 
@@ -114,7 +115,7 @@ def check_project(project: Project) -> list[Problem]:
     for extra in projects[1:]:
         problems.append(Problem(extra.file, extra.line(), "a second Project: every directory has exactly one", extra.label))
 
-    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store"):
+    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store", "Workspace"):
         first: dict[str, Resource] = {}
         for r in project.of_kind(kind):
             if r.name in first and kind != "Project":
@@ -401,4 +402,20 @@ def check_rasters(project: Project) -> list[Problem]:
         if path in paths:
             problems.append(Problem(d.file, d.line(("spec", "raster", "path")), f"spec.raster.path: {path} is also written by {paths[path].label}", d.label))
         paths.setdefault(path, d)
+    return problems
+
+
+def check_workspaces_and_styles(project: Project) -> list[Problem]:
+    """One default workspace; a global style is in no workspace and isn't one of GeoServer's own."""
+    problems = []
+    defaults = [w for w in project.of_kind("Workspace") if w.spec.get("default")]
+    for w in defaults[1:]:
+        problems.append(Problem(w.file, w.line(("spec", "default")), f"spec.default: {defaults[0].label} is already the default", w.label))
+    for s in project.of_kind("Style"):
+        if not s.spec.get("global"):
+            continue
+        if "workspace" in s.spec:
+            problems.append(Problem(s.file, s.line(("spec", "workspace")), "spec.workspace: a global style is in no workspace", s.label))
+        if s.name in BUILT_IN_STYLES:
+            problems.append(Problem(s.file, s.line(), f"{s.name} is one of GeoServer's own styles: use it without defining it", s.label))
     return problems

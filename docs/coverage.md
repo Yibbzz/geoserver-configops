@@ -20,9 +20,9 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Setting | Status | Notes |
 | --- | --- | --- |
 | Name | Yes | The project's `workspace`, and any a Layer, LayerGroup or Style names |
-| Namespace URI | Not yet | GeoServer makes one from the name |
-| Default workspace | Not yet | |
-| Isolated | Not yet | |
+| Namespace URI | Yes | `Workspace` `namespace` |
+| Default workspace | Yes | `Workspace` `default` |
+| Isolated | Yes | `Workspace` `isolated` |
 | Workspace settings (contact, proxy, numbers) | Yes | `Settings` with `workspace:` |
 | Workspace service settings (its own WMS, WFS…) | Can't | No REST endpoint in GeoServer Cloud |
 | Workspace administrators | Not yet | GeoServer ACL's workspace admin rules; the ACL service is off in the chart |
@@ -82,7 +82,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Layers and their styles, in order; groups in groups | Yes | |
 | Bounds, CRS | Yes | Worked out from the members |
 | Tile caching | Yes | |
-| Enabled, advertised, root layer, metadata links | Not yet | |
+| Enabled, advertised, metadata links | Yes | |
+| Root layer (EO groups) | Not yet | The EO mode isn't offered |
 
 ### Styles
 
@@ -90,7 +91,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | SLD, CSS, MBStyle files | Yes | Files in `styles/`, uploaded as written |
 | Workspace styles | Yes | |
-| Global styles | Partly | GeoServer's built-in `generic`, `point`, `line`, `polygon`, `raster` can be used; others can't be defined |
+| Global styles | Yes | `Style` `global: true`; GeoServer's built-in ones are used without defining them |
 | Legend graphic | Not yet | |
 
 ### Loading data

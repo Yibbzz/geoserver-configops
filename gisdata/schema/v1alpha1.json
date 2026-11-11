@@ -29,7 +29,8 @@
         "Group",
         "User",
         "AccessRule",
-        "Store"
+        "Store",
+        "Workspace"
       ]
     },
     "metadata": {
@@ -374,6 +375,22 @@
         "properties": {
           "spec": {
             "$ref": "#/$defs/store"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Workspace"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/workspace"
           }
         }
       }
@@ -1017,6 +1034,41 @@
         },
         "cache": {
           "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "advertised": {
+          "type": "boolean"
+        },
+        "metadataLinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "url"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "standard": {
+                "enum": [
+                  "ISO19115:2003",
+                  "FGDC",
+                  "TC211",
+                  "19139",
+                  "other"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -1033,6 +1085,10 @@
         },
         "workspace": {
           "$ref": "#/$defs/geoserverName"
+        },
+        "global": {
+          "type": "boolean",
+          "description": "a global style, in no workspace"
         }
       }
     },
@@ -1763,6 +1819,26 @@
         },
         "dataset": {
           "$ref": "#/$defs/resourceName"
+        }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the namespace URI, e.g. https://example.org/uk"
+        },
+        "isolated": {
+          "type": "boolean"
+        },
+        "default": {
+          "type": "boolean"
         }
       }
     }
