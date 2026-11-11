@@ -206,3 +206,78 @@ spec: { table: { schema: s, name: t }, resource: x }
     assert any(m.startswith("spec.store: no Store named 'nowhere'") for m in messages)
     assert "spec.table: a layer on a store doesn't take a table" in messages
     assert "spec.resource: only for a layer on a store" in messages
+
+
+FILES = """\
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: sites }
+spec: { type: geopackage, path: vector/sites.gpkg }
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: roads }
+spec: { type: shapefile, path: vector/roads.shp }
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: tiles }
+spec: { type: pmtiles, url: "https://example.org/roads.pmtiles" }
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: dem }
+spec: { type: geotiff, path: rasters/dem.tif }
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: photos }
+spec: { type: imagemosaic, path: rasters/photos }
+"""
+
+
+def test_file_stores_point_at_the_data_volume(tmp_path):
+    gs = FakeGeoServer()
+    gs.offers.update(sites=["sites"], roads=["roads"], dem=["dem"], photos=["photos"])
+    for c in plan(tmp_path, gs, FILES):
+        c.run()
+    assert plan(tmp_path, gs, FILES) == []
+
+    def params(name):
+        return {e["@key"]: e["$"] for e in gs.objects[f"workspaces/uk/datastores/{name}"]["dataStore"]["connectionParameters"]["entry"]}
+    assert params("sites") == {"database": "/data/vector/sites.gpkg", "dbtype": "geopkg"}
+    assert params("roads") == {"url": "file:/data/vector/roads.shp"}
+    assert params("tiles") == {"pmtiles": "https://example.org/roads.pmtiles"}
+    dem = gs.objects["workspaces/uk/coveragestores/dem"]["coverageStore"]
+    assert (dem["type"], dem["url"]) == ("GeoTIFF", "file:/data/rasters/dem.tif") and "metadata" not in dem  # not a COG
+    photos = gs.objects["workspaces/uk/coveragestores/photos"]["coverageStore"]
+    assert (photos["type"], photos["url"]) == ("ImageMosaic", "file:/data/rasters/photos")
+
+
+def test_validate_file_stores(tmp_path):
+    (tmp_path / "project.yaml").write_text(PROJECT + """---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: a }
+spec: { type: geopackage }
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: b }
+spec: { type: geotiff, url: "https://x/y.tif" }
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: c }
+spec: { type: pmtiles }
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: d }
+spec: { type: shapefile, path: ../etc/passwd }
+""")
+    messages = [p.message for p in validate(load(tmp_path)) if p.severity == "error"]
+    assert "spec.path: a geopackage store needs its file's path on the data volume, e.g. rasters/surrey.tif" in messages
+    assert "spec.url: a geotiff store reads a file on the data volume: use spec.path" in messages
+    assert "a pmtiles store needs spec.path (on the data volume) or spec.url, not both" in messages
+    assert any(m.startswith("spec.path: '../etc/passwd' isn't allowed") or "does not match" in m for m in messages)

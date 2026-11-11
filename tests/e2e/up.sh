@@ -26,5 +26,6 @@ if [ "${1:-}" = "down" ]; then
   exit 0
 fi
 echo "GeoServer Cloud $GEOSERVER_TAG, $POSTGIS_IMAGE, $RABBITMQ_IMAGE"
+mkdir -p data  # made by Docker it would be root's, and the file store test couldn't write to it
 docker compose up -d --wait --wait-timeout 420 || { docker compose logs rest | tail -50; exit 1; }
 echo "REST API ready at http://localhost:${E2E_REST_PORT:-59090}/rest"

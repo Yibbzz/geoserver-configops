@@ -1482,7 +1482,16 @@
             "wms",
             "wmts",
             "wfs",
-            "postgis"
+            "postgis",
+            "geopackage",
+            "shapefile",
+            "shapefiles",
+            "flatgeobuf",
+            "pmtiles",
+            "geotiff",
+            "worldimage",
+            "arcgrid",
+            "imagemosaic"
           ]
         },
         "url": {
@@ -1515,6 +1524,11 @@
         },
         "enabled": {
           "type": "boolean"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)\\S+$",
+          "description": "a path under the shared data volume (/data), like rasters/surrey.tif"
         }
       }
     }
