@@ -25,6 +25,7 @@ datadir/
 .pytest_cache/
 tests/e2e/jndi.yml
 tests/e2e/data/
+tests/e2e/gcs/
 
 # Python packaging
 *.egg-info/

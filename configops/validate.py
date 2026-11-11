@@ -435,8 +435,12 @@ def check_blob_stores(project: Project) -> list[Problem]:
         kind = b.spec.get("type")
         if kind == "file" and not b.spec.get("path"):
             problems.append(Problem(b.file, b.line(("spec",)), "spec.path: a file blob store needs a folder on the data volume, e.g. gwc", b.label))
-        if kind == "s3" and not b.spec.get("bucket"):
-            problems.append(Problem(b.file, b.line(("spec",)), "spec.bucket: an s3 blob store needs its bucket", b.label))
+        if kind in ("s3", "gcs") and not b.spec.get("bucket"):
+            problems.append(Problem(b.file, b.line(("spec",)), f"spec.bucket: an {kind} blob store needs its bucket", b.label))
+        if kind == "azure" and not b.spec.get("container"):
+            problems.append(Problem(b.file, b.line(("spec",)), "spec.container: an azure blob store needs its container", b.label))
+        if kind == "azure" and not b.spec.get("credentials"):
+            problems.append(Problem(b.file, b.line(("spec",)), "spec.credentials: an azure blob store needs a Secret with accountName and accountKey", b.label))
     defaults = [b for b in project.of_kind("BlobStore") if b.spec.get("default")]
     for b in defaults[1:]:
         problems.append(Problem(b.file, b.line(("spec", "default")), f"spec.default: {defaults[0].label} is already the default", b.label))

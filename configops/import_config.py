@@ -27,6 +27,15 @@ DEFAULTS = {
                "xmlPostRequestLogBufferSize": 1024, "featureTypeCacheSize": 0, "trailingSlashMatch": True,
                "allowStoredQueriesPerWorkspace": True},
     "catalogMode": "hide",
+    "jai": {"allowInterpolation": False, "recycling": False, "tilePriority": 5, "tileThreads": 7, "memoryCapacity": 0.5,
+            "memoryThreshold": 0.75, "imageIOCache": False, "pngEncoderType": "PNGJ"},
+    "coverageAccess": {"maxPoolSize": 5, "corePoolSize": 5, "keepAliveTime": 30000, "queueType": "UNBOUNDED",
+                       "imageIOCacheThreshold": 10240, "granuleCacheMaxSizeMB": 128, "granuleCacheThresholdKB": 1024},
+    "tileCaching": {"directWMSIntegrationEnabled": "false", "requireTiledParameter": "true", "WMSCEnabled": "true",
+                    "TMSEnabled": "true", "securityEnabled": "false", "cacheLayersByDefault": "true", "cacheNonDefaultStyles": "true",
+                    "metaTilingX": "4", "metaTilingY": "4", "gutter": "0", "defaultCachingGridSetIds": ["EPSG:4326", "EPSG:900913"],
+                    "defaultCoverageCacheFormats": ["image/jpeg"], "defaultVectorCacheFormats": ["image/png"],
+                    "defaultOtherCacheFormats": ["image/png", "image/jpeg"]},
     "service": {"enabled": True, "citeCompliant": False, "schemaBaseURL": "http://schemas.opengis.net", "verbose": False},
     "wms": {"bboxForEachCRS": False, "interpolation": "Nearest", "watermark": {"enabled": False, "position": "BOT_RIGHT", "transparency": 100},
             "maxBuffer": 0, "maxRequestMemory": 0, "maxRenderingTime": 0, "maxRenderingErrors": 0, "maxRequestedDimensionValues": 100,
@@ -50,7 +59,7 @@ def differing(live: dict, props: dict, defaults: dict) -> dict:
     """The schema's fields (`props`) whose live value is set and isn't the default, in the spec's form."""
     out = {}
     for name, prop in props.items():
-        if name in ("geoserver", "workspace", "global", "contact", "catalogMode"):
+        if name in ("geoserver", "workspace", "global", "contact", "catalogMode", "masterPassword", "tileCaching", "service"):
             continue
         value = unwrap(live.get("abstrct" if name == "abstract" else name))
         if value in (None, "", []):
@@ -82,6 +91,9 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
     mode = ((gs.get("security/acl/catalog") or {}).get("mode") or "").lower()
     if mode and mode != DEFAULTS["catalogMode"]:
         top["catalogMode"] = mode
+    caching = tile_caching(gs, props["global"]["properties"]["tileCaching"]["properties"])
+    if caching:
+        top["tileCaching"] = caching
     if top:
         spec["global"] = top
     if spec:
@@ -99,12 +111,36 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
         found.append(resource("Settings", f"{resource_name(ws)[0]}-settings", spec))
         notes.append(f"workspace {ws} has settings of its own: written as Settings {resource_name(ws)[0]}-settings")
 
+    workspaces = gs.names("workspaces", "workspace")
     for name in SERVICES:
+        props = defs[f"service_{name}"]["properties"]
         live = (gs.get(f"services/{name}/settings") or {}).get(name) or {}
-        spec = differing(live, defs[f"service_{name}"]["properties"], {**DEFAULTS["service"], **DEFAULTS[name]})
+        spec = differing(live, props, {**DEFAULTS["service"], **DEFAULTS[name]})
         if spec:
             found.append(resource("Service", name, spec))
+        for ws in workspaces:  # a workspace's own settings: what differs from the global ones, which they start from
+            own = (gs.get(f"services/{name}/workspaces/{ws}/settings") or {}).get(name)
+            if own is None:
+                continue
+            spec = {"service": name, "workspace": ws, **differing(own, props, {k: unwrap(v) for k, v in live.items()})}
+            found.append(resource("Service", f"{resource_name(ws)[0]}-{name}", spec))
     return found, notes
+
+
+def tile_caching(gs, props: dict) -> dict:
+    """The tile caching defaults that differ from a fresh GeoServer's."""
+    from .server import GWC_FILE, gwc_values
+
+    r = gs.request("GET", GWC_FILE, ok=(200, 404))
+    if r.status_code != 200:
+        return {}
+    out = {}
+    for key, value in gwc_values(r.text).items():
+        if key not in props or value == DEFAULTS["tileCaching"].get(key) or (value == "false" and key not in DEFAULTS["tileCaching"]):
+            continue
+        kind = props[key].get("type")
+        out[key] = value == "true" if kind == "boolean" else int(value) if kind == "integer" else value
+    return out
 
 
 def names_of(data: dict | None, key: str) -> list:

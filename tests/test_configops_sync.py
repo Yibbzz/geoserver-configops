@@ -246,3 +246,14 @@ def test_refresh_skips_unpublished_layers_and_reports_trouble(tmp_path):
     assert sync.refresh(RefreshGeoServer(published=False), refresh_files(tmp_path), db, "roads") == ""
     note = sync.refresh(RefreshGeoServer(fail=True), refresh_files(tmp_path), db, "roads")
     assert note.startswith("GeoServer not refreshed: GeoServer answered PUT x with HTTP 500")
+
+
+def test_refresh_seeds_again_what_the_files_seed(tmp_path):
+    (tmp_path / "project.yaml").write_text(REFRESH_PROJECT.replace(
+        "spec: { dataset: roads, table: roads }",
+        "spec: { dataset: roads, table: roads, cache: { gridsets: [EPSG:900913, EPSG:4326], seed: { zoom: [0, 5], gridsets: [EPSG:900913] } } }"))
+    gs = RefreshGeoServer(cached={"t:road_links"})
+    gs.seed = lambda name, gridset, fmt, zoom, bounds=None, threads=1: gs.calls.append(("seed", name, gridset, fmt, zoom))
+    note = sync.refresh(gs, load(tmp_path), ingest.Database("h", 5432, "d", "u", "p"), "roads")
+    assert gs.calls[-2:] == [("truncate", "t:road_links"), ("seed", "t:road_links", "EPSG:900913", "image/png", [0, 5])]
+    assert note.endswith("cleared; seeding 1 again")

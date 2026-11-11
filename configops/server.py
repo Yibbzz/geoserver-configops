@@ -12,6 +12,8 @@ the whole object, merges the files' fields in, and writes it back.
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
+
 from . import secrets
 from .geoserver import GeoServerError, MissingCredentials
 from .loader import Resource
@@ -79,15 +81,30 @@ def plan(planner) -> None:
     for r in planner.files.of_kind("Settings"):
         plan_settings(planner, gs, r)
     for r in planner.files.of_kind("Service"):
-        name = r.name
-        live = (gs.get(f"services/{name}/settings") or {}).get(name) or {}
-        wanted = to_geoserver(r.spec)
+        spec = dict(r.spec)
+        name, ws = spec.pop("service", None) or r.name, spec.pop("workspace", None)
+        path = f"services/{name}/workspaces/{ws}/settings" if ws else f"services/{name}/settings"
+        target = f"{name} ({ws})" if ws else name
+        found = gs.get(path)
+        live = (found or {}).get(name) or {}
+        wanted = to_geoserver(spec)
         changed = compare(live, wanted)
-        if changed:
-            def run(name=name, wanted=wanted):
-                current = (gs.get(f"services/{name}/settings") or {}).get(name) or {}
-                gs.request("PUT", f"services/{name}/settings", {name: merge(current, wanted)})
-            planner.add("~", "service", name, changed, run=run)
+        if found is not None and not changed:
+            continue
+
+        def run(name=name, ws=ws, path=path, wanted=wanted):
+            current = (gs.get(path) or {}).get(name)
+            if current is None:  # a workspace's own: starts from the global settings, as the web UI does
+                current = {k: v for k, v in ((gs.get(f"services/{name}/settings") or {}).get(name) or {}).items()
+                           if k not in ("id", "workspace")}
+            body = merge(current, wanted)
+            if ws:
+                body["workspace"] = {"name": ws}
+            gs.request("PUT", path, {name: body})
+        if found is None:
+            planner.add("+", "service", target, note="this workspace's own settings", run=run)
+        else:
+            planner.add("~", "service", target, changed, run=run)
 
 
 def plan_settings(planner, gs, r: Resource) -> None:
@@ -96,6 +113,7 @@ def plan_settings(planner, gs, r: Resource) -> None:
     contact = to_geoserver(spec.pop("contact", None) or {})
     top_spec = dict(spec.pop("global", None) or {})
     catalog_mode = top_spec.pop("catalogMode", None)
+    tile_caching = top_spec.pop("tileCaching", None)
     master = top_spec.pop("masterPassword", None)
     top = to_geoserver(top_spec)
     settings = to_geoserver(spec)
@@ -117,6 +135,13 @@ def plan_settings(planner, gs, r: Resource) -> None:
         live_mode = ((gs.get("security/acl/catalog") or {}).get("mode") or "").lower()
         if live_mode != catalog_mode:
             changed.append(("global.catalogMode", live_mode, catalog_mode))
+    gwc_xml = None
+    if tile_caching:
+        live_gwc = gs.request("GET", GWC_FILE).text
+        gwc_changes = compare_gwc(live_gwc, tile_caching)
+        changed += [("global.tileCaching." + f, a, b) for f, a, b in gwc_changes]
+        if gwc_changes:
+            gwc_xml = set_gwc(live_gwc, tile_caching)
     new_master = None
     if master:
         new_master = secrets.lookup(master["secret"], master["key"], planner.root)
@@ -130,6 +155,10 @@ def plan_settings(planner, gs, r: Resource) -> None:
         return
 
     def run():
+        if gwc_xml:
+            gs.request("PUT", GWC_FILE, gwc_xml, content_type="application/xml")
+            print("  note: GeoServer reads the tile caching defaults when its services start: "
+                  "kubectl rollout restart the GeoServer deployments to use them now")
         current = (gs.get(path) or {}).get(key) or {}
         if ws:
             body = merge(current, {**settings, "contact": contact, "workspace": {"name": ws}})
@@ -155,3 +184,49 @@ def plan_settings(planner, gs, r: Resource) -> None:
         planner.add("~", "settings", target, changed, run=run)
     else:
         planner.add("+", "settings", target, note="this workspace's own settings", run=run)
+
+
+# --- tile caching defaults: GeoServer's gwc-gs.xml, which it reads only when it starts
+
+GWC_FILE = "resource/gwc-gs.xml"
+
+
+def gwc_text(value) -> str:
+    return str(value).lower() if isinstance(value, bool) else str(value)
+
+
+def gwc_values(xml: str) -> dict:
+    """gwc-gs.xml's settings: text, or a list for the ones that hold <string>s."""
+    out = {}
+    for e in ET.fromstring(xml):
+        items = e.findall("string")
+        out[e.tag] = [i.text or "" for i in items] if items or e.tag.startswith("default") else (e.text or "")
+    return out
+
+
+def compare_gwc(xml: str, wanted: dict) -> list[tuple[str, object, object]]:
+    live = gwc_values(xml)
+    out = []
+    for key, value in wanted.items():
+        here = live.get(key)
+        same = sorted(here or []) == sorted(value) if isinstance(value, list) else here == gwc_text(value)
+        if not same:
+            out.append((key, here, value))
+    return out
+
+
+def set_gwc(xml: str, wanted: dict) -> str:
+    root = ET.fromstring(xml)
+    for key, value in wanted.items():
+        e = root.find(key)
+        if e is None:
+            e = ET.SubElement(root, key)
+        for child in list(e):
+            e.remove(child)
+        if isinstance(value, list):
+            e.text = None
+            for v in value:
+                ET.SubElement(e, "string").text = v
+        else:
+            e.text = gwc_text(value)
+    return ET.tostring(root, encoding="unicode")

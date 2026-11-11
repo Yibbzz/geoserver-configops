@@ -259,7 +259,7 @@ spec:
 | `style` | no | GeoServer's default for the geometry | Default style |
 | `styles` | no | none | Extra styles |
 | `enabled`, `advertised`, `queryable` | no | `true` | Publishing switches |
-| `cache` | no | `false` | `true`, or `{ gridsets, formats, metaTiles: [w, h], gutter, expireCache, expireClients }`: the gridsets (GeoWebCache's own, or a `Gridset`), image formats, tiles drawn at once, pixels drawn around each tile, how long (seconds) the cache and clients keep a tile, and `blobStore`: the `BlobStore` the tiles go in. Only the options set are compared |
+| `cache` | no | `false` | `true`, or `{ gridsets, formats, metaTiles: [w, h], gutter, expireCache, expireClients }`: the gridsets (GeoWebCache's own, or a `Gridset`), image formats, tiles drawn at once, pixels drawn around each tile, how long (seconds) the cache and clients keep a tile, and `blobStore`: the `BlobStore` the tiles go in. `parameterFilters` and `seed`: see below. Only the options set are compared |
 | `attribution` | no | from the dataset's source, where known | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026"; or `{ title, link, logo: { url, width, height, type } }` |
 | `filter` | no | none | A CQL filter: only these features are published, e.g. `"flood_zone = 'FZ3'"` |
 | `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …] }`: this layer's WFS settings |
@@ -270,6 +270,21 @@ spec:
 | `buffer` | no | none | Rendering buffer in pixels, for symbols that spill over tile edges |
 
 Every field above works the same on a layer on a `Store`, except `filter` and `wfs`, which are for feature types. Only the fields a file sets are compared; GeoServer's own metadata entries on a layer are kept. Not in the file, worked out on apply: native and lat/lon bounding boxes (computed from the table), attribute list and types (from the table), projection definition (from the CRS), store, links, timestamps.
+
+**Parameter filters and seeding.** A request parameter makes tiles of its own only if the layer's cache has a filter for it:
+
+```yaml
+  cache:
+    gridsets: [EPSG:900913]
+    parameterFilters:
+      CQL_FILTER: { type: values, values: [INCLUDE, "hectares > 300000"], default: INCLUDE }
+      TIME: { type: regex, regex: "[0-9]{4}-[0-9]{2}-[0-9]{2}" }
+      ELEVATION: { type: numbers, values: [0, 10.5], threshold: 0.01 }    # or integers
+      STYLES: { type: styles, values: [polygon, outline] }                 # which of the layer's styles
+    seed: { zoom: [0, 8] }             # also gridsets, formats, bounds [minx, miny, maxx, maxy], threads
+```
+
+GeoWebCache adds a `STYLES` filter (any of the layer's styles) by itself, so leaving it out means that one. A request with a value no filter allows is refused. GeoWebCache can't take a `%` in a value. `seed` draws those tiles ahead of time, in the background: after `apply` changes the layer, and after each load clears its tiles. Whether tiles are seeded isn't compared.
 
 ### Store
 
@@ -457,7 +472,7 @@ A layer's `cache.gridsets` names it. GeoWebCache's own gridsets are never compar
 
 ### BlobStore
 
-Where GeoWebCache keeps tiles. By default each tile cache pod keeps them in its own temporary folder, lost on a restart and not shared; a blob store keeps them on the shared data volume or in S3:
+Where GeoWebCache keeps tiles. By default each tile cache pod keeps them in its own temporary folder, lost on a restart and not shared; a blob store keeps them on the shared data volume, in S3, Azure Blob Storage or Google Cloud Storage:
 
 ```yaml
 apiVersion: configops/v1alpha1
@@ -483,7 +498,30 @@ spec:
   credentials: { secret: tiles-s3 }        # keys accessKey and secretKey; add the Secret to configops.secrets
 ```
 
-A layer's `cache.blobStore` names one. `maxConnections` and `gzip` are there too. GeoWebCache gives the keys back as they are, so `plan` compares the secret key too, without printing it. Only the blob stores the files name are compared; none is removed.
+```yaml
+apiVersion: configops/v1alpha1
+kind: BlobStore
+metadata:
+  name: tiles-in-azure
+spec:
+  type: azure
+  container: tiles
+  prefix: gscloud
+  credentials: { secret: tiles-azure }     # keys accountName and accountKey
+  # endpoint: http://azurite:10000/devstoreaccount1   # another service than Azure's own
+---
+apiVersion: configops/v1alpha1
+kind: BlobStore
+metadata:
+  name: tiles-in-gcs
+spec:
+  type: gcs
+  bucket: tiles
+  project: my-project
+  defaultCredentials: true                 # the pod's own Google identity; or credentials: { secret } with key apiKey
+```
+
+A layer's `cache.blobStore` names one. `maxConnections` (S3, Azure) and `gzip` (S3) are there too. GeoWebCache gives the keys back as they are, so `plan` compares the secret key too, without printing it. Only the blob stores the files name are compared; none is removed.
 
 ### Workspace
 
@@ -530,14 +568,23 @@ spec:
 | `contact` | `contactPerson`, `contactOrganization`, `contactPosition`, `contactEmail`, `contactVoice`, `contactFacsimile`, `addressType`, `address`, `addressDeliveryPoint`, `addressCity`, `addressState`, `addressPostalCode`, `addressCountry`, `onlineResource`, `welcome` |
 | `proxyBaseUrl`, `useHeadersProxyURL` | The address clients see in capabilities documents, when GeoServer sits behind a proxy |
 | `numDecimals`, `charset`, `verbose`, `verboseExceptions`, `localWorkspaceIncludesPrefix`, `showCreatedTimeColumnsInAdminList`, `showModifiedTimeColumnsInAdminList`, `showModifiedUserAdminList` | As in the web UI |
-| `global` | Only without `workspace`: `catalogMode` (`hide`, `mixed`, `challenge`: how GeoServer hides what someone may not see), `globalServices`, `resourceErrorHandling` (`OGC_EXCEPTION_REPORT`, `SKIP_MISCONFIGURED_LAYERS`), `webUIMode` (`DEFAULT`, `REDIRECT`, `DO_NOT_REDIRECT`), `xmlPostRequestLogBufferSize`, `featureTypeCacheSize`, `trailingSlashMatch`, `allowStoredQueriesPerWorkspace`, `masterPassword: { secret, key }` (the keystore's master password, from a Secret: `plan` shows it as changed only when GeoServer's differs, and never prints it; `import` can't read it back), and `geoserver:` for any other global field |
+| `global` | Only without `workspace`: `catalogMode` (`hide`, `mixed`, `challenge`: how GeoServer hides what someone may not see), `globalServices`, `resourceErrorHandling` (`OGC_EXCEPTION_REPORT`, `SKIP_MISCONFIGURED_LAYERS`), `webUIMode` (`DEFAULT`, `REDIRECT`, `DO_NOT_REDIRECT`), `xmlPostRequestLogBufferSize`, `featureTypeCacheSize`, `trailingSlashMatch`, `allowStoredQueriesPerWorkspace`, `masterPassword: { secret, key }` (the keystore's master password, from a Secret: `plan` shows it as changed only when GeoServer's differs, and never prints it; `import` can't read it back), `jai` (image processing: `allowInterpolation`, `recycling`, `tilePriority`, `tileThreads`, `memoryCapacity`, `memoryThreshold`, `pngEncoderType`), `coverageAccess` (`maxPoolSize`, `corePoolSize`, `keepAliveTime`, `queueType`, `imageIOCacheThreshold`, `granuleCacheMaxSizeMB`, `granuleCacheThresholdKB`), `tileCaching` (below), and `geoserver:` for any other global field |
 | `geoserver` | Any other settings field, as GeoServer's REST API names it |
 
 At most one `Settings` for the global settings and one per workspace.
 
+**Tile caching defaults** (the web UI's *Caching Defaults* page) are `global.tileCaching`, in GeoServer's own names: `cacheLayersByDefault`, `cacheNonDefaultStyles`, `directWMSIntegrationEnabled`, `requireTiledParameter`, `WMSCEnabled`, `TMSEnabled`, `WMTSEnabled`, `securityEnabled`, `innerCachingEnabled`, `persistenceEnabled`, `metaTilingX`, `metaTilingY`, `gutter`, `defaultCachingGridSetIds`, `defaultCoverageCacheFormats`, `defaultVectorCacheFormats`, `defaultOtherCacheFormats`. GeoServer keeps them in a file it reads only when its services start, so `apply` writes the file and says to restart them (`kubectl rollout restart` the GeoServer deployments); `plan` compares the file.
+
 ### Service
 
-One OGC service's settings: the web UI's *WMS*, *WFS*, *WCS* and *WMTS* pages. `metadata.name` is the service.
+One OGC service's settings: the web UI's *WMS*, *WFS*, *WCS* and *WMTS* pages. `metadata.name` is the service, or `service:` names it. With `workspace:`, that workspace's own settings for the service (the workspace page's service tabs), which its workspace-specific endpoint (`/<workspace>/wms`) uses; the first `apply` starts them from the global settings, as the web UI does:
+
+```yaml
+apiVersion: configops/v1alpha1
+kind: Service
+metadata: { name: uk-wms }
+spec: { service: wms, workspace: uk, title: UK maps }
+```
 
 ```yaml
 apiVersion: configops/v1alpha1
@@ -564,7 +611,7 @@ spec:
 
 **How they're compared and applied.** Both kinds change objects GeoServer already has, so `plan` shows them as `~` (or `+` for a workspace's first settings of its own), and only the fields the files set are compared. The fields are GeoServer's own names, except `abstract` (GeoServer's `abstrct`), and lists are plain lists. GeoServer replaces whatever a PUT leaves out of its settings, so `apply` reads the whole object, sets the files' fields in it, and writes it all back. A project without `Settings` or `Service` resources leaves them alone.
 
-**Not possible yet:** a workspace's own *service* settings (the web UI's per-workspace WMS, WFS… tabs): GeoServer Cloud's REST API has no endpoint for them. The contact field `addressElectronicMailAddress` isn't kept by GeoServer; use `contactEmail`.
+The contact field `addressElectronicMailAddress` isn't kept by GeoServer; use `contactEmail`.
 
 ### Role, Group, User and AccessRule
 
@@ -875,7 +922,6 @@ Next: git diff, then configops plan -C examples/uk-basemap
 
 - **One table per product** (fixed in PR #4). The pipeline loaded one layer of a multi-layer file into one table, so the `openroads` layer held only road nodes, not road links. It now loads every layer into its own table. Run on its own, it names them after the provider's product ID (`openroads_road_link`); run by the tool, it gets the Dataset's name, giving the default above (`os_open_roads_road_link`).
 - **Layer-to-style links weren't in git.** The old export script (since removed) saved feature types, not GeoServer's layer records, so which style a layer used wasn't recorded. `Layer.style` covers it.
-- **Client gaps** (tracked in the roadmap): bounding boxes, full JNDI settings, deleting styles, tile cache seed/truncate, layer publishing settings. Layer groups are supported (create, read, delete).
 
 ## Decided
 

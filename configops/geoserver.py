@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape
@@ -60,6 +61,25 @@ def for_project(project, root: Path, url: str | None = None) -> "GeoServer":
 def q(name: str) -> str:
     """A name as one path segment."""
     return quote(name, safe="")
+
+
+FILTER_TYPES = {"styleParameterFilter": "styles", "stringParameterFilter": "values", "regexParameterFilter": "regex",
+                "floatParameterFilter": "numbers", "integerParameterFilter": "integers"}
+
+
+def filter_xml(key: str, f: dict) -> str:
+    """One parameter filter, as GeoWebCache's XML."""
+    tag = next(t for t, kind in FILTER_TYPES.items() if kind == f["type"])
+    item = {"numbers": "float", "integers": "int"}.get(f["type"], "string")
+    out = f"<key>{escape(key)}</key><defaultValue>{escape(str(f.get('default', '')))}</defaultValue>"
+    if f.get("values"):
+        values = "".join(f"<{item}>{escape(str(v))}</{item}>" for v in f["values"])
+        out += f"<allowedStyles>{values}</allowedStyles>" if f["type"] == "styles" else f"<values>{values}</values>"
+    if f["type"] == "regex":
+        out += f"<regex>{escape(f.get('regex', '.*'))}</regex>"
+    if "threshold" in f:
+        out += f"<threshold>{f['threshold']}</threshold>"
+    return f"<{tag}>{out}</{tag}>"
 
 
 def tile_name(name: str) -> str:
@@ -327,6 +347,8 @@ class GeoServer:
                 extra += f"<{key}>{int(options[key])}</{key}>"
         if options.get("blobStore"):
             extra += f"<blobStoreId>{escape(options['blobStore'])}</blobStoreId>"
+        if options.get("parameterFilters"):
+            extra += f"<parameterFilters>{''.join(filter_xml(k, f) for k, f in options['parameterFilters'].items())}</parameterFilters>"
         xml = (f"<GeoServerLayer><name>{escape(name)}</name><enabled>true</enabled>{extra}"
                f"<mimeFormats>{''.join(f'<string>{escape(f)}</string>' for f in formats)}</mimeFormats>"
                f"<gridSubsets>{''.join(f'<gridSubset><gridSetName>{escape(g)}</gridSetName></gridSubset>' for g in gridsets)}"
@@ -363,6 +385,39 @@ class GeoServer:
         r = self.gwc_request("PUT", f"gridsets/{q(name)}.xml", xml)
         if r.status_code not in (200, 201):
             raise GeoServerError("PUT", f"gwc/gridsets/{name}", r.status_code, r.text)
+
+    def parameter_filters(self, name: str) -> dict[str, dict]:
+        """A tile layer's parameter filters, by parameter, in the files' form (read as XML: its JSON leaves out their types)."""
+        r = self.gwc_request("GET", f"layers/{tile_name(name)}", accept="application/xml")
+        if r.status_code != 200:
+            return {}
+        out = {}
+        for f in ET.fromstring(r.text).findall("parameterFilters/*"):
+            kind = FILTER_TYPES.get(f.tag)
+            if kind is None:
+                continue
+            entry: dict = {"type": kind}
+            values = [v.text or "" for v in f.findall("values/*") + f.findall("allowedStyles/*")]
+            if values:
+                entry["values"] = [float(v) if kind == "numbers" else int(v) if kind == "integers" else v for v in values]
+            if f.findtext("regex") is not None:
+                entry["regex"] = f.findtext("regex")
+            if f.findtext("defaultValue"):
+                entry["default"] = f.findtext("defaultValue")
+            if f.findtext("threshold") is not None:
+                entry["threshold"] = float(f.findtext("threshold"))
+            out[f.findtext("key")] = entry
+        return out
+
+    def seed(self, name: str, gridset: str, fmt: str, zoom: list[int], bounds: list[float] | None = None, threads: int = 1) -> None:
+        """Start drawing `name`'s tiles for these zoom levels (GeoWebCache does it in the background)."""
+        box = ("<bounds><coords>" + "".join(f"<double>{v}</double>" for v in bounds) + "</coords></bounds>") if bounds else ""
+        xml = (f"<seedRequest><name>{escape(name)}</name>{box}<gridSetId>{escape(gridset)}</gridSetId>"
+               f"<zoomStart>{int(zoom[0])}</zoomStart><zoomStop>{int(zoom[1])}</zoomStop><format>{escape(fmt)}</format>"
+               f"<type>seed</type><threadCount>{int(threads)}</threadCount></seedRequest>")
+        r = self.gwc_request("POST", f"seed/{tile_name(name)}.xml", xml)
+        if r.status_code != 200:
+            raise GeoServerError("POST", f"gwc/seed/{name}", r.status_code, r.text)
 
     def truncate(self, name: str) -> None:
         """Throw away `name`'s cached tiles, so they are drawn again from the new data."""
