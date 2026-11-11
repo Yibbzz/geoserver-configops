@@ -2,7 +2,8 @@
 
 A Store is data GeoServer reads where it is, rather than a table gisdata loads:
 a Cloud-Optimised GeoTIFF over HTTP or object storage, a remote WMS, WMTS or WFS
-to cascade, or a PostGIS database reached with a password. A Layer with `store:`
+to cascade, a PostGIS database reached with a password, or files on the shared
+data volume (GeoPackage, Shapefile, FlatGeobuf, PMTiles, GeoTIFF, image mosaics). A Layer with `store:`
 publishes one thing from it: a coverage, a remote layer or a feature type.
 
 Passwords come from the Store's credentials Secret (keys username and password).
@@ -25,7 +26,19 @@ TYPES = {
     "wmts": ("wmts", "WMTS"),
     "wfs": ("data", "Web Feature Server (NG)"),
     "postgis": ("data", "PostGIS"),
+    # files on the shared data volume (values-data-volume.yaml), by path under it
+    "geopackage": ("data", "GeoPackage"),
+    "shapefile": ("data", "Shapefile"),
+    "shapefiles": ("data", "Directory of spatial files (shapefiles)"),
+    "flatgeobuf": ("data", "FlatGeobuf"),
+    "pmtiles": ("data", "PMTiles"),
+    "geotiff": ("coverage", "GeoTIFF"),
+    "worldimage": ("coverage", "WorldImage"),
+    "arcgrid": ("coverage", "ArcGrid"),
+    "imagemosaic": ("coverage", "ImageMosaic"),
 }
+DATA = "/data"  # where values-data-volume.yaml mounts the shared volume
+FILE_PARAMS = {"geopackage": "database", "shapefile": "url", "shapefiles": "url", "flatgeobuf": "url", "pmtiles": "pmtiles"}
 FAMILIES = {
     "coverage": {"stores": "coveragestores", "key": "coverageStore", "items": "coverages", "item": "coverage",
                  "native": "nativeCoverageName", "list": "all"},
@@ -39,6 +52,13 @@ FAMILIES = {
 COG_READERS = {"http": "HTTP", "https": "HTTP", "s3": "S3", "gs": "GS", "az": "AZURE", "azure": "AZURE"}
 WFS = "WFSDataStoreFactory:"
 SECRET_PARAMS = {"postgis": ("user", "passwd"), "wfs": (f"{WFS}USERNAME", f"{WFS}PASSWORD")}
+
+
+def location(spec: dict) -> str:
+    """Where a file store's data is: file:/data/<path>, or its url."""
+    if spec.get("path"):
+        return f"file:{DATA}/{spec['path'].strip('/')}"
+    return spec["url"]
 
 
 def family(store: Resource) -> dict:
@@ -71,10 +91,11 @@ def wanted_store(store: Resource, root) -> tuple[dict, dict]:
         body["description"] = compared["description"] = spec["description"]
     user, password = credentials(store, root)
     if fam == "coverage":
-        body["url"] = compared["url"] = spec["url"]
-        reader = COG_READERS.get(urlparse(spec["url"]).scheme, "HTTP")
-        body["metadata"] = {"entry": {"@key": "CogSettings.Key", "cogSettings": {"rangeReaderSettings": reader, "useCachingStream": False}}}
-        compared["cog"] = reader
+        body["url"] = compared["url"] = location(spec)
+        if kind == "cog":
+            reader = COG_READERS.get(urlparse(spec["url"]).scheme, "HTTP")
+            body["metadata"] = {"entry": {"@key": "CogSettings.Key", "cogSettings": {"rangeReaderSettings": reader, "useCachingStream": False}}}
+            compared["cog"] = reader
     elif fam in ("wms", "wmts"):
         body["capabilitiesURL"] = compared["capabilitiesURL"] = spec["url"]
         if user is not None:
@@ -86,6 +107,11 @@ def wanted_store(store: Resource, root) -> tuple[dict, dict]:
             params[f"{WFS}GET_CAPABILITIES_URL"] = spec["url"]
         if kind == "postgis":
             params.setdefault("dbtype", "postgis")
+        if kind in FILE_PARAMS:
+            where = location(spec)
+            params[FILE_PARAMS[kind]] = where.removeprefix("file:") if kind == "geopackage" else where
+            if kind == "geopackage":
+                params["dbtype"] = "geopkg"
         compared.update({f"connection.{k}": v for k, v in params.items()})
         if user is not None:
             user_key, password_key = SECRET_PARAMS[kind]
@@ -129,7 +155,9 @@ def plan(planner) -> None:
         live = (gs.get(path) or {}).get(key)
         run = lambda path=path, collection=collection, key=key, body=body: gs.upsert(path, collection, {key: body})
         if live is None:
-            add("+", "store", target, note=f"{store.spec['type']}: {store.spec.get('url') or store.spec.get('connection', {}).get('host', '')}", run=run)
+            where = store.spec.get("url") or (f"{DATA}/{store.spec['path'].strip('/')}" if store.spec.get("path") else "") \
+                or store.spec.get("connection", {}).get("host", "")
+            add("+", "store", target, note=f"{store.spec['type']}: {where}", run=run)
             continue
         current = live_store(live, store.spec["type"])
         changed = [(k, current.get(k), v) for k, v in wanted.items() if current.get(k) != v]

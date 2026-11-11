@@ -337,6 +337,7 @@ def check_security(project: Project) -> list[Problem]:
 
 
 STORES_WITH_ADDRESSES = {"cog", "wms", "wmts", "wfs"}
+STORES_WITH_PATHS = {"geopackage", "shapefile", "shapefiles", "flatgeobuf", "geotiff", "worldimage", "arcgrid", "imagemosaic"}
 
 
 def check_stores(project: Project) -> list[Problem]:
@@ -347,6 +348,14 @@ def check_stores(project: Project) -> list[Problem]:
         kind = s.spec.get("type")
         if kind in STORES_WITH_ADDRESSES and not s.spec.get("url"):
             problems.append(Problem(s.file, s.line(("spec",)), f"spec.url: a {kind} store needs its address", s.label))
+        if kind in STORES_WITH_ADDRESSES and s.spec.get("path"):
+            problems.append(Problem(s.file, s.line(("spec", "path")), f"spec.path: a {kind} store is read from spec.url", s.label))
+        if kind in STORES_WITH_PATHS and not s.spec.get("path"):
+            problems.append(Problem(s.file, s.line(("spec",)), f"spec.path: a {kind} store needs its file's path on the data volume, e.g. rasters/surrey.tif", s.label))
+        if kind in STORES_WITH_PATHS and s.spec.get("url"):
+            problems.append(Problem(s.file, s.line(("spec", "url")), f"spec.url: a {kind} store reads a file on the data volume: use spec.path", s.label))
+        if kind == "pmtiles" and bool(s.spec.get("path")) == bool(s.spec.get("url")):
+            problems.append(Problem(s.file, s.line(("spec",)), "a pmtiles store needs spec.path (on the data volume) or spec.url, not both", s.label))
         if kind == "postgis":
             missing = [k for k in ("host", "database") if k not in (s.spec.get("connection") or {})]
             if missing:

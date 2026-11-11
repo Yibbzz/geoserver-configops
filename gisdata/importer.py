@@ -18,6 +18,7 @@ from . import secrets
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import default_table, load
 from .plan import DEFAULT_FORMATS, DEFAULT_GRIDSETS, PlanError, as_list, names_of
+from .stores import DATA
 from .validate import BUILT_IN_STYLES
 
 API = "gisdata/v1alpha1"
@@ -28,6 +29,18 @@ STYLE_SUFFIX = {"sld": ".sld", "css": ".css", "mbstyle": ".mbstyle"}
 MODES = {v: k for k, v in GROUP_MODES.items()}
 GEOMETRY_STYLE = {"Point": "point", "MultiPoint": "point", "LineString": "line", "MultiLineString": "line",
                   "Polygon": "polygon", "MultiPolygon": "polygon"}
+
+
+FILE_DATASTORES = {"GeoPackage": ("geopackage", "database"), "Shapefile": ("shapefile", "url"),
+                   "Directory of spatial files (shapefiles)": ("shapefiles", "url"), "FlatGeobuf": ("flatgeobuf", "url"),
+                   "PMTiles": ("pmtiles", "pmtiles")}
+FILE_COVERAGES = {"GeoTIFF": "geotiff", "WorldImage": "worldimage", "ArcGrid": "arcgrid", "ImageMosaic": "imagemosaic"}
+
+
+def data_path(where: str) -> str | None:
+    """A file store's path under the shared data volume, or None if it isn't there."""
+    path = where.removeprefix("file:").removeprefix("//")
+    return path[len(DATA) + 1:].strip("/") or None if path.startswith(f"{DATA}/") else None
 
 
 def resource_name(gs_name: str) -> tuple[str, str | None]:
@@ -103,13 +116,26 @@ class Importer:
                 self.store_resource(store, name, {"type": "postgis", "connection": connection, "credentials": {"secret": secret}})
             elif entries.get("WFSDataStoreFactory:GET_CAPABILITIES_URL"):
                 self.store_resource(store, name, {"type": "wfs", "url": entries["WFSDataStoreFactory:GET_CAPABILITIES_URL"]})
+            elif store.get("type") in FILE_DATASTORES:
+                kind, param = FILE_DATASTORES[store["type"]]
+                where = entries.get(param) or ""
+                path = data_path(where)
+                if path:
+                    self.store_resource(store, name, {"type": kind, "path": path})
+                elif kind == "pmtiles" and where and not where.startswith("file:"):
+                    self.store_resource(store, name, {"type": kind, "url": where})
+                else:
+                    self.notes.append(f"store {name}: {where} isn't on the shared data volume ({DATA}); left out, with its layers")
             else:
                 self.notes.append(f"store {name} ({store.get('type')}) isn't a kind the files have yet; left out, with its layers")
         for name in self.gs.names(f"workspaces/{self.ws}/coveragestores", "coverageStore"):
             store = self.gs.get(f"workspaces/{self.ws}/coveragestores/{name}")["coverageStore"]
             cog = any(isinstance(e, dict) and e.get("@key") == "CogSettings.Key" for e in as_list((store.get("metadata") or {}).get("entry")))
+            path = data_path(store.get("url") or "")
             if cog:
                 self.store_resource(store, name, {"type": "cog", "url": store.get("url")})
+            elif store.get("type") in FILE_COVERAGES and path:
+                self.store_resource(store, name, {"type": FILE_COVERAGES[store["type"]], "path": path})
             else:
                 self.notes.append(f"store {name} ({store.get('type')}) isn't a kind the files have yet; left out, with its layers")
         for kind, key in (("wmsstores", "wmsStore"), ("wmtsstores", "wmtsStore")):
