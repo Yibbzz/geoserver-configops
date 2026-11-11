@@ -706,7 +706,49 @@
           ]
         },
         "attribution": {
-          "type": "string"
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "link": {
+                  "type": "string"
+                },
+                "logo": {
+                  "type": "object",
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "width": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "type": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "description": "the text clients must show, or { title, link, logo: { url, width, height, type } }"
         },
         "store": {
           "$ref": "#/$defs/resourceName"
@@ -714,6 +756,173 @@
         "resource": {
           "type": "string",
           "minLength": 1
+        },
+        "filter": {
+          "type": "string",
+          "minLength": 1,
+          "description": "a CQL filter: only these features are published"
+        },
+        "wfs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxFeatures": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "decimals": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "skipNumberMatched": {
+              "type": "boolean"
+            },
+            "otherCRS": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/crs"
+              }
+            }
+          }
+        },
+        "metadataLinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "url"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "standard": {
+                "enum": [
+                  "ISO19115:2003",
+                  "FGDC",
+                  "TC211",
+                  "19139",
+                  "other"
+                ]
+              }
+            }
+          }
+        },
+        "httpCache": {
+          "type": "object",
+          "required": [
+            "maxAge"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "maxAge": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "Cache-Control max-age (seconds) on WMS responses"
+        },
+        "dimensions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "time": {
+              "type": "object",
+              "required": [
+                "attribute"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "attribute": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "endAttribute": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "presentation": {
+                  "enum": [
+                    "list",
+                    "continuous",
+                    "interval"
+                  ]
+                },
+                "resolution": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "units": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unitSymbol": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "nearestMatch": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "elevation": {
+              "type": "object",
+              "required": [
+                "attribute"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "attribute": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "endAttribute": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "presentation": {
+                  "enum": [
+                    "list",
+                    "continuous",
+                    "interval"
+                  ]
+                },
+                "resolution": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "units": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unitSymbol": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "nearestMatch": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "opaque": {
+          "type": "boolean"
+        },
+        "buffer": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "rendering buffer in pixels"
         }
       },
       "if": {

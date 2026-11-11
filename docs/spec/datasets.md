@@ -243,9 +243,16 @@ spec:
 | `styles` | no | none | Extra styles |
 | `enabled`, `advertised`, `queryable` | no | `true` | Publishing switches |
 | `cache` | no | `false` | `true`, or `{ gridsets: [...], formats: [...] }` |
-| `attribution` | no | from the dataset's source, where known | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026" |
+| `attribution` | no | from the dataset's source, where known | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026"; or `{ title, link, logo: { url, width, height, type } }` |
+| `filter` | no | none | A CQL filter: only these features are published, e.g. `"flood_zone = 'FZ3'"` |
+| `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …] }`: this layer's WFS settings |
+| `metadataLinks` | no | none | `[{ url, type, standard }]`: links to metadata records, shown in capabilities. `type` defaults to `text/html`, `standard` to `ISO19115:2003` |
+| `httpCache` | no | none | `{ maxAge }`: a `Cache-Control: max-age` (seconds) on this layer's maps |
+| `dimensions` | no | none | `{ time: {…}, elevation: {…} }`, each `{ attribute, endAttribute, presentation: list \| continuous \| interval, resolution, units, unitSymbol, nearestMatch }` |
+| `opaque` | no | `false` | Tells clients nothing shows through the layer |
+| `buffer` | no | none | Rendering buffer in pixels, for symbols that spill over tile edges |
 
-Not in the file, worked out on apply: native and lat/lon bounding boxes (computed from the table), attribute list and types (from the table), projection definition (from the CRS), store, links, timestamps.
+Every field above works the same on a layer on a `Store`, except `filter` and `wfs`, which are for feature types. Only the fields a file sets are compared; GeoServer's own metadata entries on a layer are kept. Not in the file, worked out on apply: native and lat/lon bounding boxes (computed from the table), attribute list and types (from the table), projection definition (from the CRS), store, links, timestamps.
 
 ### Store
 

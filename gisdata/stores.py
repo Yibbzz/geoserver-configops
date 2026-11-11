@@ -228,7 +228,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         wanted_item.append(("abstract", spec["abstract"]))
     if spec.get("resource"):
         wanted_item.append(("resource", spec["resource"]))
-    wanted_layer, settings = planner.layer_settings(layer)
+    wanted_layer, settings = planner.layer_settings(layer, (item_path, fam["item"]))
 
     def run(old_store=None):
         if old_store is not None:
@@ -255,7 +255,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         live_store_name = geoserver_name(store) if live_item else None
     current = {"title": live_item.get("title"), "enabled": live_item.get("enabled", True),
                "advertised": live_item.get("advertised", True), "abstract": live_item.get("abstract"),
-               "resource": live_item.get(fam["native"]) or live_item.get("nativeName"), **planner.live_layer_settings(layer, live_layer)}
+               "resource": live_item.get(fam["native"]) or live_item.get("nativeName"), **planner.live_layer_settings(layer, live_layer, live_item)}
     changed = [(k, current[k], v) for k, v in wanted_item + wanted_layer if current[k] != v]
     live_keywords = (live_item.get("keywords") or {}).get("string")
     live_keywords = live_keywords if isinstance(live_keywords, list) else ([live_keywords] if live_keywords else [])
