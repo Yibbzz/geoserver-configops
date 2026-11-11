@@ -227,35 +227,46 @@ def refresh(gs: GeoServer, files: Project, db: ingest.Database, dataset: str) ->
             if name not in holding and any(m in names or m in holding for _, m in members(group)):
                 holding.add(name)
                 changed = True
-    refreshed, cleared = 0, 0
+    from .plan import seed_cache, seed_of, wanted_cache
+
+    by_target = {f"{r.spec.get('workspace') or default_ws}:{geoserver_name(r)}": r
+                 for r in files.of_kind("Layer") + files.of_kind("LayerGroup")}
+    refreshed, cleared, seeded = 0, 0, 0
+
+    def clear(target: str) -> None:
+        nonlocal cleared, seeded
+        if not gs.tile_layer(target):
+            return
+        gs.truncate(target)
+        cleared += 1
+        r = by_target.get(target)
+        seed = seed_of(r.spec) if r else None
+        if seed:
+            seed_cache(gs, target, wanted_cache(r.spec["cache"]), seed)
+            seeded += 1
+
     try:
         if raster_layers:
             count, targets = refresh_rasters(gs, files, dataset)
             refreshed += count
             for target in targets:
-                if gs.tile_layer(target):
-                    gs.truncate(target)
-                    cleared += 1
+                clear(target)
         for r in layers:
             ws, name = r.spec.get("workspace") or default_ws, geoserver_name(r)
             if gs.featuretype(ws, db.live, name) is None:
                 continue  # not published yet: apply does that
             gs.recalculate(ws, db.live, name)
             refreshed += 1
-            if gs.tile_layer(f"{ws}:{name}"):
-                gs.truncate(f"{ws}:{name}")
-                cleared += 1
+            clear(f"{ws}:{name}")
         for name in sorted(holding):
             g = groups[name]
-            target = f"{g.spec.get('workspace') or default_ws}:{geoserver_name(g)}"
-            if gs.tile_layer(target):
-                gs.truncate(target)
-                cleared += 1
+            clear(f"{g.spec.get('workspace') or default_ws}:{geoserver_name(g)}")
     except GeoServerError as e:
         return f"GeoServer not refreshed: {e}"
     if not refreshed and not cleared:
         return ""
-    return f"GeoServer: bounds of {refreshed} layer(s) worked out again, cached tiles of {cleared} layer(s) or group(s) cleared"
+    note = f"; seeding {seeded} again" if seeded else ""
+    return f"GeoServer: bounds of {refreshed} layer(s) worked out again, cached tiles of {cleared} layer(s) or group(s) cleared{note}"
 
 
 def run(root: Path, names: list[str], force: bool = False) -> int:

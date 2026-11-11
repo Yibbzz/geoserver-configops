@@ -84,7 +84,17 @@ kind: Layer
 metadata: {{ name: points }}
 spec:
   table: {{ schema: e2e_tiles, name: points }}
-  cache: {{ gridsets: [{GRIDSET}, EPSG:900913], metaTiles: [2, 2], gutter: 10, expireCache: 60, expireClients: 30 }}
+  cache:
+    gridsets: [{GRIDSET}, EPSG:900913]
+    metaTiles: [2, 2]
+    gutter: 10
+    expireCache: 60
+    expireClients: 30
+    parameterFilters:
+      CQL_FILTER: {{ type: values, values: [INCLUDE, "id = 1"], default: INCLUDE }}
+      TIME: {{ type: regex, regex: "[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}" }}
+      ELEVATION: {{ type: numbers, values: [0, 10.5], default: 0, threshold: 0.01 }}
+      STYLES: {{ type: styles, values: [point] }}
 """)
     return tmp_path
 
@@ -103,6 +113,44 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert gs.gridset(GRIDSET)["resolutions"][-1] == 14
     tiles = gs.tile_layer(f"{WS}:points")
     assert tiles["metaWidthHeight"] == [2, 2] and tiles["gutter"] == 10 and tiles["expireCache"] == 60
+    filters = gs.parameter_filters(f"{WS}:points")
+    assert filters["CQL_FILTER"]["values"] == ["INCLUDE", "id = 1"] and filters["ELEVATION"]["values"] == [0.0, 10.5]
+    assert filters["TIME"]["regex"] == "[0-9]{4}-[0-9]{2}-[0-9]{2}" and filters["STYLES"]["values"] == ["point"]
+
+
+def test_a_changed_filter_is_drift(gs, project, capsys):
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    gs.put_tile_layer(f"{WS}:points", [GRIDSET, "EPSG:900913"], ["image/png"],
+                      {"metaTiles": [2, 2], "gutter": 10, "expireCache": 60, "expireClients": 30,
+                       "parameterFilters": {"CQL_FILTER": {"type": "values", "values": ["INCLUDE"], "default": "INCLUDE"}}})
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert code == 2 and "cache." in out, out
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "plan", "-C", str(project))[0] == 0
+
+
+def test_caching_defaults(gs, project, capsys):
+    """Written to gwc-gs.xml, which GeoServer reads when it starts: plan compares the file."""
+    saved = gs.request("GET", "resource/gwc-gs.xml").text
+    try:
+        (project / "settings.yaml").write_text("""\
+apiVersion: configops/v1alpha1
+kind: Settings
+metadata: { name: global }
+spec:
+  global:
+    tileCaching: { cacheLayersByDefault: false, metaTilingX: 2, defaultCachingGridSetIds: [EPSG:900913], WMTSEnabled: true }
+""")
+        code, out = configops(capsys, "plan", "-C", str(project))
+        assert code == 2 and "global.tileCaching.cacheLayersByDefault" in out, out
+        code, out = configops(capsys, "apply", "-C", str(project))
+        assert code == 0 and "rollout restart" in out, out
+        text = gs.request("GET", "resource/gwc-gs.xml").text
+        assert "<cacheLayersByDefault>false</cacheLayersByDefault>" in text and "<metaTilingY>4</metaTilingY>" in text
+        code, out = configops(capsys, "plan", "-C", str(project))
+        assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+    finally:
+        gs.request("PUT", "resource/gwc-gs.xml", saved, content_type="application/xml")
 
 
 def test_drift_and_import_round_trip(gs, project, tmp_path_factory, capsys, env):
@@ -110,7 +158,7 @@ def test_drift_and_import_round_trip(gs, project, tmp_path_factory, capsys, env)
     gs.put_tile_layer(f"{WS}:points", [GRIDSET, "EPSG:900913"], ["image/png"], {"metaTiles": [4, 4], "gutter": 10, "expireCache": 60,
                                                                                 "expireClients": 30})
     code, out = configops(capsys, "plan", "-C", str(project))
-    assert code == 2 and "cache:" in out, out
+    assert code == 2 and "cache." in out, out
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text(project_yaml())

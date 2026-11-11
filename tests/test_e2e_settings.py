@@ -33,7 +33,7 @@ SAVED = ["settings", "settings/contact", "services/wms/settings", "services/wfs/
 VALUES = {
     "charset": "UTF-8", "schemaBaseURL": "https://schemas.example.org", "onlineResource": "https://maps.example.org",
     "proxyBaseUrl": "https://maps.example.org/geoserver-cloud", "srs": ["EPSG:27700", "EPSG:4326"],
-    "keywords": ["e2e", "maps"], "enabled": True, "defaultDeflateCompressionLevel": 7, "url": "https://example.org/logo.png",
+    "keywords": ["e2e", "maps"], "enabled": True, "memoryCapacity": 0.5, "memoryThreshold": 0.75, "defaultDeflateCompressionLevel": 7, "url": "https://example.org/logo.png",
 }
 
 
@@ -56,7 +56,8 @@ def example(props: dict) -> dict:
     """A spec setting every property in a schema `properties`, from the schema itself."""
     out = {}
     for name, prop in props.items():
-        if name in ("geoserver", "workspace", "masterPassword"):  # the master password needs a real Secret, and is global
+        if name in ("geoserver", "workspace", "masterPassword", "tileCaching", "service"):  # the master password needs a real
+            # Secret; tile caching defaults are a file GeoServer reads when it starts (test_e2e_tiles.py)
             continue
         if name in VALUES:
             out[name] = VALUES[name]
@@ -103,6 +104,8 @@ def project(tmp_path, monkeypatch):
     ]
     docs += [{"kind": "Service", "metadata": {"name": s}, "spec": example(defs[f"service_{s}"]["properties"])}
              for s in ("wms", "wfs", "wcs", "wmts")]
+    docs.append({"kind": "Service", "metadata": {"name": "own-wms"}, "spec": {
+        "service": "wms", "workspace": WS, "title": "Workspace maps", "maxBuffer": 25}})
     (tmp_path / "project.yaml").write_text(yaml.safe_dump_all([{"apiVersion": "configops/v1alpha1", **d} for d in docs]))
     for key, value in {"E2EGS_USERNAME": "admin", "E2EGS_PASSWORD": PASSWORD, "E2EDB_HOST": DB["host"],
                        "E2EDB_PORT": DB["port"], "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": "postgres",
@@ -127,6 +130,8 @@ def test_every_field_is_applied_then_nothing_to_do(gs, project, capsys):
     assert gs.get("services/wms/settings")["wms"]["abstrct"] == "e2e abstract"
     assert gs.get("settings/contact")["contact"]["contactPerson"] == "e2e contactPerson"
     assert gs.get(f"workspaces/{WS}/settings")["settings"]["contact"]["contactPerson"] == "Workspace Team"
+    own = gs.get(f"services/wms/workspaces/{WS}/settings")["wms"]
+    assert own["title"] == "Workspace maps" and own["maxBuffer"] == 25 and own["abstrct"] == "e2e abstract"  # the rest from the global
 
 
 def test_import_round_trip(gs, project, tmp_path_factory, capsys):
@@ -135,7 +140,7 @@ def test_import_round_trip(gs, project, tmp_path_factory, capsys):
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text((project / "project.yaml").read_text().split("\n---\n")[0] + "\n")
     code, out = configops(capsys, "import", "--settings", "-C", str(imported))
-    assert code == 0 and "server.yaml: 2 Settings, 4 Service(s)" in out, out
+    assert code == 0 and "server.yaml: 2 Settings, 5 Service(s)" in out, out
     code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
 

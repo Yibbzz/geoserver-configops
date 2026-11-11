@@ -78,7 +78,9 @@ def identity(r: Resource, default_ws: str | None) -> tuple:
         return kind, account_name(r)
     if kind == "AccessRule":
         return (kind,) + rule_key(r)
-    return kind, spec.get("name") or r.name  # Service, Gridset, BlobStore
+    if kind == "Service":
+        return kind, spec.get("service") or r.name, spec.get("workspace")
+    return kind, spec.get("name") or r.name  # Gridset, BlobStore
 
 
 def normal(kind: str, key: str, value, name: str, default_ws: str | None = None, own: dict | None = None):

@@ -16,8 +16,11 @@ class FakeGeoServer:
         return self.objects.get(f"names:{path}", [])
 
     def request(self, method, path, *args, **kwargs):
-        assert (method, path) == ("GET", "resource/security/rest.properties")
-        return types.SimpleNamespace(text=self.rest_file)
+        assert method == "GET" and path in ("resource/security/rest.properties", "resource/gwc-gs.xml")
+        if path == "resource/gwc-gs.xml":
+            gwc = self.objects.get("gwc-gs.xml")
+            return types.SimpleNamespace(status_code=200 if gwc else 404, text=gwc or "")
+        return types.SimpleNamespace(status_code=200, text=self.rest_file)
 
 
 def fresh():
@@ -90,3 +93,18 @@ def test_security_names_that_need_spelling_out_and_rules():
     assert {"rest": {"path": "/rest/uk/**", "methods": ["GET", "HEAD"]}, "roles": ["ROLE_EDITOR"]} in rules
     assert len(rules) == 3  # the unchanged defaults stay out
     assert notes == ["rule layers uk.roads.w names role(s) GeoServer doesn't have: GONE; add Roles for them"]
+
+
+def test_tile_caching_defaults_and_a_workspaces_own_service():
+    objects = fresh()
+    objects["gwc-gs.xml"] = ("<GeoServerGWCConfig><version>1.1.0</version><cacheLayersByDefault>false</cacheLayersByDefault>"
+                             "<metaTilingX>4</metaTilingX><gutter>8</gutter><defaultCachingGridSetIds><string>EPSG:900913</string>"
+                             "</defaultCachingGridSetIds><defaultOtherCacheFormats><string>image/png</string><string>image/jpeg</string>"
+                             "</defaultOtherCacheFormats></GeoServerGWCConfig>")
+    global_wms = objects["services/wms/settings"]["wms"]
+    objects["services/wms/workspaces/uk/settings"] = {"wms": {**global_wms, "workspace": {"name": "uk"}, "title": "UK maps"}}
+    found, _ = import_config.settings_resources(FakeGeoServer(objects))
+    by_name = {r["metadata"]["name"]: r["spec"] for r in found}
+    assert by_name["global"] == {"global": {"tileCaching": {"cacheLayersByDefault": False, "gutter": 8,
+                                                            "defaultCachingGridSetIds": ["EPSG:900913"]}}}
+    assert by_name["uk-wms"] == {"service": "wms", "workspace": "uk", "title": "UK maps"}

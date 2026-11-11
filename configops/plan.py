@@ -68,6 +68,21 @@ CACHE_OPTIONS = {"metaTiles": "metaWidthHeight", "gutter": "gutter", "expireCach
                  "blobStore": "blobStoreId"}
 
 
+def wanted_filters(filters: dict) -> dict:
+    """Parameter filters as compared: numbers as floats, and the STYLES one GeoWebCache adds by itself."""
+    out = {"STYLES": {"type": "styles"}}
+    for key, f in filters.items():
+        f = dict(f)
+        if f["type"] in ("numbers", "integers"):
+            f["values"] = [float(v) if f["type"] == "numbers" else int(v) for v in f.get("values", [])]
+            if "threshold" in f:
+                f["threshold"] = float(f["threshold"])
+        if "default" in f:
+            f["default"] = str(f["default"])
+        out[key] = f
+    return out
+
+
 def wanted_cache(setting) -> dict | bool:
     """The spec's `cache` as {gridsets, formats, and any options it sets}, or False for no cache."""
     if not setting:
@@ -76,11 +91,13 @@ def wanted_cache(setting) -> dict | bool:
         setting = {}
     out = {"gridsets": sorted(setting.get("gridsets", DEFAULT_GRIDSETS)), "formats": sorted(setting.get("formats", DEFAULT_FORMATS))}
     out.update({k: setting[k] for k in CACHE_OPTIONS if k in setting})
+    if "parameterFilters" in setting:
+        out["parameterFilters"] = wanted_filters(setting["parameterFilters"])
     return out
 
 
-def live_cache(tile_layer: dict | None, wanted: dict | bool = False) -> dict | bool:
-    """A live tile layer in wanted_cache's form, with the options `wanted` sets."""
+def live_cache(tile_layer: dict | None, wanted: dict | bool = False, filters: dict | None = None) -> dict | bool:
+    """A live tile layer in wanted_cache's form, with the options `wanted` sets (and its parameter filters, given)."""
     if not tile_layer or not tile_layer.get("enabled", True):
         return False
     out = {"gridsets": sorted(g["gridSetName"] for g in as_list(tile_layer.get("gridSubsets"))),
@@ -88,15 +105,49 @@ def live_cache(tile_layer: dict | None, wanted: dict | bool = False) -> dict | b
     for key, gwc in CACHE_OPTIONS.items():
         if isinstance(wanted, dict) and key in wanted:
             out[key] = tile_layer.get(gwc)
+    if isinstance(wanted, dict) and "parameterFilters" in wanted:
+        out["parameterFilters"] = compared_filters(filters or {}, wanted["parameterFilters"])
     return out
 
 
-def set_cache(gs: GeoServer, name: str, wanted: dict | bool) -> None:
-    """Cache `name` as wanted; no cache drops the one GeoServer makes for every new layer."""
+def compared_filters(live: dict, wanted: dict) -> dict:
+    """The live filters with only the fields the files set (a STYLES filter's default is the layer's style)."""
+    out = {}
+    for key, f in live.items():
+        want = wanted.get(key, {})
+        out[key] = {k: v for k, v in f.items() if k == "type" or k in want or k == "values"}
+    return out
+
+
+def cache_name(gs: GeoServer, name: str, wanted: dict | bool) -> dict | bool:
+    """The live cache of `name`, in the form `wanted` is compared in."""
+    filters = gs.parameter_filters(name) if isinstance(wanted, dict) and "parameterFilters" in wanted else None
+    return live_cache(gs.tile_layer(name), wanted, filters)
+
+
+def set_cache(gs: GeoServer, name: str, wanted: dict | bool, seed: dict | None = None) -> None:
+    """Cache `name` as wanted; no cache drops the one GeoServer makes for every new layer. Then seed, if asked."""
     if wanted:
-        gs.put_tile_layer(name, wanted["gridsets"], wanted["formats"], {k: wanted[k] for k in CACHE_OPTIONS if k in wanted})
+        options = {k: wanted[k] for k in CACHE_OPTIONS if k in wanted}
+        if "parameterFilters" in wanted:
+            options["parameterFilters"] = wanted["parameterFilters"]
+        gs.put_tile_layer(name, wanted["gridsets"], wanted["formats"], options)
+        if seed:
+            seed_cache(gs, name, wanted, seed)
     else:
         gs.delete_tile_layer(name)
+
+
+def seed_of(spec: dict) -> dict | None:
+    cache = spec.get("cache")
+    return cache.get("seed") if isinstance(cache, dict) else None
+
+
+def seed_cache(gs: GeoServer, name: str, cache: dict, seed: dict) -> None:
+    """Draw the tiles `seed` asks for, in each of its gridsets and formats (in the background)."""
+    for gridset in seed.get("gridsets") or cache["gridsets"]:
+        for fmt in seed.get("formats") or cache["formats"]:
+            gs.seed(name, gridset, fmt, seed["zoom"], seed.get("bounds"), seed.get("threads", 1))
 
 
 def is_geometry(attribute: dict) -> bool:
@@ -123,7 +174,16 @@ def sql_fields(view: dict) -> dict:
 
 
 def diff(pairs: list[tuple[str, object, object]]) -> list[tuple[str, object, object]]:
-    return [(name, live, wanted) for name, live, wanted in pairs if live != wanted]
+    """The pairs that differ; where both sides are objects (a cache), only the fields inside that differ, as a.b."""
+    out = []
+    for name, live, wanted in pairs:
+        if live == wanted:
+            continue
+        if isinstance(live, dict) and isinstance(wanted, dict):
+            out += diff([(f"{name}.{k}", live.get(k), wanted.get(k)) for k in dict.fromkeys([*live, *wanted])])
+        else:
+            out.append((name, live, wanted))
+    return out
 
 
 class Planner:
@@ -286,7 +346,7 @@ class Planner:
             if layer_wanted:
                 live = (self.gs.layer(ws, name) or {}).get("layer") or {}
                 self.gs.request("PUT", f"workspaces/{ws}/layers/{name}", {"layer": details.patch_layer(live, layer_wanted)})
-            set_cache(self.gs, f"{ws}:{name}", cache)
+            set_cache(self.gs, f"{ws}:{name}", cache, seed_of(spec))
         return wanted, run
 
     def live_layer_settings(self, layer: Resource, live_layer: dict, live_resource: dict | None = None) -> dict:
@@ -294,7 +354,7 @@ class Planner:
         current = {"queryable": live.get("queryable", True), "style": (live.get("defaultStyle") or {}).get("name"),
                    "styles": names_of((live.get("styles") or {}).get("style")),
                    "attribution": (live.get("attribution") or {}).get("title"),
-                   "cache": live_cache(self.gs.tile_layer(f"{self.workspace_of(layer)}:{geoserver_name(layer)}"),
+                   "cache": cache_name(self.gs, f"{self.workspace_of(layer)}:{geoserver_name(layer)}",
                                        wanted_cache(layer.spec.get("cache")))}
         current.update(details.live_resource(live_resource or {}, details.wanted_resource(layer.spec)))
         current.update(details.live_layer(live, details.wanted_layer(layer.spec)))
@@ -447,7 +507,7 @@ class Planner:
                 if extra or links:
                     self.gs.request("PUT", f"workspaces/{ws}/layergroups/{gs_name}",
                                     {"layerGroup": {**extra, **details.patch_resource({}, links)}})
-                set_cache(self.gs, f"{ws}:{gs_name}", cache)
+                set_cache(self.gs, f"{ws}:{gs_name}", cache, seed_of(spec))
 
             live = self.gs.layergroup(gs_name, ws)
             if live is None:
@@ -458,7 +518,7 @@ class Planner:
             current = {"title": g.get("title"), "mode": g.get("mode"), "abstract": g.get("abstractTxt"),
                        "layers": names_of((g.get("publishables") or {}).get("published")),
                        "styles": styles + [None] * (len(entries) - len(styles)),
-                       "cache": live_cache(self.gs.tile_layer(f"{ws}:{gs_name}"), cache),
+                       "cache": cache_name(self.gs, f"{ws}:{gs_name}", cache),
                        "enabled": g.get("enabled", True), "advertised": g.get("advertised", True),
                        **details.live_resource(g, links)}
             changed = diff([(k, current[k], v) for k, v in wanted])

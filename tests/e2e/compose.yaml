@@ -20,6 +20,15 @@ services:
     image: ${RABBITMQ_IMAGE}
     environment: {RABBITMQ_DEFAULT_USER: user, RABBITMQ_DEFAULT_PASS: guest}
     healthcheck: {test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"], interval: 5s, retries: 40}
+  # Stand-ins for Azure Blob Storage and Google Cloud Storage, for the tile cache's blob stores
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command: azurite-blob --blobHost 0.0.0.0 --loose --skipApiVersionCheck
+  fakegcs:
+    image: fsouza/fake-gcs-server:1.52.2
+    command: -scheme http -port 4443 -public-host fakegcs:4443 -backend memory
+    volumes: ["./gcs:/data"]  # gcs/<bucket>: the buckets it starts with
+    ports: ["${E2E_GCS_PORT:-54443}:4443"]
   rest:
     image: geoservercloud/geoserver-cloud-rest:${GEOSERVER_TAG}
     depends_on: {db: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}

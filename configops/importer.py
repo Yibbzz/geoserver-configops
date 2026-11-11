@@ -67,13 +67,23 @@ BUILT_IN_GRIDSETS = re.compile(r"^(EPSG:(4326|900913|3857|4258)|GlobalCRS84(Pixe
 GWC_DEFAULTS = {"metaWidthHeight": [4, 4], "gutter": 0, "expireCache": 0, "expireClients": 0, "blobStoreId": None}
 
 
-def cache_setting(tile_layer: dict | None):
+def cache_setting(tile_layer: dict | None, filters: dict | None = None):
     if not tile_layer or not tile_layer.get("enabled", True):
         return None
     gridsets = sorted(g["gridSetName"] for g in as_list(tile_layer.get("gridSubsets")))
     formats = sorted(as_list(tile_layer.get("mimeFormats")))
     options = {key: tile_layer[gwc] for key, gwc in CACHE_OPTIONS.items()
                if tile_layer.get(gwc) is not None and tile_layer.get(gwc) != GWC_DEFAULTS[gwc]}
+    filters = dict(filters or {})
+    styles = filters.get("STYLES")
+    if styles is not None and "values" not in styles:
+        del filters["STYLES"]  # GeoWebCache's own: any of the layer's styles
+    for f in filters.values():
+        f.pop("default", None) if f["type"] == "styles" else None
+        if f.get("default") == "":
+            del f["default"]
+    if filters:
+        options["parameterFilters"] = filters
     if gridsets == sorted(DEFAULT_GRIDSETS) and formats == sorted(DEFAULT_FORMATS) and not options:
         return True
     return {"gridsets": gridsets, "formats": formats, **options}
@@ -101,6 +111,10 @@ class Importer:
         self.secrets: list[str] = []  # Secrets the imported stores name
         self.global_styles: dict[str, tuple[str, str]] = {}  # global style name -> (suffix, text)
         self.legends: dict[str, dict] = {}  # workspace style name -> its legend graphic
+
+    def cache(self, name: str):
+        tile_layer = self.gs.tile_layer(name)
+        return cache_setting(tile_layer, self.gs.parameter_filters(name) if tile_layer else None)
 
     def style(self, ref: str | None) -> str | None:
         """A live style reference as the files write it, or None if it can't be."""
@@ -257,7 +271,7 @@ class Importer:
         title = (layer.get("attribution") or {}).get("title")
         if title:
             spec["attribution"] = title
-        cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
+        cache = self.cache(f"{self.ws}:{gs_name}")
         if cache:
             spec["cache"] = cache
         spec.update(details.to_spec(item, layer))
@@ -320,7 +334,7 @@ class Importer:
             title = (layer.get("attribution") or {}).get("title")
             if title and title != self.attributions.get(linked[0] if linked else None):
                 spec["attribution"] = title
-            cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
+            cache = self.cache(f"{self.ws}:{gs_name}")
             if cache:
                 spec["cache"] = cache
             if ft.get("projectionPolicy") == "FORCE_DECLARED" and ft.get("srs") and ft["srs"] != (native_code(ft) or self.project_crs):
@@ -368,7 +382,7 @@ class Importer:
                 self.notes.append(f"group {gs_name}: no members left; left out")
                 continue
             spec["layers"] = members
-            cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
+            cache = self.cache(f"{self.ws}:{gs_name}")
             if cache:
                 spec["cache"] = cache
             for flag in ("enabled", "advertised"):
@@ -402,7 +416,7 @@ class Importer:
 
     def blob_stores(self, resources: list[dict]) -> list[dict]:
         """BlobStore resources for the blob stores the imported layers' tiles are kept in."""
-        from .tiles import live_blob_store
+        from .tiles import FIELDS, KEYS, live_blob_store
 
         names = sorted({r["spec"]["cache"]["blobStore"] for r in resources
                         if isinstance(r["spec"].get("cache"), dict) and r["spec"]["cache"].get("blobStore")})
@@ -420,16 +434,24 @@ class Importer:
                     self.notes.append(f"blob store {name}: {live['path']} isn't on the shared data volume; left out")
                     continue
                 spec.update({"type": "file", "path": path})
-            else:
-                spec["type"] = "s3"
-                spec.update({k: live[k] for k in ("bucket", "prefix", "endpoint", "region", "maxConnections", "gzip") if k in live})
-                if live.get("access") and live["access"] != "PRIVATE":
-                    spec["access"] = live["access"].lower().replace("_", "-")
-                if live.get("accessKey"):
+            elif live["type"] in KEYS:
+                kind = live["type"]
+                spec["type"] = kind
+                spec.update({k: live[k] for k in FIELDS[kind] if k in live and k != "access"})
+                if kind == "s3":
+                    spec = {k: v for k, v in spec.items() if (k, v) not in (("maxConnections", 50), ("gzip", True))}
+                    if live.get("access") and live["access"] != "PRIVATE":
+                        spec["access"] = live["access"].lower().replace("_", "-")
+                if kind == "gcs" and not live.get("defaultCredentials"):
+                    spec.pop("defaultCredentials", None)
+                if any(k in live for k in KEYS[kind]):
                     secret = f"{meta}-credentials"
                     spec["credentials"] = {"secret": secret}
-                    self.notes.append(f"blob store {name}: put its keys in Secret {secret} (keys: accessKey, secretKey), "
+                    self.notes.append(f"blob store {name}: put its keys in Secret {secret} (keys: {', '.join(KEYS[kind])}), "
                                       "and add it to configops.secrets")
+            else:
+                self.notes.append(f"blob store {name}: its type isn't one the files have; left out")
+                continue
             if live.get("default"):
                 spec["default"] = True
             if not live.get("enabled", True):

@@ -170,21 +170,53 @@
     {
       "if": {
         "required": [
-          "kind",
-          "metadata"
+          "kind"
         ],
         "properties": {
           "kind": {
             "const": "Service"
-          },
-          "metadata": {
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "spec"
+            ],
             "properties": {
-              "name": {
-                "const": "wms"
+              "spec": {
+                "required": [
+                  "service"
+                ],
+                "properties": {
+                  "service": {
+                    "const": "wms"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "required": [
+              "metadata"
+            ],
+            "properties": {
+              "metadata": {
+                "properties": {
+                  "name": {
+                    "const": "wms"
+                  }
+                }
+              },
+              "spec": {
+                "not": {
+                  "required": [
+                    "service"
+                  ]
+                }
               }
             }
           }
-        }
+        ]
       },
       "then": {
         "properties": {
@@ -197,21 +229,53 @@
     {
       "if": {
         "required": [
-          "kind",
-          "metadata"
+          "kind"
         ],
         "properties": {
           "kind": {
             "const": "Service"
-          },
-          "metadata": {
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "spec"
+            ],
             "properties": {
-              "name": {
-                "const": "wfs"
+              "spec": {
+                "required": [
+                  "service"
+                ],
+                "properties": {
+                  "service": {
+                    "const": "wfs"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "required": [
+              "metadata"
+            ],
+            "properties": {
+              "metadata": {
+                "properties": {
+                  "name": {
+                    "const": "wfs"
+                  }
+                }
+              },
+              "spec": {
+                "not": {
+                  "required": [
+                    "service"
+                  ]
+                }
               }
             }
           }
-        }
+        ]
       },
       "then": {
         "properties": {
@@ -224,21 +288,53 @@
     {
       "if": {
         "required": [
-          "kind",
-          "metadata"
+          "kind"
         ],
         "properties": {
           "kind": {
             "const": "Service"
-          },
-          "metadata": {
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "spec"
+            ],
             "properties": {
-              "name": {
-                "const": "wcs"
+              "spec": {
+                "required": [
+                  "service"
+                ],
+                "properties": {
+                  "service": {
+                    "const": "wcs"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "required": [
+              "metadata"
+            ],
+            "properties": {
+              "metadata": {
+                "properties": {
+                  "name": {
+                    "const": "wcs"
+                  }
+                }
+              },
+              "spec": {
+                "not": {
+                  "required": [
+                    "service"
+                  ]
+                }
               }
             }
           }
-        }
+        ]
       },
       "then": {
         "properties": {
@@ -251,21 +347,53 @@
     {
       "if": {
         "required": [
-          "kind",
-          "metadata"
+          "kind"
         ],
         "properties": {
           "kind": {
             "const": "Service"
-          },
-          "metadata": {
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "spec"
+            ],
             "properties": {
-              "name": {
-                "const": "wmts"
+              "spec": {
+                "required": [
+                  "service"
+                ],
+                "properties": {
+                  "service": {
+                    "const": "wmts"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "required": [
+              "metadata"
+            ],
+            "properties": {
+              "metadata": {
+                "properties": {
+                  "name": {
+                    "const": "wmts"
+                  }
+                }
+              },
+              "spec": {
+                "not": {
+                  "required": [
+                    "service"
+                  ]
+                }
               }
             }
           }
-        }
+        ]
       },
       "then": {
         "properties": {
@@ -277,9 +405,19 @@
     },
     {
       "if": {
+        "required": [
+          "kind"
+        ],
         "properties": {
           "kind": {
             "const": "Service"
+          },
+          "spec": {
+            "not": {
+              "required": [
+                "service"
+              ]
+            }
           }
         }
       },
@@ -294,7 +432,7 @@
                   "wcs",
                   "wmts"
                 ],
-                "description": "wms, wfs, wcs or wmts"
+                "description": "wms, wfs, wcs or wmts, or set spec.service"
               }
             }
           }
@@ -730,58 +868,7 @@
           "type": "boolean"
         },
         "cache": {
-          "oneOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "gridsets": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "minItems": 1
-                },
-                "formats": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "minItems": 1
-                },
-                "metaTiles": {
-                  "type": "array",
-                  "items": {
-                    "type": "integer",
-                    "minimum": 1
-                  },
-                  "minItems": 2,
-                  "maxItems": 2,
-                  "description": "[columns, rows] of tiles drawn at once"
-                },
-                "gutter": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "expireCache": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "expireClients": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "blobStore": {
-                  "type": "string",
-                  "minLength": 1,
-                  "description": "a BlobStore's name: where the tiles are kept"
-                }
-              }
-            }
-          ]
+          "$ref": "#/$defs/cache"
         },
         "attribution": {
           "oneOf": [
@@ -1161,58 +1248,7 @@
           "$ref": "#/$defs/keywords"
         },
         "cache": {
-          "oneOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "gridsets": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "minItems": 1
-                },
-                "formats": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "minItems": 1
-                },
-                "metaTiles": {
-                  "type": "array",
-                  "items": {
-                    "type": "integer",
-                    "minimum": 1
-                  },
-                  "minItems": 2,
-                  "maxItems": 2,
-                  "description": "[columns, rows] of tiles drawn at once"
-                },
-                "gutter": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "expireCache": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "expireClients": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "blobStore": {
-                  "type": "string",
-                  "minLength": 1,
-                  "description": "a BlobStore's name: where the tiles are kept"
-                }
-              }
-            }
-          ]
+          "$ref": "#/$defs/cache"
         },
         "enabled": {
           "type": "boolean"
@@ -1444,6 +1480,153 @@
                 }
               },
               "description": "the keystore's master password, from a Secret (GeoServer asks for at least 8 characters)"
+            },
+            "tileCaching": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Tile caching defaults (GeoServer's gwc-gs.xml); GeoServer reads them when its services start",
+              "properties": {
+                "cacheLayersByDefault": {
+                  "type": "boolean"
+                },
+                "cacheNonDefaultStyles": {
+                  "type": "boolean"
+                },
+                "directWMSIntegrationEnabled": {
+                  "type": "boolean"
+                },
+                "requireTiledParameter": {
+                  "type": "boolean"
+                },
+                "WMSCEnabled": {
+                  "type": "boolean"
+                },
+                "TMSEnabled": {
+                  "type": "boolean"
+                },
+                "WMTSEnabled": {
+                  "type": "boolean"
+                },
+                "securityEnabled": {
+                  "type": "boolean"
+                },
+                "innerCachingEnabled": {
+                  "type": "boolean"
+                },
+                "persistenceEnabled": {
+                  "type": "boolean"
+                },
+                "metaTilingX": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "metaTilingY": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "gutter": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "defaultCachingGridSetIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "defaultCoverageCacheFormats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "defaultVectorCacheFormats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "defaultOtherCacheFormats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "jai": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Image processing (JAI)",
+              "properties": {
+                "allowInterpolation": {
+                  "type": "boolean"
+                },
+                "recycling": {
+                  "type": "boolean"
+                },
+                "tilePriority": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "tileThreads": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "memoryCapacity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "memoryThreshold": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "pngEncoderType": {
+                  "enum": [
+                    "PNGJ",
+                    "JDK"
+                  ]
+                }
+              }
+            },
+            "coverageAccess": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Raster access: thread pool and caches",
+              "properties": {
+                "maxPoolSize": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "corePoolSize": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "keepAliveTime": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "queueType": {
+                  "enum": [
+                    "UNBOUNDED",
+                    "DIRECT"
+                  ]
+                },
+                "imageIOCacheThreshold": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "granuleCacheMaxSizeMB": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "granuleCacheThresholdKB": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
             }
           }
         },
@@ -1594,6 +1777,14 @@
         },
         "remoteStyleTimeout": {
           "type": "integer"
+        },
+        "service": {
+          "const": "wms",
+          "description": "the service, when the resource's name isn't it (a workspace's own settings)"
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName",
+          "description": "this workspace's own settings for the service, in place of the global ones"
         }
       }
     },
@@ -1680,6 +1871,14 @@
         },
         "getFeatureOutputTypeCheckingEnabled": {
           "type": "boolean"
+        },
+        "service": {
+          "const": "wfs",
+          "description": "the service, when the resource's name isn't it (a workspace's own settings)"
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName",
+          "description": "this workspace's own settings for the service, in place of the global ones"
         }
       }
     },
@@ -1758,6 +1957,14 @@
             "QUALITY",
             "SPEED"
           ]
+        },
+        "service": {
+          "const": "wcs",
+          "description": "the service, when the resource's name isn't it (a workspace's own settings)"
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName",
+          "description": "this workspace's own settings for the service, in place of the global ones"
         }
       }
     },
@@ -1801,6 +2008,14 @@
         "geoserver": {
           "type": "object",
           "description": "any other field, as GeoServer's REST API names it"
+        },
+        "service": {
+          "const": "wmts",
+          "description": "the service, when the resource's name isn't it (a workspace's own settings)"
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName",
+          "description": "this workspace's own settings for the service, in place of the global ones"
         }
       }
     },
@@ -2122,7 +2337,9 @@
         "type": {
           "enum": [
             "file",
-            "s3"
+            "s3",
+            "azure",
+            "gcs"
           ]
         },
         "name": {
@@ -2146,14 +2363,16 @@
         },
         "bucket": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "s3, gcs: the bucket"
         },
         "prefix": {
           "type": "string"
         },
         "endpoint": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "s3, azure, gcs: another address than the cloud's own (MinIO, SeaweedFS, Azurite, a local fake)"
         },
         "region": {
           "type": "string",
@@ -2173,9 +2392,174 @@
           "type": "boolean"
         },
         "credentials": {
-          "$ref": "#/$defs/secretRef"
+          "$ref": "#/$defs/secretRef",
+          "description": "s3: keys accessKey and secretKey; azure: accountName and accountKey; gcs: apiKey"
+        },
+        "container": {
+          "type": "string",
+          "minLength": 1,
+          "description": "azure: the blob container"
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1,
+          "description": "gcs: the Google Cloud project"
+        },
+        "defaultCredentials": {
+          "type": "boolean",
+          "description": "gcs: log in as the pod's own Google identity (workload identity) instead of an API key"
         }
       }
+    },
+    "cache": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "gridsets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "formats": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "metaTiles": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "[columns, rows] of tiles drawn at once"
+            },
+            "gutter": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "expireCache": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "expireClients": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "blobStore": {
+              "type": "string",
+              "minLength": 1,
+              "description": "a BlobStore's name: where the tiles are kept"
+            },
+            "parameterFilters": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "styles",
+                      "values",
+                      "regex",
+                      "numbers",
+                      "integers"
+                    ],
+                    "description": "styles: the layer's styles; values: one of a list of strings; regex: any matching string; numbers, integers: one of a list, within threshold"
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "number"
+                      ]
+                    },
+                    "description": "the allowed values (for styles: the allowed styles; all of the layer's if left out)"
+                  },
+                  "regex": {
+                    "type": "string"
+                  },
+                  "default": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  },
+                  "threshold": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              },
+              "description": "request parameters that make tiles of their own, by parameter name (STYLES, CQL_FILTER, TIME, ...). GeoWebCache adds STYLES (any of the layer's styles) by itself"
+            },
+            "seed": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "zoom"
+              ],
+              "properties": {
+                "zoom": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "[from, to] zoom levels"
+                },
+                "gridsets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "the cache's gridsets to seed; all of them if left out"
+                },
+                "formats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "the cache's formats to seed; all of them if left out"
+                },
+                "bounds": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "description": "[minx, miny, maxx, maxy] in the gridset's CRS; the whole layer if left out"
+                },
+                "threads": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16
+                }
+              },
+              "description": "draw these tiles ahead of time: after apply changes the cache, and after each load"
+            }
+          }
+        }
+      ]
     }
   }
 }

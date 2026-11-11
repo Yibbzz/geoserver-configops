@@ -24,7 +24,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Default workspace | Yes | `Workspace` `default` |
 | Isolated | Yes | `Workspace` `isolated` |
 | Workspace settings (contact, proxy, numbers) | Yes | `Settings` with `workspace:` |
-| Workspace service settings (its own WMS, WFS…) | Can't | No REST endpoint in GeoServer Cloud |
+| Workspace service settings (its own WMS, WFS…) | Yes | `Service` with `workspace:` |
 | Workspace administrators | Not yet | GeoServer ACL's workspace admin rules; the ACL service is off in the chart |
 
 ### Stores
@@ -71,7 +71,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Custom dimensions | Not yet | |
 | **Tile caching:** on or off, gridsets, image formats | Yes | `cache:` |
 | Metatiling, gutter, expiry | Yes | `cache: { metaTiles, gutter, expireCache, expireClients }` |
-| Parameter filters | Not yet | GeoWebCache adds the STYLES one by itself |
+| Parameter filters | Yes | `cache.parameterFilters` |
 | **Security:** who may read, write, administer | Yes | `AccessRule` with `layer:` |
 
 ### Layer groups
@@ -119,8 +119,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | Global | Yes | `Settings`: proxy address, decimals, charset, verbose, error handling, web UI mode and the rest |
 | Contact information | Yes | `Settings` `contact:` |
-| JAI, coverage access | Partly | Through `Settings` `global.geoserver:`; not listed in the schema |
-| Image processing | Partly | As JAI |
+| JAI, coverage access | Yes | `Settings` `global.jai`, `global.coverageAccess` |
+| Image processing | Yes | As JAI |
 | Logging | Chart | GeoServer Cloud logs through Spring Boot, set in the chart's environment |
 
 ## Tile caching
@@ -128,12 +128,12 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Page | Status | Notes |
 | --- | --- | --- |
 | Tile layers | Yes | Each layer's and group's `cache:` |
-| Caching defaults | Not yet | |
+| Caching defaults | Yes | `Settings` `global.tileCaching`; GeoServer reads them when its services start |
 | Gridsets (your own) | Yes | `Gridset`, e.g. British National Grid |
 | Disk quota | Can't | `/gwc/rest/diskquota` answers 404 in GeoServer Cloud |
 | Blob stores: a folder, S3 | Yes | `BlobStore` `type: file` (on the data volume) or `s3`; `cache.blobStore` |
-| Blob stores: Azure, Google Cloud Storage | Not yet | In the images; not tested |
-| Seeding, truncating | Partly | Cached tiles are cleared after each load; seeding isn't built |
+| Blob stores: Azure, Google Cloud Storage | Yes | `BlobStore` `type: azure`, `gcs` |
+| Seeding, truncating | Yes | `cache.seed`: after apply changes a layer and after each load, which also clears the old tiles |
 
 ## Security
 
