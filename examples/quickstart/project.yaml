@@ -1,6 +1,6 @@
 # The smallest real project: one dataset from data.gov.uk, published as one layer.
 # Loads in about a minute. See the README's quick start; examples/uk-basemap is the full example.
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata:
   name: quickstart
@@ -14,7 +14,7 @@ spec:
   workspace: quickstart
   crs: EPSG:27700
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Source
 metadata:
   name: data-gov-uk
@@ -22,9 +22,9 @@ spec:
   type: ckan
   url: https://data.gov.uk
 ---
-# Surrey Heath conservation areas: `gisdata discover data-gov-uk conservation-areas125`
+# Surrey Heath conservation areas: `configops discover data-gov-uk conservation-areas125`
 # shows the package, its files and the layer inside.
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Dataset
 metadata:
   name: conservation-areas
@@ -35,7 +35,7 @@ spec:
   tables:
     conservation_areas: {}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: conservation-areas

@@ -10,8 +10,8 @@ import os
 import psycopg2
 import pytest
 
-from gisdata.cli import main
-from gisdata.geoserver import GeoServer
+from configops.cli import main
+from configops.geoserver import GeoServer
 
 pytestmark = pytest.mark.e2e
 
@@ -19,8 +19,8 @@ URL = os.environ.get("E2E_GEOSERVER_URL")
 if not URL:
     pytest.skip("E2E_GEOSERVER_URL not set", allow_module_level=True)
 
-WS = "gisdata_extras"
-STYLE = "gisdata-e2e-green"
+WS = "configops_extras"
+STYLE = "configops-e2e-green"
 PASSWORD = os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver")
 DB = dict(host=os.environ.get("E2E_DB_HOST", "localhost"), port=int(os.environ.get("E2E_DB_PORT", 55433)),
           dbname="postgres", user="postgres", password=os.environ.get("E2E_DB_PASSWORD", "postgres"))
@@ -57,12 +57,12 @@ def env(monkeypatch):
     for key, value in {"E2EGS_USERNAME": "admin", "E2EGS_PASSWORD": PASSWORD, "E2EDB_HOST": DB["host"],
                        "E2EDB_PORT": str(DB["port"]), "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": DB["user"],
                        "E2EDB_PASSWORD": DB["password"]}.items():
-        monkeypatch.setenv(f"GISDATA_{key}", value)
+        monkeypatch.setenv(f"CONFIGOPS_{key}", value)
 
 
 def project_yaml() -> str:
     return f"""\
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata: {{ name: e2e-extras }}
 spec:
@@ -77,22 +77,22 @@ def project(tmp_path, env):
     (tmp_path / "styles" / "global").mkdir(parents=True)
     (tmp_path / "styles" / "global" / f"{STYLE}.sld").write_text(SLD)
     (tmp_path / "project.yaml").write_text(project_yaml() + f"""---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Workspace
-metadata: {{ name: gisdata-extras }}
+metadata: {{ name: configops-extras }}
 spec: {{ namespace: "https://example.org/extras", isolated: true }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Style
 metadata: {{ name: {STYLE} }}
 spec: {{ file: styles/global/{STYLE}.sld, global: true }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: points }}
 spec: {{ table: {{ schema: e2e_extras, name: points }}, style: {STYLE} }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: LayerGroup
 metadata: {{ name: hidden }}
 spec: {{ layers: [points], advertised: false, metadataLinks: [ {{ url: "https://example.org/group.xml" }} ] }}
@@ -100,16 +100,16 @@ spec: {{ layers: [points], advertised: false, metadataLinks: [ {{ url: "https://
     return tmp_path
 
 
-def gisdata(capsys, *args):
+def configops(capsys, *args):
     code = main(list(args))
     out = capsys.readouterr()
     return code, out.out + out.err
 
 
 def test_apply_then_nothing_to_do(gs, project, capsys):
-    code, out = gisdata(capsys, "apply", "-C", str(project))
+    code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0, out
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     assert gs.get(f"namespaces/{WS}")["namespace"]["uri"] == "https://example.org/extras"
     assert gs.get(f"workspaces/{WS}")["workspace"]["isolated"] is True
@@ -119,10 +119,10 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
 
 
 def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text(project_yaml())
-    assert gisdata(capsys, "import", WS, "-C", str(imported))[0] == 0
+    assert configops(capsys, "import", WS, "-C", str(imported))[0] == 0
     assert (imported / "styles" / "global" / f"{STYLE}.sld").exists()
-    code, out = gisdata(capsys, "plan", "-C", str(imported))
+    code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out

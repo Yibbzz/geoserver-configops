@@ -6,8 +6,8 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from conftest import ROOT
-from gisdata.loader import load
-from gisdata.validate import schema, validate
+from configops.loader import load
+from configops.validate import schema, validate
 
 PROJECTS = sorted(p.parent for p in (ROOT / "examples").glob("*/project.yaml"))
 

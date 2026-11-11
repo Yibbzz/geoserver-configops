@@ -1,7 +1,7 @@
 """A raster Dataset against the real GeoServer Cloud REST service: a zip of grid tiles served over
 HTTP is made into one COG on the data volume, published through a Store on it, then loaded again.
 
-gisdata runs here and writes to E2E_DATA_DIR, which tests/e2e/up.sh mounts at /data in the REST
+configops runs here and writes to E2E_DATA_DIR, which tests/e2e/up.sh mounts at /data in the REST
 service; it needs GDAL's command-line tools:
 
     E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data pytest -m e2e
@@ -18,8 +18,8 @@ from pathlib import Path
 import psycopg2
 import pytest
 
-from gisdata.cli import main
-from gisdata.geoserver import GeoServer
+from configops.cli import main
+from configops.geoserver import GeoServer
 
 pytestmark = pytest.mark.e2e
 
@@ -30,7 +30,7 @@ if not URL or not DATA:
 if shutil.which("gdalbuildvrt") is None:
     pytest.skip("GDAL's command-line tools not installed", allow_module_level=True)
 
-WS = "gisdata_raster"
+WS = "configops_raster"
 PASSWORD = os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver")
 DB = dict(host=os.environ.get("E2E_DB_HOST", "localhost"), port=int(os.environ.get("E2E_DB_PORT", 55433)),
           dbname="postgres", user="postgres", password=os.environ.get("E2E_DB_PASSWORD", "postgres"))
@@ -72,7 +72,7 @@ def gs():
     yield gs
     gs.delete_workspace(WS)
     shutil.rmtree(Path(DATA) / "e2e-raster", ignore_errors=True)
-    shutil.rmtree(Path(DATA) / ".gisdata-backups" / "e2e-raster", ignore_errors=True)
+    shutil.rmtree(Path(DATA) / ".configops-backups" / "e2e-raster", ignore_errors=True)
     sql("DELETE FROM public.os_ingest_log WHERE dataset_id = 'e2e-heights'")
 
 
@@ -90,10 +90,10 @@ def project(tmp_path, served, monkeypatch):
     for key, value in {"E2EGS_USERNAME": "admin", "E2EGS_PASSWORD": PASSWORD, "E2EDB_HOST": DB["host"],
                        "E2EDB_PORT": str(DB["port"]), "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": DB["user"],
                        "E2EDB_PASSWORD": DB["password"]}.items():
-        monkeypatch.setenv(f"GISDATA_{key}", value)
-    monkeypatch.setenv("GISDATA_DATA_DIR", str(Path(DATA).resolve()))
+        monkeypatch.setenv(f"CONFIGOPS_{key}", value)
+    monkeypatch.setenv("CONFIGOPS_DATA_DIR", str(Path(DATA).resolve()))
     (tmp_path / "project.yaml").write_text(f"""\
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata: {{ name: e2e-raster }}
 spec:
@@ -103,22 +103,22 @@ spec:
   crs: EPSG:27700
   backups: 1
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Source
 metadata: {{ name: web }}
 spec: {{ type: url }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Dataset
 metadata: {{ name: e2e-heights }}
 spec: {{ source: web, url: "{served}", raster: {{ path: {PATH} }} }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata: {{ name: heights }}
 spec: {{ type: geotiff, dataset: e2e-heights }}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: heights }}
 spec: {{ store: heights, title: Heights }}
@@ -126,18 +126,18 @@ spec: {{ store: heights, title: Heights }}
     return tmp_path
 
 
-def gisdata(capsys, *args):
+def configops(capsys, *args):
     code = main(list(args))
     out = capsys.readouterr()
     return code, out.out + out.err
 
 
 def test_first_load_then_publish_then_nothing_to_do(gs, project, capsys):
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 2 and f"+ raster /data/{PATH}   (first sync of dataset e2e-heights)" in out, out
-    code, out = gisdata(capsys, "apply", "-C", str(project))
+    code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0 and "e2e-heights: loaded" in out and "(200 pixels)" in out, out
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     coverage = gs.get(f"workspaces/{WS}/coveragestores/heights/coverages/heights")["coverage"]
     assert coverage["srs"] == "EPSG:27700"  # the project's, since the grids have none
@@ -145,10 +145,10 @@ def test_first_load_then_publish_then_nothing_to_do(gs, project, capsys):
 
 
 def test_a_new_load_is_swapped_in_and_geoserver_refreshed(gs, project, capsys):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
-    code, out = gisdata(capsys, "sync", "-C", str(project), "e2e-heights", "--force")
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    code, out = configops(capsys, "sync", "-C", str(project), "e2e-heights", "--force")
     assert code == 0 and "e2e-heights: loaded" in out, out
     assert "bounds of 1 layer(s) worked out again" in out
-    backups = list((Path(DATA) / ".gisdata-backups" / "e2e-raster").glob("heights.*.tif"))
+    backups = list((Path(DATA) / ".configops-backups" / "e2e-raster").glob("heights.*.tif"))
     assert len(backups) == 1
-    assert gisdata(capsys, "plan", "-C", str(project))[0] == 0
+    assert configops(capsys, "plan", "-C", str(project))[0] == 0

@@ -1,5 +1,5 @@
 # Turns on the shared data volume (dataVolume in values.yaml) and mounts it at /data in every
-# GeoServer service, for file stores and the raster files gisdata loads:
+# GeoServer service, for file stores and the raster files configops loads:
 #   helm upgrade --install geoserver . -f values.yaml -f values-data-volume.yaml
 dataVolume:
   enabled: true

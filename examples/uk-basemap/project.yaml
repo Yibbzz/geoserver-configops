@@ -1,5 +1,5 @@
 # The GeoServer and database this directory manages, and defaults for everything else.
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata:
   name: uk-basemap

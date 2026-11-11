@@ -1,10 +1,10 @@
-"""gisdata's GeoServer client against the real GeoServer Cloud REST service.
+"""configops's GeoServer client against the real GeoServer Cloud REST service.
 
 Start it with tests/e2e/up.sh, then:
 
     E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 pytest -m e2e
 
-Uses its own workspace (gisdata_e2e) and table, removed at the end.
+Uses its own workspace (configops_e2e) and table, removed at the end.
 """
 
 import os
@@ -12,7 +12,7 @@ import os
 import psycopg2
 import pytest
 
-from gisdata.geoserver import GeoServer, GeoServerError
+from configops.geoserver import GeoServer, GeoServerError
 
 pytestmark = pytest.mark.e2e
 
@@ -20,7 +20,7 @@ URL = os.environ.get("E2E_GEOSERVER_URL")
 if not URL:
     pytest.skip("E2E_GEOSERVER_URL not set", allow_module_level=True)
 
-WS, STORE, JNDI = "gisdata_e2e", "postgis", "java:comp/env/jdbc/mypostgis"
+WS, STORE, JNDI = "configops_e2e", "postgis", "java:comp/env/jdbc/mypostgis"
 SLD = """<?xml version="1.0" encoding="UTF-8"?>
 <StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc">
   <NamedLayer><Name>{name}</Name><UserStyle><FeatureTypeStyle><Rule>
@@ -152,7 +152,7 @@ def test_deleting(gs):
 
 
 def test_errors_say_what_failed(gs):
-    with pytest.raises(GeoServerError, match=r"POST workspaces/gisdata_e2e/datastores/postgis/featuretypes with HTTP"):
+    with pytest.raises(GeoServerError, match=r"POST workspaces/configops_e2e/datastores/postgis/featuretypes with HTTP"):
         gs.upsert_featuretype(WS, STORE, "nothing", "no_such_table")
 
 

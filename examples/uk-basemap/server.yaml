@@ -1,7 +1,7 @@
 # What the services say about themselves in their capabilities, and a limit that keeps
 # a WFS client from asking for all 4 million road links at once. Contact details and
 # other global settings go in a `Settings` resource (see the spec).
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Service
 metadata:
   name: wms
@@ -12,7 +12,7 @@ spec:
   accessConstraints: Contains OS data © Crown copyright and database right. Open Government Licence v3.0.
   srs: [EPSG:27700, EPSG:4326, EPSG:3857]
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Service
 metadata:
   name: wfs

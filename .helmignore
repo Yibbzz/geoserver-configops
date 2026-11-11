@@ -41,10 +41,10 @@ __pycache__/
 Makefile
 .pytest_cache/
 docs/
-gisdata/
+configops/
 pyproject.toml
 *.egg-info/
-# gisdata secret values: never packaged, never put in the project ConfigMap
+# configops secret values: never packaged, never put in the project ConfigMap
 secrets.yaml
 secrets.yml
 Dockerfile

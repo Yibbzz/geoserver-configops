@@ -13,9 +13,9 @@ import os
 import pytest
 import yaml
 
-from gisdata.cli import main
-from gisdata.geoserver import GeoServer
-from gisdata.validate import schema
+from configops.cli import main
+from configops.geoserver import GeoServer
+from configops.validate import schema
 
 pytestmark = pytest.mark.e2e
 
@@ -23,7 +23,7 @@ URL = os.environ.get("E2E_GEOSERVER_URL")
 if not URL:
     pytest.skip("E2E_GEOSERVER_URL not set", allow_module_level=True)
 
-WS = "gisdata_settings"
+WS = "configops_settings"
 PASSWORD = os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver")
 DB = dict(host=os.environ.get("E2E_DB_HOST", "localhost"), port=os.environ.get("E2E_DB_PORT", "55433"))
 SAVED = ["settings", "settings/contact", "services/wms/settings", "services/wfs/settings",
@@ -103,25 +103,25 @@ def project(tmp_path, monkeypatch):
     ]
     docs += [{"kind": "Service", "metadata": {"name": s}, "spec": example(defs[f"service_{s}"]["properties"])}
              for s in ("wms", "wfs", "wcs", "wmts")]
-    (tmp_path / "project.yaml").write_text(yaml.safe_dump_all([{"apiVersion": "gisdata/v1alpha1", **d} for d in docs]))
+    (tmp_path / "project.yaml").write_text(yaml.safe_dump_all([{"apiVersion": "configops/v1alpha1", **d} for d in docs]))
     for key, value in {"E2EGS_USERNAME": "admin", "E2EGS_PASSWORD": PASSWORD, "E2EDB_HOST": DB["host"],
                        "E2EDB_PORT": DB["port"], "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": "postgres",
                        "E2EDB_PASSWORD": os.environ.get("E2E_DB_PASSWORD", "postgres")}.items():
-        monkeypatch.setenv(f"GISDATA_{key}", value)
+        monkeypatch.setenv(f"CONFIGOPS_{key}", value)
     return tmp_path
 
 
-def gisdata(capsys, *args):
+def configops(capsys, *args):
     code = main(list(args))
     out = capsys.readouterr()
     return code, out.out + out.err
 
 
 def test_every_field_is_applied_then_nothing_to_do(gs, project, capsys):
-    assert gisdata(capsys, "validate", str(project))[0] == 0
-    code, out = gisdata(capsys, "apply", "-C", str(project))
+    assert configops(capsys, "validate", str(project))[0] == 0
+    code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0, out
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
 
     assert gs.get("services/wms/settings")["wms"]["abstrct"] == "e2e abstract"
@@ -131,20 +131,20 @@ def test_every_field_is_applied_then_nothing_to_do(gs, project, capsys):
 
 def test_import_round_trip(gs, project, tmp_path_factory, capsys):
     """What apply set, import writes back: plan on the imported files has nothing to do."""
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text((project / "project.yaml").read_text().split("\n---\n")[0] + "\n")
-    code, out = gisdata(capsys, "import", "--settings", "-C", str(imported))
+    code, out = configops(capsys, "import", "--settings", "-C", str(imported))
     assert code == 0 and "server.yaml: 2 Settings, 4 Service(s)" in out, out
-    code, out = gisdata(capsys, "plan", "-C", str(imported))
+    code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     wms = gs.get("services/wms/settings")["wms"]
     gs.request("PUT", "services/wms/settings", {"wms": {**wms, "title": "Edited in the web UI"}})
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 2 and 'title: "Edited in the web UI" -> "e2e title"' in out
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
-    assert gisdata(capsys, "plan", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "plan", "-C", str(project))[0] == 0

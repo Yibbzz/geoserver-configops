@@ -9,8 +9,8 @@ import os
 import psycopg2
 import pytest
 
-from gisdata.cli import main
-from gisdata.geoserver import GeoServer
+from configops.cli import main
+from configops.geoserver import GeoServer
 
 pytestmark = pytest.mark.e2e
 
@@ -18,7 +18,7 @@ URL = os.environ.get("E2E_GEOSERVER_URL")
 if not URL:
     pytest.skip("E2E_GEOSERVER_URL not set", allow_module_level=True)
 
-WS = "gisdata_layer_data"
+WS = "configops_layer_data"
 PASSWORD = os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver")
 DB = dict(host=os.environ.get("E2E_DB_HOST", "localhost"), port=int(os.environ.get("E2E_DB_PORT", 55433)),
           dbname="postgres", user="postgres", password=os.environ.get("E2E_DB_PASSWORD", "postgres"))
@@ -55,12 +55,12 @@ def env(monkeypatch):
     for key, value in {"E2EGS_USERNAME": "admin", "E2EGS_PASSWORD": PASSWORD, "E2EDB_HOST": DB["host"],
                        "E2EDB_PORT": str(DB["port"]), "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": DB["user"],
                        "E2EDB_PASSWORD": DB["password"]}.items():
-        monkeypatch.setenv(f"GISDATA_{key}", value)
+        monkeypatch.setenv(f"CONFIGOPS_{key}", value)
 
 
 def project_yaml() -> str:
     return f"""\
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata: {{ name: e2e-layer-data }}
 spec:
@@ -75,7 +75,7 @@ def project(tmp_path, env):
     (tmp_path / "styles").mkdir()
     (tmp_path / "styles" / "dots.sld").write_text(SLD)
     (tmp_path / "project.yaml").write_text(project_yaml() + """---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: { name: high-hills }
 spec:
@@ -89,7 +89,7 @@ spec:
     geometry: { column: geom, type: Point, crs: EPSG:27700 }
   style: dots
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: { name: sites }
 spec:
@@ -97,7 +97,7 @@ spec:
   crs: EPSG:27700
   attributes: [name, kind]
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Style
 metadata: { name: dots }
 spec: { file: styles/dots.sld, legend: { url: "https://example.org/dots.png", width: 16, height: 16 } }
@@ -105,16 +105,16 @@ spec: { file: styles/dots.sld, legend: { url: "https://example.org/dots.png", wi
     return tmp_path
 
 
-def gisdata(capsys, *args):
+def configops(capsys, *args):
     code = main(list(args))
     out = capsys.readouterr()
     return code, out.out + out.err
 
 
 def test_apply_then_nothing_to_do(gs, project, capsys):
-    code, out = gisdata(capsys, "apply", "-C", str(project))
+    code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0, out
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     ft = gs.featuretype(WS, "e2e_layer_data", "sites")["featureType"]
     assert [a["name"] for a in ft["attributes"]["attribute"]] == ["geom", "name", "kind"]
@@ -123,25 +123,25 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     path = f"workspaces/{WS}/datastores/e2e_layer_data/featuretypes/high_hills"
     ft = gs.get(path)["featureType"]
     entry = next(e for e in ft["metadata"]["entry"] if isinstance(e, dict) and e.get("@key") == "JDBC_VIRTUAL_TABLE") \
         if isinstance(ft["metadata"]["entry"], list) else ft["metadata"]["entry"]
     entry["virtualTable"]["sql"] = "select id, name, height, geom from e2e_layer_data.sites"
     gs.request("PUT", path, {"featureType": {"metadata": ft["metadata"]}})
-    code, out = gisdata(capsys, "plan", "-C", str(project))
+    code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 2 and "sql:" in out, out
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
-    assert gisdata(capsys, "plan", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "plan", "-C", str(project))[0] == 0
 
 
 def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
-    assert gisdata(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text(project_yaml())
-    assert gisdata(capsys, "import", WS, "-C", str(imported))[0] == 0
+    assert configops(capsys, "import", WS, "-C", str(imported))[0] == 0
     text = (imported / f"{WS}.yaml").read_text()
     assert "query: |" in text and "legend:" in text
-    code, out = gisdata(capsys, "plan", "-C", str(imported))
+    code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out

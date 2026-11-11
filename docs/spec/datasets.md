@@ -2,12 +2,12 @@
 
 A set of YAML files that says which open datasets you want, where they come from, how often they update, and how they are published and styled in GeoServer Cloud. A small command-line tool reads the files and makes PostGIS and GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
 
-> **Status:** first draft for review, 9 Nov 2026. Every command below is built. `gisdata` is a working name for the tool and the `apiVersion` group; both will change when the project is named.
+> **Status:** first draft for review, 9 Nov 2026. Every command below is built. The tool is `configops`, part of GeoServer ConfigOps, and the `apiVersion` group is `configops`.
 
 ## Principles
 
 1. **The files hold what you chose, nothing else.** Anything GeoServer or the data can work out (projection definitions, bounding boxes, attribute lists, links, timestamps) is never written in the files. The tool fills it in when it applies them.
-2. **Plan, then apply.** `gisdata plan` shows what would change; `gisdata apply` makes exactly those changes, in dependency order, and running it twice changes nothing the second time.
+2. **Plan, then apply.** `configops plan` shows what would change; `configops apply` makes exactly those changes, in dependency order, and running it twice changes nothing the second time.
 3. **No state file.** The live GeoServer, the PostGIS schemas and the ingest log are the state. Drift (a change made in the web UI) shows up in the next `plan`.
 4. **Secrets by reference.** API keys and passwords never appear in the files, only the name of the secret that holds them.
 5. **Shaped like Kubernetes resources** (`apiVersion`, `kind`, `metadata`, `spec`), so the same files could later drive a Kubernetes operator instead of the CLI.
@@ -16,9 +16,9 @@ A set of YAML files that says which open datasets you want, where they come from
 ## How it fits together
 
 ```
- config files (git) ──► gisdata plan / apply ──► GeoServer catalog: workspaces, stores, layers, styles, tile cache
+ config files (git) ──► configops plan / apply ──► GeoServer catalog: workspaces, stores, layers, styles, tile cache
         │
-        └────────────► gisdata sync (nightly) ──► PostGIS tables: download, stage, validate, back up, swap in
+        └────────────► configops sync (nightly) ──► PostGIS tables: download, stage, validate, back up, swap in
                                                     └─► then refresh extents and clear cached tiles of the layers on them
 ```
 
@@ -47,14 +47,14 @@ uk-basemap/
 Every resource has the same outer shape:
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer                 # Project, Source, Dataset, Store, Layer, LayerGroup, Style, Settings, Service, Role, Group, User or AccessRule
 metadata:
   name: road-links          # unique per kind; lowercase letters, digits and dashes
 spec: {}                    # what you want; differs per kind
 ```
 
-There is no `status` in the files. Status is what `gisdata status` reports from the live system; writing it back would make every sync a git change.
+There is no `status` in the files. Status is what `configops status` reports from the live system; writing it back would make every sync a git change.
 
 ## Kinds
 
@@ -63,7 +63,7 @@ There is no `status` in the files. Status is what `gisdata status` reports from 
 One per directory. Says which GeoServer and database to manage and the defaults for everything else.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Project
 metadata:
   name: uk-basemap
@@ -73,7 +73,7 @@ spec:
     credentials: { secret: geoserver-admin }       # keys: username, password
   database:
     jndi: java:comp/env/jdbc/mypostgis             # how GeoServer reaches PostGIS (from the Helm chart)
-    connection: { secret: geoserver-pgconfig-secret }   # how gisdata itself reaches it, for loading data
+    connection: { secret: geoserver-pgconfig-secret }   # how configops itself reaches it, for loading data
     schemas: { live: data_layers, staging: staging, backup: backup }
   workspace: uk                                    # default workspace for layers and styles
   crs: EPSG:27700                                  # default CRS for tables that don't say
@@ -96,7 +96,7 @@ spec:
 Where data comes from. One per provider account.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Source
 metadata:
   name: os
@@ -104,14 +104,14 @@ spec:
   type: os-downloads                 # OS Downloads API
   credentials: { secret: os-api }    # key: apiKey; optional, OpenData products need none
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Source
 metadata:
   name: web
 spec:
   type: url                          # plain file downloads, no key
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Source
 metadata:
   name: data-gov-uk
@@ -141,15 +141,15 @@ Each type is a plug-in with two parts: list what's available, and fetch one prod
 One product from a source, loaded into one or more tables (or, with `raster:`, made into one Cloud-Optimised GeoTIFF), with an update schedule.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Dataset
 metadata:
   name: os-open-roads
 spec:
   source: os
-  product: OpenRoads                 # the provider's product ID, as `gisdata discover os` lists it
+  product: OpenRoads                 # the provider's product ID, as `configops discover os` lists it
   update: weekly                     # daily | weekly | monthly | manual | a cron expression
-  tables:                            # source layer -> table; names as `gisdata discover os OpenRoads` lists them
+  tables:                            # source layer -> table; names as `configops discover os OpenRoads` lists them
     road_link: {}                    # table os_open_roads_road_link
     road_node: { name: road_nodes }  # table road_nodes
 ```
@@ -174,7 +174,7 @@ A product is a *version* at the source (OS publishes `2026-10`, for example). `s
 With `raster:` instead of `tables:`, the download becomes one Cloud-Optimised GeoTIFF on the shared data volume (`-f values-data-volume.yaml`), and a `Store` with `dataset:` publishes it:
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Dataset
 metadata:
   name: terrain-50
@@ -186,7 +186,7 @@ spec:
     path: rasters/os-terrain-50.tif  # under /data
     crs: EPSG:27700                  # the grids carry no CRS of their own
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata:
   name: terrain-50
@@ -201,14 +201,14 @@ spec:
 | `raster.crs` | the rasters' own, else the project's `crs` | Assigned to the result |
 | `raster.nodata` | none | The value written where no raster covers (GDAL would write 0 there), and read as "no data" in the rasters |
 
-`sync` downloads the product (for `os-downloads`, a raster format: GeoTIFF, then ASCII Grid; for `ckan`, name the file with `resource`), unpacks every raster in it, through zips inside zips, mosaics them through a GDAL VRT and writes one deflate-compressed COG with overviews. It writes beside the live file, checks GDAL can read it, then renames it over the live file, so GeoServer never reads half a file; the old one moves to `.gisdata-backups/` on the volume, and the newest `backups` are kept. Then it resets the GeoServer stores on the file, works their layers' bounds out again and clears their cached tiles. `plan` loads a raster Dataset that has never loaded before making its store. Outside the cluster, `GISDATA_DATA_DIR` stands in for `/data`.
+`sync` downloads the product (for `os-downloads`, a raster format: GeoTIFF, then ASCII Grid; for `ckan`, name the file with `resource`), unpacks every raster in it, through zips inside zips, mosaics them through a GDAL VRT and writes one deflate-compressed COG with overviews. It writes beside the live file, checks GDAL can read it, then renames it over the live file, so GeoServer never reads half a file; the old one moves to `.configops-backups/` on the volume, and the newest `backups` are kept. Then it resets the GeoServer stores on the file, works their layers' bounds out again and clears their cached tiles. `plan` loads a raster Dataset that has never loaded before making its store. Outside the cluster, `CONFIGOPS_DATA_DIR` stands in for `/data`.
 
 ### Layer
 
 How data is published in GeoServer. A layer is on a dataset's table, on any table you load yourself, on a SQL view (`sql:`), or on a `Store` (below).
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: road-links
@@ -221,16 +221,16 @@ spec:
   styles: [line]                     # extra styles clients may ask for
   cache: true                        # tile caching in GeoWebCache
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: survey-sites
 spec:
-  table: { schema: field_data, name: sites }   # a table gisdata doesn't load
+  table: { schema: field_data, name: sites }   # a table configops doesn't load
   title: Survey sites
   style: point
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: big-counties
@@ -273,10 +273,10 @@ Every field above works the same on a layer on a `Store`, except `filter` and `w
 
 ### Store
 
-Data GeoServer reads where it is, rather than a table gisdata loads: a Cloud-Optimised GeoTIFF over HTTP or object storage, a remote WMS, WMTS or WFS to cascade, a PostGIS database reached with a password, or files on the shared data volume. A `Layer` with `store:` publishes one thing from it.
+Data GeoServer reads where it is, rather than a table configops loads: a Cloud-Optimised GeoTIFF over HTTP or object storage, a remote WMS, WMTS or WFS to cascade, a PostGIS database reached with a password, or files on the shared data volume. A `Layer` with `store:` publishes one thing from it.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata:
   name: sentinel-2-surrey
@@ -285,7 +285,7 @@ spec:
   url: https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/30/U/XC/2025/8/S2C_30UXC_20250825_0_L2A/TCI.tif
   description: Sentinel-2 true colour, 25 Aug 2025
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata:
   name: eox
@@ -293,7 +293,7 @@ spec:
   type: wmts                                # a remote WMTS, cascaded
   url: https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Store
 metadata:
   name: warehouse
@@ -302,7 +302,7 @@ spec:
   connection: { host: db.example.org, port: 5432, database: gis, schema: public }
   credentials: { secret: warehouse-login }  # keys username and password
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: sentinel-2
@@ -310,7 +310,7 @@ spec:
   store: sentinel-2-surrey                  # its only coverage, so no resource needed
   title: Sentinel-2 true colour
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: cloudless
@@ -333,12 +333,12 @@ spec:
 | `geotiff`, `worldimage`, `arcgrid` | (none: `path`) | The raster | A COG on the volume is a `geotiff` |
 | `imagemosaic` | (none: `path`) | The mosaic of a folder's rasters | GeoServer writes its index into the folder |
 
-**Files** are read from the shared data volume, which the chart mounts at `/data` in every GeoServer service with `-f values-data-volume.yaml`. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you, or a raster Dataset makes them (above); `gisdata import` writes stores whose files are under `/data`.
+**Files** are read from the shared data volume, which the chart mounts at `/data` in every GeoServer service with `-f values-data-volume.yaml`. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you, or a raster Dataset makes them (above); `configops import` writes stores whose files are under `/data`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `dataset` | none | A raster Dataset whose file this `geotiff` store reads, instead of `path` |
-| `credentials` | none | `{ secret }`: a Secret with keys `username` and `password`, for a `postgis` or `wfs` store or a WMS or WMTS that needs a login. In the chart, add it to `gisdata.secrets`. GeoServer keeps the password encrypted, so it's set but not compared |
+| `credentials` | none | `{ secret }`: a Secret with keys `username` and `password`, for a `postgis` or `wfs` store or a WMS or WMTS that needs a login. In the chart, add it to `configops.secrets`. GeoServer keeps the password encrypted, so it's set but not compared |
 | `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
 | `description`, `enabled` | none; `true` | |
 
@@ -349,7 +349,7 @@ A `Layer` on a store takes `store` and `resource` (the name the store gives it: 
 Style files are picked up from `styles/` by file name: `styles/os-road-link.sld` is the style `os-road-link`. A `Style` resource is only needed to override that:
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Style
 metadata:
   name: os-road-link
@@ -357,7 +357,7 @@ spec:
   file: styles/os/road-link-detailed.sld
   workspace: uk                       # default: the project's workspace
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Style
 metadata:
   name: house-colours
@@ -391,7 +391,7 @@ In MBStyle the same thing is `minzoom` and `maxzoom` on each layer of the style.
 Several layers published together, in drawing order, under one name: a basemap, or a tree of layers for clients to browse.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: LayerGroup
 metadata:
   name: uk-basemap
@@ -405,7 +405,7 @@ spec:
     - { layer: road-nodes, style: os-road-node }
   cache: true
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: LayerGroup
 metadata:
   name: os-opendata
@@ -442,7 +442,7 @@ Not in the file, worked out on apply: the group's bounding box (from its members
 A tile grid of your own for GeoWebCache: GeoServer only has web mercator and latitude/longitude ones (and UTM zones), so for tiles on British National Grid:
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Gridset
 metadata:
   name: british-national-grid
@@ -460,7 +460,7 @@ A layer's `cache.gridsets` names it. GeoWebCache's own gridsets are never compar
 Where GeoWebCache keeps tiles. By default each tile cache pod keeps them in its own temporary folder, lost on a restart and not shared; a blob store keeps them on the shared data volume or in S3:
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: BlobStore
 metadata:
   name: tiles-on-volume
@@ -469,7 +469,7 @@ spec:
   path: gwc                                # under /data
   default: true                            # GeoWebCache's default for every layer
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: BlobStore
 metadata:
   name: tiles-in-s3
@@ -480,7 +480,7 @@ spec:
   endpoint: https://s3.eu-west-2.amazonaws.com   # any S3-compatible service; http:// turns HTTPS off
   region: eu-west-2
   access: private                          # or public-read
-  credentials: { secret: tiles-s3 }        # keys accessKey and secretKey; add the Secret to gisdata.secrets
+  credentials: { secret: tiles-s3 }        # keys accessKey and secretKey; add the Secret to configops.secrets
 ```
 
 A layer's `cache.blobStore` names one. `maxConnections` and `gzip` are there too. GeoWebCache gives the keys back as they are, so `plan` compares the secret key too, without printing it. Only the blob stores the files name are compared; none is removed.
@@ -490,7 +490,7 @@ A layer's `cache.blobStore` names one. `maxConnections` and `gzip` are there too
 Only needed for a workspace's own settings in the web UI's *Edit Workspace* page; workspaces are made for you wherever a resource names one.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Workspace
 metadata:
   name: uk
@@ -507,7 +507,7 @@ A Workspace resource makes its workspace the project's, as if a layer were in it
 GeoServer's own settings: the contact details every service's capabilities show, the proxy address, number formatting and the rest of the web UI's *Global* and *Contact Information* pages. With `workspace`, a workspace's own settings instead (the web UI's workspace *Settings* tab), which its workspace-specific services use.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Settings
 metadata:
   name: global
@@ -540,7 +540,7 @@ At most one `Settings` for the global settings and one per workspace.
 One OGC service's settings: the web UI's *WMS*, *WFS*, *WCS* and *WMTS* pages. `metadata.name` is the service.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Service
 metadata:
   name: wms                              # wms, wfs, wcs or wmts
@@ -571,20 +571,20 @@ spec:
 Security: the web UI's *Users, Groups, Roles* and *Data*, *Services* and *REST* security pages. Users and groups live in GeoServer's default user/group service, roles in its default role service.
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Role
 metadata:
   name: editor                        # GeoServer role EDITOR
 spec: {}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Group
 metadata:
   name: editors
 spec:
   roles: [EDITOR]                     # every member has these
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: User
 metadata:
   name: alice
@@ -594,7 +594,7 @@ spec:
   roles: []                           # roles of her own, besides her groups'
   enabled: true
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: AccessRule
 metadata:
   name: flood-zones-for-editors
@@ -609,7 +609,7 @@ spec:
 | `Group` | `name` | `metadata.name` | The group's name in GeoServer |
 | | `roles` | none | Roles every member has |
 | `User` | `name` | `metadata.name` | The user name, for names `metadata.name` can't hold (`alice@example.org`) |
-| | `password` | required | `{ secret, key }`: the Secret and key holding it. In the chart, add the Secret to `gisdata.secrets` |
+| | `password` | required | `{ secret, key }`: the Secret and key holding it. In the chart, add the Secret to `configops.secrets` |
 | | `groups`, `roles` | none | Groups the user is in, and roles of their own |
 | | `enabled` | `true` | A disabled user can't log in |
 | `AccessRule` | `roles` | required | Roles allowed, or `["*"]` for everyone |
@@ -619,7 +619,7 @@ spec:
 
 An `AccessRule` has exactly one of `layer`, `service` or `rest`. Roles are named as GeoServer shows them, and GeoServer's own `ADMIN` and `GROUP_ADMIN` can be used without defining them. How GeoServer hides what someone may not see is the global `Settings`' `catalogMode` (`hide`, `mixed` or `challenge`).
 
-**What's managed.** A project manages security only when it has at least one of these resources. Then users, groups, roles and rules the files don't name show as unmanaged, and `apply --prune` removes them. GeoServer's own are never touched unless a file names them: the `admin` user, the `ADMIN` and `GROUP_ADMIN` roles, and the default rules (everyone reads every layer, admins write, admins use the REST API). To change a default rule, write a rule with the same `layer`, `service` or `rest`. The `admin` user can't be a `User`: gisdata logs in as it, so change its password in GeoServer and the `geoserver-admin` Secret together.
+**What's managed.** A project manages security only when it has at least one of these resources. Then users, groups, roles and rules the files don't name show as unmanaged, and `apply --prune` removes them. GeoServer's own are never touched unless a file names them: the `admin` user, the `ADMIN` and `GROUP_ADMIN` roles, and the default rules (everyone reads every layer, admins write, admins use the REST API). To change a default rule, write a rule with the same `layer`, `service` or `rest`. The `admin` user can't be a `User`: configops logs in as it, so change its password in GeoServer and the `geoserver-admin` Secret together.
 
 **Passwords** can't be read back from GeoServer, so `plan` checks each enabled user's by logging in with it: if GeoServer refuses, it shows `password: (differs)` and `apply` sets it. GeoServer remembers a successful login for some minutes, so for that long an old password still works, and changing back to one used minutes ago may not show.
 
@@ -634,7 +634,7 @@ A `secret` field names a secret; the files never hold its value. Where the tool 
 | Running | Where secret `os-api`, key `apiKey` comes from |
 | --- | --- |
 | In Kubernetes | Kubernetes Secret `os-api`, key `apiKey` |
-| On a laptop or in CI | Environment variable `GISDATA_OS_API_APIKEY`, or a git-ignored `secrets.yaml` next to the project |
+| On a laptop or in CI | Environment variable `CONFIGOPS_OS_API_APIKEY`, or a git-ignored `secrets.yaml` next to the project |
 
 ## Ownership and pruning
 
@@ -650,20 +650,20 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 
 | Command | Does |
 | --- | --- |
-| `gisdata validate` | Checks the files: schema, references between resources, style files exist. No network |
-| `gisdata discover <source> [product]` | Lists products a source offers, or the layers inside one product |
-| `gisdata plan` | Compares files with live GeoServer and PostGIS; prints what `apply` would create, change or delete. Exit code 2 when there are changes, for CI |
-| `gisdata apply [--prune]` | Makes the changes `plan` shows, in order: workspace, store, styles, tables (first sync), layers, layer groups, tile cache |
-| `gisdata sync [dataset]` | Checks sources for new versions and loads them (stage, validate, back up, swap in), then refreshes extents and clears cached tiles of the layers on them. The nightly job |
-| `gisdata status` | Per dataset: version loaded, when, rows, last error, next check. Per layer: published, drifted, tiles cached |
-| `gisdata import` | Reads a live GeoServer workspace and writes the files that describe it; the way in for an existing install |
+| `configops validate` | Checks the files: schema, references between resources, style files exist. No network |
+| `configops discover <source> [product]` | Lists products a source offers, or the layers inside one product |
+| `configops plan` | Compares files with live GeoServer and PostGIS; prints what `apply` would create, change or delete. Exit code 2 when there are changes, for CI |
+| `configops apply [--prune]` | Makes the changes `plan` shows, in order: workspace, store, styles, tables (first sync), layers, layer groups, tile cache |
+| `configops sync [dataset]` | Checks sources for new versions and loads them (stage, validate, back up, swap in), then refreshes extents and clears cached tiles of the layers on them. The nightly job |
+| `configops status` | Per dataset: version loaded, when, rows, last error, next check. Per layer: published, drifted, tiles cached |
+| `configops import` | Reads a live GeoServer workspace and writes the files that describe it; the way in for an existing install |
 
 ### `validate`, and checking files as you type
 
-`gisdata validate` checks every resource against the JSON Schema in [`gisdata/schema/v1alpha1.json`](../../gisdata/schema/v1alpha1.json), then the rules across files: every reference resolves, style files exist, no two layers or groups share a GeoServer name, no two datasets load the same table, and no layer group contains itself. Problems come out as `file:line`, with a non-zero exit code for CI:
+`configops validate` checks every resource against the JSON Schema in [`configops/schema/v1alpha1.json`](../../configops/schema/v1alpha1.json), then the rules across files: every reference resolves, style files exist, no two layers or groups share a GeoServer name, no two datasets load the same table, and no layer group contains itself. Problems come out as `file:line`, with a non-zero exit code for CI:
 
 ```
-$ gisdata validate examples/uk-basemap
+$ configops validate examples/uk-basemap
 datasets/os-open-roads.yaml:22: error: Layer road-links: spec.titel: unknown field 'titel' (did you mean 'title'?)
 datasets/os-open-roads.yaml:34: error: Layer road-nodes: spec.style: no style named 'os-road-nodes' (a file in styles/, a Style resource, or one of GeoServer's built-in styles)
 
@@ -674,20 +674,20 @@ Editors that understand JSON Schema check the files as you type. In VS Code, wit
 
 ### `discover`
 
-`gisdata discover <source>` lists a source's products and the format each would load as; `gisdata discover <source> <product>` lists its downloads, marks the one `sync` would use, and lists the layers inside it, which are the names `tables` takes. `<source>` is a Source in the project (`-C dir`, default the current directory), whose secret supplies the API key if it has one, or a source type when there is no project yet: `os-downloads`, `ckan --url <portal>`, or `url`.
+`configops discover <source>` lists a source's products and the format each would load as; `configops discover <source> <product>` lists its downloads, marks the one `sync` would use, and lists the layers inside it, which are the names `tables` takes. `<source>` is a Source in the project (`-C dir`, default the current directory), whose secret supplies the API key if it has one, or a source type when there is no project yet: `os-downloads`, `ckan --url <portal>`, or `url`.
 
 | Source type | `discover <source>` | `discover <source> <product>` |
 | --- | --- | --- |
 | `os-downloads` | Every OS product (`--search` narrows) | The product's formats; layers of the one `sync` uses |
 | `ckan` | Packages matching `--search`, 20 at a time (`--limit`); without a search, the latest changed | The package's resources, marked loadable or not (web pages and services aren't); layers of the best file, or of `--resource <id or name>` |
-| `url` | (nothing to list) | The product is the file's address: `gisdata discover url https://example.org/roads.zip` |
+| `url` | (nothing to list) | The product is the file's address: `configops discover url https://example.org/roads.zip` |
 | `wfs` | The service's feature types (`--search` narrows) | The feature type (with or without its namespace prefix): geometry, CRS and count, read by GDAL's WFS driver, which also loads it, so the layer name shown is the loader's |
 | `ogc-api-features` | The API's feature collections (coverages and records are left out) | The collection: the count from `numberMatched`, the geometry from the first feature, the CRS the data is stored in |
 
 On a CKAN package, a resource that is a WFS or OGC API service (recognised by its format, address or title, since portals often leave the format blank) shows the command that discovers it, and search results mark packages with only a service as `via WFS`. Many data.gov.uk datasets are published this way, the Environment Agency's among them:
 
 ```
-$ gisdata discover ogc-api-features --url https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1 Flood_Zones_2_3_Rivers_and_Sea
+$ configops discover ogc-api-features --url https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1 Flood_Zones_2_3_Rivers_and_Sea
 Flood Zones 2 3 Rivers And Sea (Flood_Zones_2_3_Rivers_and_Sea)
   OGC API Features: https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1/collections/Flood_Zones_2_3_Rivers_and_Sea/items
 
@@ -698,7 +698,7 @@ Flood_Zones_2_3_Rivers_and_Sea  MultiPolygon  EPSG:27700  415,408
 Services are asked directly, so nothing is cached. Requests to any source are tried again, twice, when a server drops the connection or is briefly unavailable.
 
 ```
-$ gisdata discover data-gov-uk conservation-areas125
+$ configops discover data-gov-uk conservation-areas125
 Conservation Areas (conservation-areas125), version 2026-11-04
     Shapefile: Conservation Areas, conservation_areas.zip, size unknown  [c3a73b80-a7fb-4e21-ab32-e87f514b620e]
     GeoJSON: Conservation Areas, conservation_areas.geojson, size unknown  [5dcaa616-b91c-4e58-8b11-141fda4db7e1]
@@ -714,7 +714,7 @@ conservation_areas  Geometry  EPSG:27700  11
 Portals label formats loosely (`SHP`, `ZIP`, a media-type URL, or nothing), so the format comes from the declared format, the media type and the file name together; a zip named `roads.gpkg.zip` counts as a GeoPackage. Loadable files, best first: GeoPackage, Shapefile, GeoJSON, GML, File Geodatabase, KML, FlatGeobuf, then a zip of unknown contents.
 
 ```
-$ gisdata discover os OpenRoads
+$ configops discover os OpenRoads
 OS Open Roads (OpenRoads), version 2026-10
     ESRI® Shapefile: oproad_essh_gb.zip, 585.8 MB
     GML 3: oproad_gml3_gb.zip, 611.8 MB
@@ -728,16 +728,16 @@ road_link          LineString  EPSG:27700  3,980,725
 road_node          Point       EPSG:27700  3,364,565
 ```
 
-The layers are read from the download in place, with GDAL over HTTP range requests, so nothing is saved to disk (a server that only sends whole files has the file fetched to a temporary folder instead, up to 300 MB); the zip's file list costs a few requests, but a GeoPackage inside a compressed zip is read through, which takes a minute or two for a 1 GB product. A product version never changes (for CKAN, the package's last change; for a link, its ETag or Last-Modified), so the layers are cached (`~/.cache/gisdata`) and the next run is instant; `--refresh` reads them again, `--no-layers` skips them, `--format json` is for scripts. GDAL 3.7 or later (`ogrinfo`) is needed for layers.
+The layers are read from the download in place, with GDAL over HTTP range requests, so nothing is saved to disk (a server that only sends whole files has the file fetched to a temporary folder instead, up to 300 MB); the zip's file list costs a few requests, but a GeoPackage inside a compressed zip is read through, which takes a minute or two for a 1 GB product. A product version never changes (for CKAN, the package's last change; for a link, its ETag or Last-Modified), so the layers are cached (`~/.cache/configops`) and the next run is instant; `--refresh` reads them again, `--no-layers` skips them, `--format json` is for scripts. GDAL 3.7 or later (`ogrinfo`) is needed for layers.
 
 The download `sync` uses is the first of GeoPackage, Shapefile, GML, MapInfo TAB that comes as one file for the whole country; a format offered only as grid-square tiles is passed over, since each tile would become its own table.
 
 ### `sync`
 
-`gisdata sync` loads new versions of the project's datasets into PostGIS. Run with no names (the nightly job), it checks each Dataset whose `update` schedule is due; `gisdata sync roads rivers` checks those two whatever their schedule, and `--force` loads even when nothing changed.
+`configops sync` loads new versions of the project's datasets into PostGIS. Run with no names (the nightly job), it checks each Dataset whose `update` schedule is due; `configops sync roads rivers` checks those two whatever their schedule, and `--force` loads even when nothing changed.
 
 ```
-$ gisdata sync -C examples/uk-basemap
+$ configops sync -C examples/uk-basemap
 boundary-line: not due (monthly)
 conservation-areas: loaded 2026-11-04 in 1s: data_layers.conservation_areas (10 rows)
   note: 1 invalid geometry left out
@@ -756,9 +756,9 @@ After a load, `sync` works out again the bounding boxes of the published layers 
 
 Every check (loaded, up to date, failed) is written to the ingest log in `public.os_ingest_log`, which is how the next run knows the version and when the dataset is next due. A failed check doesn't count, so the next run tries again. Schedules allow an hour's slack, so a daily dataset checked a little after 02:00 yesterday is due at 02:00 today; a cron expression is due when it has named a minute since the last check.
 
-The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `GISDATA_GEOSERVER_PGCONFIG_SECRET_HOST=localhost` and so on, or `secrets.yaml`.
+The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `CONFIGOPS_GEOSERVER_PGCONFIG_SECRET_HOST=localhost` and so on, or `secrets.yaml`.
 
-In Kubernetes, the Helm chart runs it nightly as the `gisdata-sync` CronJob, and runs `gisdata apply --wait` as a `gisdata-apply-<revision>` Job after every install and upgrade (a plain Job, not a hook, since a first apply loads data and Helm would block on it). It builds the `gisdata-project` ConfigMap from the project directory (`gisdata.project`: YAML and style files, never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `gisdata.secrets` (the database's, `geoserver-admin` for the refresh after loads, and source keys) as files under `$GISDATA_SECRETS_DIR/<secret>/<key>`, where `gisdata` looks after the environment.
+In Kubernetes, the Helm chart runs it nightly as the `configops-sync` CronJob, and runs `configops apply --wait` as a `configops-apply-<revision>` Job after every install and upgrade (a plain Job, not a hook, since a first apply loads data and Helm would block on it). It builds the `configops-project` ConfigMap from the project directory (`configops.project`: YAML and style files, never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `configops.secrets` (the database's, `geoserver-admin` for the refresh after loads, and source keys) as files under `$CONFIGOPS_SECRETS_DIR/<secret>/<key>`, where `configops` looks after the environment.
 
 Known gaps:
 
@@ -769,24 +769,24 @@ Known gaps:
 
 ### `plan` and `apply`
 
-`gisdata plan` compares the files with live GeoServer, and with PostGIS for whether each layer's table exists yet. It prints what `apply` would do, with each changed field. `gisdata apply` makes those changes in dependency order: workspaces, stores, styles, first loads of missing tables, layers, layer groups (each after the groups it holds), then, with `--prune`, deletions, groups first. If a change fails, `apply` stops there and says so; running it again carries on, since everything already done now matches.
+`configops plan` compares the files with live GeoServer, and with PostGIS for whether each layer's table exists yet. It prints what `apply` would do, with each changed field. `configops apply` makes those changes in dependency order: workspaces, stores, styles, first loads of missing tables, layers, layer groups (each after the groups it holds), then, with `--prune`, deletions, groups first. If a change fails, `apply` stops there and says so; running it again carries on, since everything already done now matches.
 
 ```
-$ gisdata plan
+$ configops plan
   ~ style uk:os-road-node   (styles/os-road-node.sld differs from GeoServer's copy)
   ~ layer uk:road_links
       title: "Roads (edited in UI)" -> "OS Open Roads, road links"
   + table data_layers.os_open_roads_road_node   (first sync of dataset os-open-roads)
   + layer uk:road_nodes   (data_layers.os_open_roads_road_node)
   ? layer uk:old_test_points   (unmanaged; removed with --prune)
-  ! layer uk:survey_sites   (table field_data.sites doesn't exist; gisdata only publishes it)
+  ! layer uk:survey_sites   (table field_data.sites doesn't exist; configops only publishes it)
 
 Plan: 2 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
 ```
 
-`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done, such as a layer on a table gisdata doesn't load and which doesn't exist. Groups leave such a layer out until it can be published. `plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables you load yourself, often after the deploy, so the chart's apply Job doesn't fail for them. It exits 1 when a change fails.
+`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done, such as a layer on a table configops doesn't load and which doesn't exist. Groups leave such a layer out until it can be published. `plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables you load yourself, often after the deploy, so the chart's apply Job doesn't fail for them. It exits 1 when a change fails.
 
-The chart also runs `plan` hourly as the `gisdata-drift` CronJob (`gisdata.drift` in `values.yaml`). Its Job fails when GeoServer has drifted from the files, say a layer edited or deleted in the web UI, or when `plan` can't run; `!` lines alone don't fail it. The log shows what differs, and `apply` (or the next `helm upgrade`) puts it back. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere, through a port-forward for example.
+The chart also runs `plan` hourly as the `configops-drift` CronJob (`configops.drift` in `values.yaml`). Its Job fails when GeoServer has drifted from the files, say a layer edited or deleted in the web UI, or when `plan` can't run; `!` lines alone don't fail it. The log shows what differs, and `apply` (or the next `helm upgrade`) puts it back. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere, through a port-forward for example.
 
 Each layer gets a PostGIS store in its workspace for the schema its table is in, named after the schema and reaching the database through the Project's JNDI datasource, so no password goes into GeoServer. Bounding boxes are worked out from the table whenever a layer is published or changed.
 
@@ -794,7 +794,7 @@ Each layer gets a PostGIS store in its workspace for the schema its table is in,
 
 Only fields the files set, or whose defaults this spec defines (`title`, `enabled`, `advertised`, `queryable`, a group's `mode`), are compared. Fields GeoServer works out, or that nobody set, never show as changes, so a plan after `apply` is empty. A title changed in the web UI shows as drift and `apply` puts it back; a default style changed in the web UI on a layer whose file sets none is left alone. A style is compared by its file's text.
 
-`cache` is compared with GeoWebCache's settings for the layer or group. GeoServer Cloud caches every new layer by itself, so `cache: false` (the default) means `apply` removes that cache; `cache: true` caches in EPSG:4326 and EPSG:900913 as PNG, and `{ gridsets, formats }` sets both. GeoWebCache's REST API is at `<geoserver url>/gwc/rest` through the gateway; `GISDATA_GWC_URL` points elsewhere (a GeoServer Cloud REST service reached directly serves it under `/geoserver-cloud/gwc/rest`).
+`cache` is compared with GeoWebCache's settings for the layer or group. GeoServer Cloud caches every new layer by itself, so `cache: false` (the default) means `apply` removes that cache; `cache: true` caches in EPSG:4326 and EPSG:900913 as PNG, and `{ gridsets, formats }` sets both. GeoWebCache's REST API is at `<geoserver url>/gwc/rest` through the gateway; `CONFIGOPS_GWC_URL` points elsewhere (a GeoServer Cloud REST service reached directly serves it under `/geoserver-cloud/gwc/rest`).
 
 `attribution` is the layer's own text or, for a layer on a dataset from a source whose licence asks for one, that source's: OS data gets "Contains OS data © Crown copyright and database right <year>". Other sources have no default yet.
 
@@ -802,10 +802,10 @@ Only fields the files set, or whose defaults this spec defines (`title`, `enable
 
 ## `status`
 
-`gisdata status` shows the project as it is live, and changes nothing: each dataset from the ingest log, and each layer and group from GeoServer.
+`configops status` shows the project as it is live, and changes nothing: each dataset from the ingest log, and each layer and group from GeoServer.
 
 ```
-$ gisdata status
+$ configops status
 DATASET             UPDATE  LOADED      AT                ROWS  NEXT CHECK        LAST CHECK
 conservation-areas  weekly  2026-11-04  2026-11-10 13:53  10    2026-11-17 12:53  success
 os-open-roads       weekly  never       -                 -     now               failed: can't reach the OS Downloads API: …
@@ -813,7 +813,7 @@ os-open-roads       weekly  never       -                 -     now             
 LAYER                           PUBLISHED  DRIFTED  TILES CACHED
 uk:conservation_areas           yes        no       no
 uk:road_links                   yes        title    yes
-uk:survey_sites                 no: table field_data.sites doesn't exist; gisdata only publishes it  -  no
+uk:survey_sites                 no: table field_data.sites doesn't exist; configops only publishes it  -  no
 uk:uk_basemap (group)           yes        no       yes
 ```
 
@@ -821,16 +821,16 @@ uk:uk_basemap (group)           yes        no       yes
 
 ## Importing today's config
 
-`gisdata import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles in `styles/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `gisdata plan` on the result has nothing to do. A layer on a table that one of the directory's Datasets loads is written on that Dataset. Stores the files have a kind for (Cloud-Optimised GeoTIFFs, cascaded WMS, WMTS and WFS, PostGIS with a password) are written as `Store`s with their layers; a store's password can't be read back, so it names a credentials Secret, which the import lists.
+`configops import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles in `styles/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `configops plan` on the result has nothing to do. A layer on a table that one of the directory's Datasets loads is written on that Dataset. Stores the files have a kind for (Cloud-Optimised GeoTIFFs, cascaded WMS, WMTS and WFS, PostGIS with a password) are written as `Store`s with their layers; a store's password can't be read back, so it names a credentials Secret, which the import lists.
 
 ```
-$ gisdata import test -C my-project --geoserver http://localhost:8080/geoserver-cloud
+$ configops import test -C my-project --geoserver http://localhost:8080/geoserver-cloud
 Wrote test.yaml: 4 layer(s) (0 on a Dataset's table), 0 group(s); 0 style(s) in styles/; project.yaml
   note: store postgis: apply moves its layers to a store named after their schema (data_layers)
 ```
 
 ```yaml
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: test-points-chang
@@ -846,9 +846,9 @@ The notes say what couldn't be carried over as it is: a store not named after it
 `--settings` and `--security` bring in the rest of GeoServer, with or without a workspace (without one, the directory needs a Project):
 
 ```
-$ gisdata import --settings --security -C my-project
+$ configops import --settings --security -C my-project
 Wrote server.yaml: 1 Settings, 2 Service(s); security.yaml: 2 role(s), 1 group(s), 2 user(s), 3 rule(s)
-  note: passwords can't be read from GeoServer: put each user's in Secret geoserver-users (keys: alice, bob), and add it to gisdata.secrets; plan stops until it's there
+  note: passwords can't be read from GeoServer: put each user's in Secret geoserver-users (keys: alice, bob), and add it to configops.secrets; plan stops until it's there
 ```
 
 `server.yaml` holds the global `Settings`, a `Settings` for each workspace with settings of its own, and a `Service` for each service, with only the fields that differ from a fresh GeoServer Cloud. `security.yaml` holds every role, group, user and access rule that isn't GeoServer's own unchanged default. Fields outside the schema aren't imported. Passwords can't be read back, so each user's comes from Secret `geoserver-users`, under a key named after the user; until it holds them, `plan` stops and says which is missing. With them there, `plan` on the imported files has nothing to do.
@@ -871,4 +871,3 @@ Wrote server.yaml: 1 Settings, 2 Service(s); security.yaml: 2 role(s), 1 group(s
 
 1. **Dataset versions on screen:** should GeoServer's layer abstract or keywords carry the loaded version automatically?
 2. **Several projects on one GeoServer:** fine if each owns its own workspaces; anything else needed?
-3. **The working name** `gisdata`: replace when the project is named.

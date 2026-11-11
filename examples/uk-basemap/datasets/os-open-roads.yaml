@@ -1,6 +1,6 @@
 # OS Open Roads: road links and nodes from the GeoPackage, each published with its own style.
-# `gisdata discover os OpenRoads` lists its layers; motorway_junction is left out here.
-apiVersion: gisdata/v1alpha1
+# `configops discover os OpenRoads` lists its layers; motorway_junction is left out here.
+apiVersion: configops/v1alpha1
 kind: Dataset
 metadata:
   name: os-open-roads
@@ -12,7 +12,7 @@ spec:
     road_link: {}
     road_node: {}
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: road-links
@@ -24,7 +24,7 @@ spec:
   cache:
     gridsets: [EPSG:900913, british-national-grid]   # web maps, and British National Grid (layer-groups.yaml)
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata:
   name: road-nodes

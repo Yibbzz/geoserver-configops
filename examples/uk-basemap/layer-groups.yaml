@@ -1,5 +1,5 @@
 # A basemap drawn as one layer, and a folder that groups it with other layers.
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: LayerGroup
 metadata:
   name: uk-basemap
@@ -13,7 +13,7 @@ spec:
     - { layer: road-nodes, style: os-road-node }
   cache: true
 ---
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: LayerGroup
 metadata:
   name: os-opendata
@@ -25,7 +25,7 @@ spec:
     - survey-sites
 ---
 # Tiles on British National Grid, as OS's own maps use: the same origin and zoom levels
-apiVersion: gisdata/v1alpha1
+apiVersion: configops/v1alpha1
 kind: Gridset
 metadata:
   name: british-national-grid
