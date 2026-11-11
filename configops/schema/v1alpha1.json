@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Yibbzz/geoserver_cloud/configops/schema/v1alpha1.json",
+  "$id": "https://github.com/Yibbzz/geoserver-configops/configops/schema/v1alpha1.json",
   "title": "configops resource (v1alpha1)",
   "description": "One resource of the dataset spec: docs/spec/datasets.md",
   "type": "object",
