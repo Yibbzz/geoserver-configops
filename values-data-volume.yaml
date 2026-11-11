@@ -1,0 +1,88 @@
+# Turns on the shared data volume (dataVolume in values.yaml) and mounts it at /data in every
+# GeoServer service, for file stores and the raster files gisdata loads:
+#   helm upgrade --install geoserver . -f values.yaml -f values-data-volume.yaml
+dataVolume:
+  enabled: true
+
+geoserver:
+  services:
+    gateway:
+      volumes:
+        vol-data:
+          persistentVolumeClaim:
+            claimName: geoserver-data
+      containers:
+        spring:
+          volumeMounts:
+            /data:
+              name: vol-data
+    webui:
+      volumes:
+        vol-data:
+          persistentVolumeClaim:
+            claimName: geoserver-data
+      containers:
+        spring:
+          volumeMounts:
+            /data:
+              name: vol-data
+    rest:
+      volumes:
+        vol-data:
+          persistentVolumeClaim:
+            claimName: geoserver-data
+      containers:
+        spring:
+          volumeMounts:
+            /data:
+              name: vol-data
+    wfs:
+      volumes:
+        vol-data:
+          persistentVolumeClaim:
+            claimName: geoserver-data
+      containers:
+        spring:
+          volumeMounts:
+            /data:
+              name: vol-data
+    wms:
+      volumes:
+        vol-data:
+          persistentVolumeClaim:
+            claimName: geoserver-data
+      containers:
+        spring:
+          volumeMounts:
+            /data:
+              name: vol-data
+    wcs:
+      volumes:
+        vol-data:
+          persistentVolumeClaim:
+            claimName: geoserver-data
+      containers:
+        spring:
+          volumeMounts:
+            /data:
+              name: vol-data
+    wps:
+      volumes:
+        vol-data:
+          persistentVolumeClaim:
+            claimName: geoserver-data
+      containers:
+        spring:
+          volumeMounts:
+            /data:
+              name: vol-data
+    gwc:
+      volumes:
+        vol-data:
+          persistentVolumeClaim:
+            claimName: geoserver-data
+      containers:
+        spring:
+          volumeMounts:
+            /data:
+              name: vol-data
