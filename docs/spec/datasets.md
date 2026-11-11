@@ -634,6 +634,16 @@ spec:
 
 The notes say what couldn't be carried over as it is: a store not named after its schema (`apply` makes one that is), a store that connects with a password instead of the JNDI datasource, styles from another workspace or global styles other than GeoServer's built-in ones, and rasters.
 
+`--settings` and `--security` bring in the rest of GeoServer, with or without a workspace (without one, the directory needs a Project):
+
+```
+$ gisdata import --settings --security -C my-project
+Wrote server.yaml: 1 Settings, 2 Service(s); security.yaml: 2 role(s), 1 group(s), 2 user(s), 3 rule(s)
+  note: passwords can't be read from GeoServer: put each user's in Secret geoserver-users (keys: alice, bob), and add it to gisdata.secrets; plan stops until it's there
+```
+
+`server.yaml` holds the global `Settings`, a `Settings` for each workspace with settings of its own, and a `Service` for each service, with only the fields that differ from a fresh GeoServer Cloud. `security.yaml` holds every role, group, user and access rule that isn't GeoServer's own unchanged default. Fields outside the schema aren't imported. Passwords can't be read back, so each user's comes from Secret `geoserver-users`, under a key named after the user; until it holds them, `plan` stops and says which is missing. With them there, `plan` on the imported files has nothing to do.
+
 ## Known problems this spec has to answer
 
 - **One table per product** (fixed in PR #4). The pipeline loaded one layer of a multi-layer file into one table, so the `openroads` layer held only road nodes, not road links. It now loads every layer into its own table. Run on its own, it names them after the provider's product ID (`openroads_road_link`); run by the tool, it gets the Dataset's name, giving the default above (`os_open_roads_road_link`).

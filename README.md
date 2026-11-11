@@ -185,7 +185,7 @@ spec: { layer: { workspace: uk, layer: flood_zones, access: read }, roles: [EDIT
 
 `plan` spots a changed password by logging in with it, and a REST rule GeoServer would never reach. GeoServer's own `admin` user, roles and default rules are left alone unless a file names them.
 
-**Bring in an existing GeoServer workspace:** `gisdata import <workspace> -C my-project` writes the files that describe it, so `plan` on them has nothing to do.
+**Bring in an existing GeoServer:** `gisdata import <workspace> --settings --security -C my-project` writes the files that describe the workspace, GeoServer's settings and services, and its security, so `plan` on them has nothing to do. Passwords can't be read back: put each user's in Secret `geoserver-users`, as the import's note says.
 
 ## How it fits together
 
