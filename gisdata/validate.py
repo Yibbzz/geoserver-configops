@@ -44,6 +44,7 @@ def validate(project: Project) -> list[Problem]:
     problems += check_unused(project)
     problems += check_settings(project)
     problems += check_security(project)
+    problems += check_stores(project)
     return sorted(problems, key=lambda p: (str(p.file), p.line, p.severity, p.message))
 
 
@@ -112,7 +113,7 @@ def check_project(project: Project) -> list[Problem]:
     for extra in projects[1:]:
         problems.append(Problem(extra.file, extra.line(), "a second Project: every directory has exactly one", extra.label))
 
-    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule"):
+    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store"):
         first: dict[str, Resource] = {}
         for r in project.of_kind(kind):
             if r.name in first and kind != "Project":
@@ -332,4 +333,35 @@ def check_security(project: Project) -> list[Problem]:
             other = first[key]
             problems.append(Problem(r.file, r.line(("spec",)), f"the same rule as AccessRule {other.name} ({key[0]} {key[1]})", r.label))
         first.setdefault(key, r)
+    return problems
+
+
+STORES_WITH_ADDRESSES = {"cog", "wms", "wmts", "wfs"}
+
+
+def check_stores(project: Project) -> list[Problem]:
+    """Each store has what its type needs; a layer on a store names one that exists, and nothing else to publish."""
+    problems = []
+    stores = project.named("Store")
+    for s in project.of_kind("Store"):
+        kind = s.spec.get("type")
+        if kind in STORES_WITH_ADDRESSES and not s.spec.get("url"):
+            problems.append(Problem(s.file, s.line(("spec",)), f"spec.url: a {kind} store needs its address", s.label))
+        if kind == "postgis":
+            missing = [k for k in ("host", "database") if k not in (s.spec.get("connection") or {})]
+            if missing:
+                problems.append(Problem(s.file, s.line(("spec",)), f"spec.connection: a postgis store needs {', '.join(missing)}", s.label))
+            if s.spec.get("url"):
+                problems.append(Problem(s.file, s.line(("spec", "url")), "spec.url: a postgis store connects with spec.connection", s.label))
+    for layer in project.of_kind("Layer"):
+        name = layer.spec.get("store")
+        if name is None:
+            if "resource" in layer.spec:
+                problems.append(Problem(layer.file, layer.line(("spec", "resource")), "spec.resource: only for a layer on a store", layer.label))
+            continue
+        if name not in stores:
+            problems.append(Problem(layer.file, layer.line(("spec", "store")), f"spec.store: no Store named {name!r}{known(stores)}", layer.label))
+        for key in ("dataset", "table"):
+            if key in layer.spec:
+                problems.append(Problem(layer.file, layer.line(("spec", key)), f"spec.{key}: a layer on a store doesn't take a {key}", layer.label))
     return problems

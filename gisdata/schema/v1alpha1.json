@@ -28,7 +28,8 @@
         "Role",
         "Group",
         "User",
-        "AccessRule"
+        "AccessRule",
+        "Store"
       ]
     },
     "metadata": {
@@ -360,6 +361,22 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Store"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/store"
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -668,11 +685,15 @@
         },
         "attribution": {
           "type": "string"
+        },
+        "store": {
+          "$ref": "#/$defs/resourceName"
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1
         }
       },
-      "required": [
-        "table"
-      ],
       "if": {
         "required": [
           "dataset"
@@ -691,7 +712,20 @@
             "type": "object"
           }
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "table"
+          ]
+        },
+        {
+          "required": [
+            "store"
+          ]
+        }
+      ],
+      "description": "a table (with or without dataset), or store"
     },
     "layerGroup": {
       "type": "object",
@@ -1432,6 +1466,55 @@
               }
             }
           }
+        }
+      }
+    },
+    "store": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "cog",
+            "wms",
+            "wmts",
+            "wfs",
+            "postgis"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the COG's address (https://, s3://, gs://, az://), or the service's capabilities address"
+        },
+        "connection": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "integer",
+              "boolean"
+            ]
+          },
+          "description": "connection parameters, as GeoServer names them"
+        },
+        "credentials": {
+          "$ref": "#/$defs/secretRef"
+        },
+        "name": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "workspace": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
         }
       }
     }

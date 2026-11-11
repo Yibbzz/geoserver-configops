@@ -21,7 +21,7 @@ from pathlib import Path
 
 import psycopg2
 
-from . import discover, ingest, remote, security, server, sync
+from . import discover, ingest, remote, security, server, stores, sync
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
@@ -30,6 +30,9 @@ from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, 
 # Apply order: what a change needs is made first; deletions come last, outermost first
 ORDER = ["workspace", "settings", "service", "role", "user group", "user", "store", "style", "table", "layer", "group", "rule"]
 DELETE_ORDER = ["rule", "user", "user group", "role", "group", "layer", "style", "store"]
+
+# Every kind of store a workspace can hold: (REST collection, JSON key)
+STORE_COLLECTIONS = [("datastores", "dataStore"), ("coveragestores", "coverageStore"), ("wmsstores", "wmsStore"), ("wmtsstores", "wmtsStore")]
 
 # `cache: true`: what GeoServer itself would cache
 DEFAULT_GRIDSETS = ["EPSG:4326", "EPSG:900913"]
@@ -161,6 +164,7 @@ class Planner:
                 self.add("+", "workspace", ws, run=lambda ws=ws: self.gs.upsert_workspace(ws))
         server.plan(self)
         self.plan_stores()
+        stores.plan(self)
         self.plan_styles()
         self.plan_layers()
         self.plan_groups()
@@ -170,7 +174,7 @@ class Planner:
 
     def wanted_stores(self) -> dict[tuple[str, str], None]:
         """(workspace, schema) of every store the layers need; a store per schema, named after it."""
-        return {(self.workspace_of(layer), self.table_of(layer)[0]): None for layer in self.layers.values()}
+        return {(self.workspace_of(layer), self.table_of(layer)[0]): None for layer in self.layers.values() if "store" not in layer.spec}
 
     def plan_stores(self) -> None:
         for ws, schema in self.wanted_stores():
@@ -194,8 +198,37 @@ class Planner:
             elif live.replace("\r\n", "\n").strip() != text.replace("\r\n", "\n").strip():
                 self.add("~", "style", f"{ws}:{name}", note=f"{path.relative_to(self.root)} differs from GeoServer's copy", run=run)
 
+    def layer_settings(self, layer: Resource) -> tuple[list[tuple[str, object]], Callable[[], None]]:
+        """(the layer's publishing settings as (field, wanted), the call that sets them): styles, queryable, attribution, cache."""
+        spec, ws, name = layer.spec, self.workspace_of(layer), geoserver_name(layer)
+        attribution = self.attribution(layer)
+        cache = wanted_cache(spec.get("cache"))
+        wanted = [("queryable", spec.get("queryable", True)), ("cache", cache)]
+        if attribution is not None:
+            wanted.append(("attribution", attribution))
+        if spec.get("style"):
+            wanted.append(("style", self.style_ref(spec["style"])))
+        if "styles" in spec:
+            wanted.append(("styles", [self.style_ref(s) for s in spec["styles"]]))
+
+        def run():
+            self.gs.update_layer(ws, name, style=self.style_ref(spec.get("style")),
+                                 styles=[self.style_ref(s) for s in spec["styles"]] if "styles" in spec else None,
+                                 queryable=spec.get("queryable", True), attribution=attribution)
+            set_cache(self.gs, f"{ws}:{name}", cache)
+        return wanted, run
+
+    def live_layer_settings(self, layer: Resource, live_layer: dict) -> dict:
+        live = live_layer["layer"]
+        return {"queryable": live.get("queryable", True), "style": (live.get("defaultStyle") or {}).get("name"),
+                "styles": names_of((live.get("styles") or {}).get("style")),
+                "attribution": (live.get("attribution") or {}).get("title"),
+                "cache": live_cache(self.gs.tile_layer(f"{self.workspace_of(layer)}:{geoserver_name(layer)}"))}
+
     def plan_layers(self) -> None:
         for layer in self.layers.values():
+            if "store" in layer.spec:
+                continue  # stores.plan publishes it
             ws, name, spec = self.workspace_of(layer), geoserver_name(layer), layer.spec
             schema, table, dataset = self.table_of(layer)
             target = f"{ws}:{name}"
@@ -214,27 +247,15 @@ class Planner:
                          ("nativeName", table)]
             if "abstract" in spec:
                 wanted_ft.append(("abstract", spec["abstract"]))
-            attribution = self.attribution(layer)
-            cache = wanted_cache(spec.get("cache"))
-            wanted_layer = [("queryable", spec.get("queryable", True)), ("cache", cache)]
-            if attribution is not None:
-                wanted_layer.append(("attribution", attribution))
-            if spec.get("style"):
-                wanted_layer.append(("style", self.style_ref(spec["style"])))
-            if "styles" in spec:
-                wanted_layer.append(("styles", [self.style_ref(s) for s in spec["styles"]]))
+            wanted_layer, settings = self.layer_settings(layer)
 
-            def run(ws=ws, name=name, schema=schema, table=table, spec=spec, title=title, attribution=attribution,
-                    cache=cache, old_store=None):
+            def run(ws=ws, name=name, schema=schema, table=table, spec=spec, title=title, settings=settings, old_store=None):
                 if old_store and old_store != schema:
                     self.gs.delete_featuretype(ws, old_store, name)
                 self.gs.upsert_featuretype(ws, schema, name, table, title=title, abstract=spec.get("abstract"),
                                            keywords=spec.get("keywords"), enabled=spec.get("enabled", True),
                                            advertised=spec.get("advertised", True))
-                self.gs.update_layer(ws, name, style=self.style_ref(spec.get("style")),
-                                     styles=[self.style_ref(s) for s in spec["styles"]] if "styles" in spec else None,
-                                     queryable=spec.get("queryable", True), attribution=attribution)
-                set_cache(self.gs, f"{ws}:{name}", cache)
+                settings()
 
             live_layer = self.gs.layer(ws, name)
             if live_layer is None:
@@ -242,15 +263,10 @@ class Planner:
                 continue
             store = self.store_of(live_layer)
             ft = (self.gs.featuretype(ws, store, name) or {}).get("featureType", {}) if store else {}
-            live = live_layer["layer"]
             current = {
                 "title": ft.get("title"), "enabled": ft.get("enabled", True), "advertised": ft.get("advertised", True),
                 "nativeName": ft.get("nativeName"), "abstract": ft.get("abstract"),
-                "queryable": live.get("queryable", True),
-                "style": (live.get("defaultStyle") or {}).get("name"),
-                "styles": names_of((live.get("styles") or {}).get("style")),
-                "attribution": (live.get("attribution") or {}).get("title"),
-                "cache": live_cache(self.gs.tile_layer(target)),
+                **self.live_layer_settings(layer, live_layer),
             }
             changed = diff([(k, current[k], v) for k, v in wanted_ft + wanted_layer])
             if "keywords" in spec and names_of((ft.get("keywords") or {}).get("string")) != spec["keywords"]:
@@ -265,6 +281,13 @@ class Planner:
         """The store a live layer's feature type is in, from its link."""
         href = live_layer["layer"].get("resource", {}).get("href", "")
         return href.split("/datastores/", 1)[1].split("/", 1)[0] if "/datastores/" in href else None
+
+    def delete_store(self, ws: str, name: str) -> None:
+        """Remove a store of any kind, with what's published from it."""
+        for kind, key in STORE_COLLECTIONS:
+            if name in self.gs.names(f"workspaces/{ws}/{kind}", key):
+                self.gs.delete(f"workspaces/{ws}/{kind}/{name}", {"recurse": "true"})
+                return
 
     def delete_layer(self, ws: str, name: str) -> None:
         """Remove a layer and its feature type (GeoServer drops it from groups too)."""
@@ -333,7 +356,8 @@ class Planner:
             "group": {f"{self.workspace_of(g)}:{geoserver_name(g)}" for g in self.groups.values()},
             "layer": {f"{self.workspace_of(layer)}:{geoserver_name(layer)}" for layer in self.layers.values()},
             "style": {f"{ws}:{name}" for name, (_, ws) in self.styles.items()},
-            "store": {f"{ws}:{schema}" for ws, schema in self.wanted_stores()},
+            "store": {f"{ws}:{schema}" for ws, schema in self.wanted_stores()}
+                     | {f"{self.workspace_of(s)}:{geoserver_name(s)}" for s in self.files.of_kind("Store")},
         }
         for ws in managed:
             if self.gs.workspace(ws) is None:
@@ -342,13 +366,13 @@ class Planner:
                 "group": self.gs.names(f"workspaces/{ws}/layergroups", "layerGroup"),
                 "layer": self.gs.names(f"workspaces/{ws}/layers", "layer"),
                 "style": self.gs.names(f"workspaces/{ws}/styles", "style"),
-                "store": self.gs.names(f"workspaces/{ws}/datastores", "dataStore"),
+                "store": [n for kind, key in STORE_COLLECTIONS for n in self.gs.names(f"workspaces/{ws}/{kind}", key)],
             }
             delete = {
                 "group": lambda ws, n: self.gs.delete_layergroup(n, ws),
                 "layer": self.delete_layer,
                 "style": lambda ws, n: self.gs.delete_style(n, ws),
-                "store": lambda ws, n: self.gs.delete_datastore(ws, n),
+                "store": self.delete_store,
             }
             for kind in live:  # outermost first, as DELETE_ORDER
                 for n in live[kind]:
