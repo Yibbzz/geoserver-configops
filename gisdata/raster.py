@@ -78,15 +78,19 @@ def info(path: Path) -> dict:
     return json.loads(result.stdout)
 
 
-def build(rasters: list[Path], work: Path, out: Path, crs: str | None, fallback: str | None) -> dict:
-    """Mosaic `rasters` into one COG at `out`. `crs` is assigned if given; `fallback` if the rasters have none."""
+def build(rasters: list[Path], work: Path, out: Path, crs: str | None, fallback: str | None, nodata: float | None = None) -> dict:
+    """
+    Mosaic `rasters` into one COG at `out`. `crs` is assigned if given; `fallback` if the rasters
+    have none. `nodata` marks where no raster covers (GDAL would write 0 there) and the rasters' own gaps.
+    """
     listing = work / "rasters.txt"
     listing.write_text("".join(f"{p}\n" for p in rasters))
     vrt = work / "mosaic.vrt"
     has_crs = bool(info(rasters[0]).get("coordinateSystem", {}).get("wkt"))
     assign = crs or (None if has_crs else fallback)
     srs = ["-a_srs", assign] if assign else []
-    gdal("gdalbuildvrt", "-q", *srs, "-input_file_list", str(listing), str(vrt))
+    empty = ["-vrtnodata", str(nodata), "-srcnodata", str(nodata)] if nodata is not None else []
+    gdal("gdalbuildvrt", "-q", *srs, *empty, "-input_file_list", str(listing), str(vrt))
     gdal("gdal_translate", "-q", "-of", "COG", "-co", "COMPRESS=DEFLATE", "-co", "PREDICTOR=YES", "-co", "BIGTIFF=IF_SAFER",
          "-co", "NUM_THREADS=ALL_CPUS", "-co", "OVERVIEWS=AUTO", str(vrt), str(out))
     built = info(out)
@@ -111,7 +115,7 @@ def install(new: Path, path: str, keep: int) -> None:
     os.replace(new, live)
 
 
-def load(download: Path, work: Path, path: str, crs: str | None, fallback: str | None, keep: int) -> int:
+def load(download: Path, work: Path, path: str, crs: str | None, fallback: str | None, keep: int, nodata: float | None = None) -> int:
     """Make the download into the COG at `path` on the data volume; returns its size in pixels."""
     if not data_root().is_dir():
         raise LoadError(f"no data volume at {data_root()}: deploy with values-data-volume.yaml (or set {DATA_ENV})")
@@ -120,7 +124,7 @@ def load(download: Path, work: Path, path: str, crs: str | None, fallback: str |
     rasters = unpack(download, work)
     new = live.with_name(f".{live.name}.{datetime.now():%Y%m%d%H%M%S}.new")  # beside the live file: the rename stays on one volume
     try:
-        built = build(rasters, work, new, crs, fallback)
+        built = build(rasters, work, new, crs, fallback, nodata)
         install(new, path, keep)
     finally:
         new.unlink(missing_ok=True)

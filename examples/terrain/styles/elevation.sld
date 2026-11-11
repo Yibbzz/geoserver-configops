@@ -10,8 +10,8 @@
         <Rule>
           <RasterSymbolizer>
             <ColorMap type="ramp">
-              <ColorMapEntry color="#2b83ba" quantity="-5" opacity="0" label="sea"/>
-              <ColorMapEntry color="#4a9e5c" quantity="0" label="0 m"/>
+              <ColorMapEntry color="#2b83ba" quantity="0" opacity="0" label="sea"/>
+              <ColorMapEntry color="#4a9e5c" quantity="0.1" label="0 m"/>
               <ColorMapEntry color="#a6d96a" quantity="100"/>
               <ColorMapEntry color="#ffffbf" quantity="250"/>
               <ColorMapEntry color="#d7a96a" quantity="500"/>

@@ -173,7 +173,7 @@ def sync_raster(conn, dataset: Resource, src, product: Product, last, started: d
             ingest.record(conn, dataset.name, last.version, chosen.format, "skipped", started, sha=sha, tables=[path])
             return f"{dataset.name}: up to date ({discover.version(last.version)})", []
         t0 = time.monotonic()
-        pixels = raster.load(download, work, path, options.get("crs"), project_crs, project.spec.get("backups", 3))
+        pixels = raster.load(download, work, path, options.get("crs"), project_crs, project.spec.get("backups", 3), options.get("nodata"))
     version = product.version or f"sha256:{sha[:16]}"
     ingest.record(conn, dataset.name, version, chosen.format, "success", started, rows=pixels, sha=sha, tables=[path])
     return (f"{dataset.name}: loaded {discover.version(version)} in {time.monotonic() - t0:.0f}s: "

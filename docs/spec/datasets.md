@@ -199,6 +199,7 @@ spec:
 | --- | --- | --- |
 | `raster.path` | required | Where the COG goes, under the data volume; ends in `.tif` |
 | `raster.crs` | the rasters' own, else the project's `crs` | Assigned to the result |
+| `raster.nodata` | none | The value written where no raster covers (GDAL would write 0 there), and read as "no data" in the rasters |
 
 `sync` downloads the product (for `os-downloads`, a raster format: GeoTIFF, then ASCII Grid; for `ckan`, name the file with `resource`), unpacks every raster in it, through zips inside zips, mosaics them through a GDAL VRT and writes one deflate-compressed COG with overviews. It writes beside the live file, checks GDAL can read it, then renames it over the live file, so GeoServer never reads half a file; the old one moves to `.gisdata-backups/` on the volume, and the newest `backups` are kept. Then it resets the GeoServer stores on the file, works their layers' bounds out again and clears their cached tiles. `plan` loads a raster Dataset that has never loaded before making its store. Outside the cluster, `GISDATA_DATA_DIR` stands in for `/data`.
 

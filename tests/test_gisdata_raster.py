@@ -76,6 +76,21 @@ def test_mosaics_into_a_cog_with_the_fallback_crs(download, tmp_path, data):
     assert not list((data / "rasters").glob(".*.new"))  # nothing half-written left behind
 
 
+def test_nodata_where_no_tile_covers(tmp_path, data):
+    """Two tiles with a gap between: the gap is nodata, not 0."""
+    for i, x in enumerate((0, 200)):
+        (tmp_path / f"t{i}.asc").write_text(grid(x, 10 * (i + 1)))
+    path = tmp_path / "tiles.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        z.write(tmp_path / "t0.asc", "t0.asc")
+        z.write(tmp_path / "t1.asc", "t1.asc")
+    work = tmp_path / "work"
+    work.mkdir()
+    raster.load(path, work, "gappy.tif", "EPSG:27700", None, keep=1, nodata=-9999)
+    built = raster.info(data / "gappy.tif")
+    assert built["size"] == [6, 2] and built["bands"][0]["noDataValue"] == -9999
+
+
 def test_each_load_backs_up_the_last_and_keeps_the_newest(download, tmp_path, data, monkeypatch):
     stamps = iter(["20260101000000", "20260102000000", "20260103000000"])
     monkeypatch.setattr(raster, "stamp", lambda: next(stamps))

@@ -601,6 +601,10 @@
             },
             "crs": {
               "$ref": "#/$defs/crs"
+            },
+            "nodata": {
+              "type": "number",
+              "description": "the value for where no raster covers, and the rasters' own gaps"
             }
           }
         }

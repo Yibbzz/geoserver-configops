@@ -35,6 +35,7 @@ spec:
   raster:
     path: rasters/os-terrain-50.tif
     crs: EPSG:27700                            # the grids carry no CRS of their own
+    nodata: -9999                              # where no tile covers: the sea around the coast
 ---
 apiVersion: gisdata/v1alpha1
 kind: Store
