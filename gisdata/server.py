@@ -92,7 +92,9 @@ def plan_settings(planner, gs, r: Resource) -> None:
     spec = dict(r.spec)
     ws = spec.pop("workspace", None)
     contact = to_geoserver(spec.pop("contact", None) or {})
-    top = to_geoserver(spec.pop("global", None) or {})
+    top_spec = dict(spec.pop("global", None) or {})
+    catalog_mode = top_spec.pop("catalogMode", None)
+    top = to_geoserver(top_spec)
     settings = to_geoserver(spec)
     path, key = settings_paths(ws)
     live = (gs.get(path) or {}).get(key) or {}
@@ -108,6 +110,10 @@ def plan_settings(planner, gs, r: Resource) -> None:
     changed = [("contact." + f, a, b) for f, a, b in compare(live_contact, contact)]
     changed += compare(live_settings, settings)
     changed += [("global." + f, a, b) for f, a, b in compare(live, top)]
+    if catalog_mode:
+        live_mode = ((gs.get("security/acl/catalog") or {}).get("mode") or "").lower()
+        if live_mode != catalog_mode:
+            changed.append(("global.catalogMode", live_mode, catalog_mode))
     if exists and not changed:
         return
 
@@ -120,6 +126,8 @@ def plan_settings(planner, gs, r: Resource) -> None:
             body["settings"]["contact"] = merge(body["settings"].get("contact") or {}, contact)
             body.pop("updateSequence", None)  # GeoServer's own counter
         gs.request("PUT", path, {key: body})
+        if catalog_mode:
+            gs.request("PUT", "security/acl/catalog", {"mode": catalog_mode.upper()})
         if not ws and contact:  # the contact has its own endpoint, which is what the services read
             current_contact = (gs.get("settings/contact") or {}).get("contact") or {}
             gs.request("PUT", "settings/contact", {"contact": merge(current_contact, contact)})

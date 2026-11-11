@@ -43,6 +43,7 @@ def validate(project: Project) -> list[Problem]:
     problems += check_names(project)
     problems += check_unused(project)
     problems += check_settings(project)
+    problems += check_security(project)
     return sorted(problems, key=lambda p: (str(p.file), p.line, p.severity, p.message))
 
 
@@ -111,7 +112,7 @@ def check_project(project: Project) -> list[Problem]:
     for extra in projects[1:]:
         problems.append(Problem(extra.file, extra.line(), "a second Project: every directory has exactly one", extra.label))
 
-    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service"):
+    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule"):
         first: dict[str, Resource] = {}
         for r in project.of_kind(kind):
             if r.name in first and kind != "Project":
@@ -291,4 +292,44 @@ def check_settings(project: Project) -> list[Problem]:
         first.setdefault(ws, r)
         if ws and "global" in r.spec:
             problems.append(Problem(r.file, r.line(("spec", "global")), "spec.global: only the global Settings (no workspace) has these", r.label))
+    return problems
+
+
+def check_security(project: Project) -> list[Problem]:
+    """Built-ins left to GeoServer, references between users, groups and roles, one rule per key."""
+    from .security import BUILT_IN_ROLES, BUILT_IN_USERS, account_name, role_name, rule_key
+
+    problems = []
+    roles = {role_name(r) for r in project.of_kind("Role")} | BUILT_IN_ROLES
+    groups = {account_name(r) for r in project.of_kind("Group")}
+
+    def check_roles(r: Resource, path: tuple, allow_everyone: bool = False) -> None:
+        for i, role in enumerate(r.spec.get("roles") or []):
+            if role == "*" and allow_everyone:
+                continue
+            if role not in roles:
+                problems.append(Problem(r.file, r.line(path + (i,)), f"{dotted(path)}[{i}]: no Role named {role!r} (roles: {', '.join(sorted(roles))})", r.label))
+
+    for r in project.of_kind("Role"):
+        if role_name(r) in BUILT_IN_ROLES:
+            problems.append(Problem(r.file, r.line(), f"{role_name(r)} is GeoServer's own role; use it without defining it", r.label))
+    for r in project.of_kind("Group"):
+        check_roles(r, ("spec", "roles"))
+    for r in project.of_kind("User"):
+        if account_name(r) in BUILT_IN_USERS:
+            problems.append(Problem(r.file, r.line(), "admin is GeoServer's own user, and gisdata logs in as it: change its password in GeoServer and the geoserver-admin Secret", r.label))
+        check_roles(r, ("spec", "roles"))
+        for i, group in enumerate(r.spec.get("groups") or []):
+            if group not in groups:
+                problems.append(Problem(r.file, r.line(("spec", "groups", i)), f"spec.groups[{i}]: no Group named {group!r}{known({g: None for g in groups})}", r.label))
+    first: dict[tuple[str, str], Resource] = {}
+    for r in project.of_kind("AccessRule"):
+        if sum(k in r.spec for k in ("layer", "service", "rest")) != 1:
+            continue  # the schema reports it
+        check_roles(r, ("spec", "roles"), allow_everyone=True)
+        key = rule_key(r)
+        if key in first:
+            other = first[key]
+            problems.append(Problem(r.file, r.line(("spec",)), f"the same rule as AccessRule {other.name} ({key[0]} {key[1]})", r.label))
+        first.setdefault(key, r)
     return problems

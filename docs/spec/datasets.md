@@ -38,6 +38,7 @@ uk-basemap/
   layers/
     survey-sites.yaml       # Layers on tables you load yourself
   server.yaml               # Settings and Services: contact details, service titles, limits
+  security.yaml             # Roles, Groups, Users and AccessRules
   styles/
     os-road-link.sld        # style files, picked up by name
     os-road-node.sld
@@ -47,7 +48,7 @@ Every resource has the same outer shape:
 
 ```yaml
 apiVersion: gisdata/v1alpha1
-kind: Layer                 # Project, Source, Dataset, Layer, LayerGroup, Style, Settings or Service
+kind: Layer                 # Project, Source, Dataset, Layer, LayerGroup, Style, Settings, Service, Role, Group, User or AccessRule
 metadata:
   name: road-links          # unique per kind; lowercase letters, digits and dashes
 spec: {}                    # what you want; differs per kind
@@ -320,7 +321,7 @@ spec:
 | `contact` | `contactPerson`, `contactOrganization`, `contactPosition`, `contactEmail`, `contactVoice`, `contactFacsimile`, `addressType`, `address`, `addressDeliveryPoint`, `addressCity`, `addressState`, `addressPostalCode`, `addressCountry`, `onlineResource`, `welcome` |
 | `proxyBaseUrl`, `useHeadersProxyURL` | The address clients see in capabilities documents, when GeoServer sits behind a proxy |
 | `numDecimals`, `charset`, `verbose`, `verboseExceptions`, `localWorkspaceIncludesPrefix`, `showCreatedTimeColumnsInAdminList`, `showModifiedTimeColumnsInAdminList`, `showModifiedUserAdminList` | As in the web UI |
-| `global` | Only without `workspace`: `globalServices`, `resourceErrorHandling` (`OGC_EXCEPTION_REPORT`, `SKIP_MISCONFIGURED_LAYERS`), `webUIMode` (`DEFAULT`, `REDIRECT`, `DO_NOT_REDIRECT`), `xmlPostRequestLogBufferSize`, `featureTypeCacheSize`, `trailingSlashMatch`, `allowStoredQueriesPerWorkspace`, and `geoserver:` for any other global field |
+| `global` | Only without `workspace`: `catalogMode` (`hide`, `mixed`, `challenge`: how GeoServer hides what someone may not see), `globalServices`, `resourceErrorHandling` (`OGC_EXCEPTION_REPORT`, `SKIP_MISCONFIGURED_LAYERS`), `webUIMode` (`DEFAULT`, `REDIRECT`, `DO_NOT_REDIRECT`), `xmlPostRequestLogBufferSize`, `featureTypeCacheSize`, `trailingSlashMatch`, `allowStoredQueriesPerWorkspace`, and `geoserver:` for any other global field |
 | `geoserver` | Any other settings field, as GeoServer's REST API names it |
 
 At most one `Settings` for the global settings and one per workspace.
@@ -356,6 +357,67 @@ spec:
 
 **Not possible yet:** a workspace's own *service* settings (the web UI's per-workspace WMS, WFS… tabs): GeoServer Cloud's REST API has no endpoint for them. The contact field `addressElectronicMailAddress` isn't kept by GeoServer; use `contactEmail`.
 
+### Role, Group, User and AccessRule
+
+Security: the web UI's *Users, Groups, Roles* and *Data*, *Services* and *REST* security pages. Users and groups live in GeoServer's default user/group service, roles in its default role service.
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: Role
+metadata:
+  name: editor                        # GeoServer role EDITOR
+spec: {}
+---
+apiVersion: gisdata/v1alpha1
+kind: Group
+metadata:
+  name: editors
+spec:
+  roles: [EDITOR]                     # every member has these
+---
+apiVersion: gisdata/v1alpha1
+kind: User
+metadata:
+  name: alice
+spec:
+  password: { secret: geoserver-users, key: alice }
+  groups: [editors]
+  roles: []                           # roles of her own, besides her groups'
+  enabled: true
+---
+apiVersion: gisdata/v1alpha1
+kind: AccessRule
+metadata:
+  name: flood-zones-for-editors
+spec:
+  layer: { workspace: uk, layer: flood_zones, access: read }
+  roles: [EDITOR]
+```
+
+| Kind | Field | Default | Meaning |
+| --- | --- | --- | --- |
+| `Role` | `name` | `metadata.name` upper-cased, dashes as underscores | The role's name in GeoServer |
+| `Group` | `name` | `metadata.name` | The group's name in GeoServer |
+| | `roles` | none | Roles every member has |
+| `User` | `name` | `metadata.name` | The user name, for names `metadata.name` can't hold (`alice@example.org`) |
+| | `password` | required | `{ secret, key }`: the Secret and key holding it. In the chart, add the Secret to `gisdata.secrets` |
+| | `groups`, `roles` | none | Groups the user is in, and roles of their own |
+| | `enabled` | `true` | A disabled user can't log in |
+| `AccessRule` | `roles` | required | Roles allowed, or `["*"]` for everyone |
+| | `layer` | | `{ workspace, layer, access }`: who may `read`, `write` or `admin` a layer. `*` (the default for `workspace` and `layer`) means all |
+| | `service` | | `{ service, operation }`: who may use an operation, e.g. `{ service: wfs, operation: Transaction }`. `*` means all |
+| | `rest` | | `{ path, methods }`: who may call the REST API on an Ant path, e.g. `{ path: /rest/workspaces/uk/**, methods: [GET] }` (`methods` default `[GET]`) |
+
+An `AccessRule` has exactly one of `layer`, `service` or `rest`. Roles are named as GeoServer shows them, and GeoServer's own `ADMIN` and `GROUP_ADMIN` can be used without defining them. How GeoServer hides what someone may not see is the global `Settings`' `catalogMode` (`hide`, `mixed` or `challenge`).
+
+**What's managed.** A project manages security only when it has at least one of these resources. Then users, groups, roles and rules the files don't name show as unmanaged, and `apply --prune` removes them. GeoServer's own are never touched unless a file names them: the `admin` user, the `ADMIN` and `GROUP_ADMIN` roles, and the default rules (everyone reads every layer, admins write, admins use the REST API). To change a default rule, write a rule with the same `layer`, `service` or `rest`. The `admin` user can't be a `User`: gisdata logs in as it, so change its password in GeoServer and the `geoserver-admin` Secret together.
+
+**Passwords** can't be read back from GeoServer, so `plan` checks each enabled user's by logging in with it: if GeoServer refuses, it shows `password: (differs)` and `apply` sets it. GeoServer remembers a successful login for some minutes, so for that long an old password still works, and changing back to one used minutes ago may not show.
+
+**REST rules** are checked in order and the first match wins, so a rule after GeoServer's default `/**` is never reached. `apply` keeps them in GeoServer's `security/rest.properties` in that order (the project's rules first, the `/**` defaults last), and `plan` shows a rule that has slipped below `/**` as `place: after /** (never reached)`. GeoServer Cloud can't delete a REST rule through its access-rule API (the path's slashes), which is why the file is written instead.
+
+Changes reach every GeoServer Cloud service within a minute or so.
+
 ## Secrets
 
 A `secret` field names a secret; the files never hold its value. Where the tool looks:
@@ -372,7 +434,8 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 - Everything inside it (stores, layers, workspace styles) is compared with the files. Anything there that the files don't mention is shown by `plan` as `unmanaged` and removed only with `apply --prune`.
 - Global styles and other workspaces are never changed or deleted, unless a resource names them.
 - Tables: only tables a Dataset declares, in the configured schemas, are created, replaced or backed up. A Layer on someone else's table only publishes it.
-- Settings and services: only the ones a `Settings` or `Service` resource names, and only the fields it sets. They are never deleted. GeoServer has one set of global settings, so when several projects share a GeoServer, let one of them hold the global `Settings` and the `Service`s.
+- Settings and services: only the ones a `Settings` or `Service` resource names, and only the fields it sets. They are never deleted.
+- Security: only when the project has a `Role`, `Group`, `User` or `AccessRule`; then the rest is unmanaged, as in a workspace (see above). GeoServer's own users, roles and default rules are never touched unless a file names them. GeoServer has one set of global settings, so when several projects share a GeoServer, let one of them hold the global `Settings` and the `Service`s.
 
 ## Commands
 

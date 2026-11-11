@@ -24,7 +24,11 @@
         "LayerGroup",
         "Style",
         "Settings",
-        "Service"
+        "Service",
+        "Role",
+        "Group",
+        "User",
+        "AccessRule"
       ]
     },
     "metadata": {
@@ -289,6 +293,70 @@
                 "description": "wms, wfs, wcs or wmts"
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Role"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/role"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Group"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/group"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "User"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/user"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "AccessRule"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/accessRule"
           }
         }
       }
@@ -826,6 +894,13 @@
             "geoserver": {
               "type": "object",
               "description": "any other field, as GeoServer's REST API names it"
+            },
+            "catalogMode": {
+              "enum": [
+                "hide",
+                "mixed",
+                "challenge"
+              ]
             }
           }
         },
@@ -1183,6 +1258,180 @@
         "geoserver": {
           "type": "object",
           "description": "any other field, as GeoServer's REST API names it"
+        }
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "GeoServer role names"
+        }
+      }
+    },
+    "user": {
+      "type": "object",
+      "required": [
+        "password"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "password": {
+          "type": "object",
+          "required": [
+            "secret",
+            "key"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "secret": {
+              "$ref": "#/$defs/resourceName"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "GeoServer role names"
+        }
+      }
+    },
+    "accessRule": {
+      "type": "object",
+      "required": [
+        "roles"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "layer"
+          ]
+        },
+        {
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "required": [
+            "rest"
+          ]
+        }
+      ],
+      "description": "exactly one of layer, service or rest",
+      "properties": {
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "GeoServer role names, or * for everyone"
+        },
+        "layer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "workspace": {
+              "type": "string",
+              "minLength": 1
+            },
+            "layer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "access": {
+              "enum": [
+                "read",
+                "write",
+                "admin"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "service": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "rest": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "methods": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "GET",
+                  "HEAD",
+                  "POST",
+                  "PUT",
+                  "DELETE",
+                  "PATCH"
+                ]
+              }
+            }
+          }
         }
       }
     }
