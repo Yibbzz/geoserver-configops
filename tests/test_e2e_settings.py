@@ -56,7 +56,7 @@ def example(props: dict) -> dict:
     """A spec setting every property in a schema `properties`, from the schema itself."""
     out = {}
     for name, prop in props.items():
-        if name in ("geoserver", "workspace"):
+        if name in ("geoserver", "workspace", "masterPassword"):  # the master password needs a real Secret, and is global
             continue
         if name in VALUES:
             out[name] = VALUES[name]
