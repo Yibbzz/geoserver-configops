@@ -79,7 +79,7 @@ jobs:
           docker run --rm -v "$PWD/examples/uk-basemap:/project:ro" gisdata:ci validate /project
 
   # The real GeoServer Cloud REST service (same images and jndi.yml as the chart) in Docker,
-  # then the catalog import/export round trip against it.
+  # then the e2e tests against it.
   e2e-rest:
     runs-on: ubuntu-latest
     steps:
@@ -96,7 +96,7 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Start GeoServer Cloud REST, PostGIS and RabbitMQ
         run: tests/e2e/up.sh
-      - name: Round trip
+      - name: e2e tests
         env:
           E2E_GEOSERVER_URL: http://localhost:59090/rest
           E2E_DB_PORT: '55433'
@@ -107,7 +107,7 @@ jobs:
         run: docker compose -f tests/e2e/compose.yaml -p gscloud-e2e logs --tail=200
 
   # The whole chart on a throwaway kind cluster: every pod ready, OGC services through
-  # the gateway, the round trip against the deployment, and a WMS GetMap.
+  # the gateway, the e2e tests against the deployment, and examples/smoke drawn with WMS.
   kind-deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 45
