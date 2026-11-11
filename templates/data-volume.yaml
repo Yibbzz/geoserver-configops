@@ -1,0 +1,17 @@
+{{- /* The shared data volume: see dataVolume in values.yaml, and values-data-volume.yaml */ -}}
+{{- if .Values.dataVolume.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: geoserver-data
+  annotations:
+    helm.sh/resource-policy: keep  # the data outlives an uninstall
+spec:
+  accessModes: [{{ .Values.dataVolume.accessMode | quote }}]
+  {{- with .Values.dataVolume.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.dataVolume.size }}
+{{- end }}

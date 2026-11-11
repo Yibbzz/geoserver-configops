@@ -63,6 +63,16 @@ rabbitmq:
       memory: 512Mi
 
 # PostGIS for the GeoServer catalog (pgconfig schema) and ingested data
+# A volume every GeoServer service and gisdata can read, mounted at /data: for file stores
+# (GeoPackage, Shapefile, GeoTIFF, image mosaics) and the raster files gisdata loads. Turn it on
+# with -f values-data-volume.yaml, which also mounts it in every GeoServer service
+# (templates/data-volume.yaml).
+dataVolume:
+  enabled: false
+  size: 20Gi
+  storageClass: ''                # empty = cluster default
+  accessMode: ReadWriteOnce       # ReadWriteMany when GeoServer's services can run on several nodes
+
 # (templates/postgresql.yaml). Credentials come from geoserver-pgconfig-secret.
 # Set enabled: false to use an external or managed database instead; point
 # the host/port in geoserver-pgconfig-secret at it.
