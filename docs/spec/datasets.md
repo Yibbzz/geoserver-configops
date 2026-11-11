@@ -291,6 +291,21 @@ Every field above works the same on a layer on a `Store`, except `filter` and `w
 
 GeoWebCache adds a `STYLES` filter (any of the layer's styles) by itself, so leaving it out means that one. A request with a value no filter allows is refused. GeoWebCache can't take a `%` in a value. `seed` draws those tiles ahead of time, in the background: after `apply` changes the layer, and after each load clears its tiles. Whether tiles are seeded isn't compared.
 
+**Parameter filters and seeding.** A request parameter makes tiles of its own only if the layer's cache has a filter for it:
+
+```yaml
+  cache:
+    gridsets: [EPSG:900913]
+    parameterFilters:
+      CQL_FILTER: { type: values, values: [INCLUDE, "hectares > 300000"], default: INCLUDE }
+      TIME: { type: regex, regex: "[0-9]{4}-[0-9]{2}-[0-9]{2}" }
+      ELEVATION: { type: numbers, values: [0, 10.5], threshold: 0.01 }    # or integers
+      STYLES: { type: styles, values: [polygon, outline] }                 # which of the layer's styles
+    seed: { zoom: [0, 8] }             # also gridsets, formats, bounds [minx, miny, maxx, maxy], threads
+```
+
+GeoWebCache adds a `STYLES` filter (any of the layer's styles) by itself, so leaving it out means that one. A request with a value no filter allows is refused. GeoWebCache can't take a `%` in a value. `seed` draws those tiles ahead of time, in the background: after `apply` changes the layer, and after each load clears its tiles. Whether tiles are seeded isn't compared.
+
 ### Store
 
 Data GeoServer reads where it is, rather than a table configops loads: a Cloud-Optimised GeoTIFF over HTTP or object storage, a remote WMS, WMTS or WFS to cascade, a PostGIS database reached with a password, or files on the shared data volume. A `Layer` with `store:` publishes one thing from it.
