@@ -30,7 +30,7 @@ PASSWORD = os.environ.get("E2E_GEOSERVER_PASSWORD", "geoserver")
 LDAP = os.environ.get("E2E_LDAP_URL")
 DB_IN_GEOSERVER = os.environ.get("E2E_DB_HOST_IN_GEOSERVER", "db")
 DB_PASSWORD = os.environ.get("E2E_DB_PASSWORD", "postgres")
-MADE = ["usergroup/e2e-jdbc", "auth/e2e-jdbc", "auth/e2e-ldap", "role/e2e-roles"]
+MADE = ["usergroup/e2e-jdbc", "auth/e2e-jdbc", "auth/e2e-ldap", "role/e2e-roles", "role/e2e-ldap-roles", "role/e2e-jdbc-roles"]
 
 
 @pytest.fixture(scope="module")
@@ -177,3 +177,29 @@ def test_store_passwords_are_encrypted_as_set(gs, project, capsys):
             assert check(passwd), (encoder, passwd)
     finally:
         gs.delete_workspace(ws)
+
+
+@pytest.mark.skipif(not LDAP, reason="E2E_LDAP_URL not set: no LDAP directory")
+def test_roles_from_ldap_groups(gs, project, capsys):
+    """An LDAP role service: the directory's groups are its roles. (Asking it for one person's roles through
+    REST gave none with every filter tried; GeoServer's own lookup at login isn't reachable from a test.)"""
+    service = {"kind": "RoleService", "metadata": {"name": "e2e-ldap-roles"}, "spec": {
+        "class": "org.geoserver.security.ldap.LDAPRoleServiceConfig", "className": "org.geoserver.security.ldap.LDAPRoleService",
+        "config": {"serverURL": f"{LDAP}/dc=example,dc=org", "groupSearchBase": "ou=groups", "groupSearchFilter": "member={1}",
+                   "allGroupsSearchFilter": "cn=*", "userFilter": "uid={0}", "useTLS": False, "bindBeforeGroupSearch": True,
+                   "user": "cn=admin,dc=example,dc=org", "password": "admin"}}}
+    apply_clean(capsys, project(service))
+    roles = gs.get("security/roles/service/e2e-ldap-roles")
+    assert "ROLE_MAPPERS" in str(roles), roles
+
+
+def test_roles_kept_in_a_jdbc_database(gs, project, capsys):
+    service = {"kind": "RoleService", "metadata": {"name": "e2e-jdbc-roles"}, "spec": {
+        "class": "org.geoserver.security.jdbc.config.JDBCRoleServiceConfig", "className": "org.geoserver.security.jdbc.JDBCRoleService",
+        "config": {"driverClassName": "org.postgresql.Driver", "connectURL": f"jdbc:postgresql://{DB_IN_GEOSERVER}:5432/postgres",
+                   "userName": "postgres", "password": DB_PASSWORD, "creatingTables": True, "jndi": False,
+                   "propertyFileNameDDL": "rolesddl.xml", "propertyFileNameDML": "rolesdml.xml",
+                   "adminRoleName": "ADMIN", "groupAdminRoleName": "GROUP_ADMIN"}}}
+    apply_clean(capsys, project(service))
+    gs.request("POST", "security/roles/service/e2e-jdbc-roles/role/E2E_JDBC_ROLE", ok=(200, 201, 400, 500))  # 4xx/5xx: there from before
+    assert "E2E_JDBC_ROLE" in str(gs.get("security/roles/service/e2e-jdbc-roles"))
