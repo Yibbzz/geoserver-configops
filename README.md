@@ -4,7 +4,7 @@ A Helm chart for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud)
 
 - **choose open datasets** from the Ordnance Survey, CKAN portals such as data.gov.uk, WFS and OGC API Features services, or plain links;
 - **load them into PostGIS** and keep them up to date: a nightly job checks each one for a new version and loads it with staging, checks and backups;
-- **publish them** as GeoServer layers, styles and layer groups, with an OpenTofu-style `plan` and `apply`.
+- **publish them** as GeoServer layers, styles and layer groups, and set GeoServer's own settings and services (contact details, titles, limits), with an OpenTofu-style `plan` and `apply`.
 
 > **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI. Expect breaking changes.
 
@@ -102,7 +102,7 @@ Styles are SLD files in the project's `styles/` folder, and `LayerGroup`s combin
 | Project | What it holds |
 | --- | --- |
 | [`examples/quickstart`](examples/quickstart/) | One dataset (Surrey Heath conservation areas from data.gov.uk, 10 polygons) and its layer. Loads in seconds |
-| [`examples/uk-basemap`](examples/uk-basemap/) | The worked example, and the chart's default: OS Open Roads (7.3M features), OS Boundary-Line, the Environment Agency's flood zones (415k polygons) and the conservation areas; 6 layers with their own styles, a basemap group drawn as one layer, tile caching, and a layer on a table you load yourself. Downloads about 3 GB; the first load takes 20 minutes or so |
+| [`examples/uk-basemap`](examples/uk-basemap/) | The worked example, and the chart's default: OS Open Roads (7.3M features), OS Boundary-Line, the Environment Agency's flood zones (415k polygons) and the conservation areas; 6 layers with their own styles, a basemap group drawn as one layer, tile caching, WMS and WFS service settings, and a layer on a table you load yourself. Downloads about 3 GB; the first load takes 20 minutes or so |
 | [`examples/smoke`](examples/smoke/) | CI's test project: its data file is served inside the test cluster |
 
 ## How to
@@ -157,6 +157,17 @@ kubectl -n gscloud logs -f job/sync-now
 ```
 
 **Publish a table you load yourself:** a Layer with `table: { schema: field_data, name: sites }` and no `dataset`. Until the table exists, `plan` shows it as `!` (can't be done yet) and `apply` leaves it, and its place in groups, for later.
+
+**Set contact details, service titles and limits:** a `Settings` resource for GeoServer's global settings (or a workspace's own), and a `Service` per OGC service, in GeoServer's own field names. Only the fields you set are managed:
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: Service
+metadata: { name: wfs }          # wms, wfs, wcs or wmts
+spec:
+  title: Example Council features
+  maxFeatures: 100000
+```
 
 **Bring in an existing GeoServer workspace:** `gisdata import <workspace> -C my-project` writes the files that describe it, so `plan` on them has nothing to do.
 

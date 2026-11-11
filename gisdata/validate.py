@@ -42,6 +42,7 @@ def validate(project: Project) -> list[Problem]:
     problems += check_groups(project)
     problems += check_names(project)
     problems += check_unused(project)
+    problems += check_settings(project)
     return sorted(problems, key=lambda p: (str(p.file), p.line, p.severity, p.message))
 
 
@@ -110,7 +111,7 @@ def check_project(project: Project) -> list[Problem]:
     for extra in projects[1:]:
         problems.append(Problem(extra.file, extra.line(), "a second Project: every directory has exactly one", extra.label))
 
-    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style"):
+    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service"):
         first: dict[str, Resource] = {}
         for r in project.of_kind(kind):
             if r.name in first and kind != "Project":
@@ -275,3 +276,19 @@ def check_unused(project: Project) -> list[Problem]:
 
 def known(named: dict) -> str:
     return f" (known: {', '.join(sorted(named))})" if named else ""
+
+
+def check_settings(project: Project) -> list[Problem]:
+    """One Settings for the global settings and one per workspace; `global` only on the global one."""
+    problems = []
+    first: dict[str | None, Resource] = {}
+    for r in project.of_kind("Settings"):
+        ws = r.spec.get("workspace")
+        where = f"workspace {ws}" if ws else "the global settings"
+        if ws in first:
+            other = first[ws]
+            problems.append(Problem(r.file, r.line(("spec",)), f"a second Settings for {where} (the first is in {other.file.name}:{other.line()})", r.label))
+        first.setdefault(ws, r)
+        if ws and "global" in r.spec:
+            problems.append(Problem(r.file, r.line(("spec", "global")), "spec.global: only the global Settings (no workspace) has these", r.label))
+    return problems

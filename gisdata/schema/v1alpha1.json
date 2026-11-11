@@ -22,7 +22,9 @@
         "Dataset",
         "Layer",
         "LayerGroup",
-        "Style"
+        "Style",
+        "Settings",
+        "Service"
       ]
     },
     "metadata": {
@@ -137,6 +139,156 @@
         "properties": {
           "spec": {
             "$ref": "#/$defs/style"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Settings"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/settings"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "kind",
+          "metadata"
+        ],
+        "properties": {
+          "kind": {
+            "const": "Service"
+          },
+          "metadata": {
+            "properties": {
+              "name": {
+                "const": "wms"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/service_wms"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "kind",
+          "metadata"
+        ],
+        "properties": {
+          "kind": {
+            "const": "Service"
+          },
+          "metadata": {
+            "properties": {
+              "name": {
+                "const": "wfs"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/service_wfs"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "kind",
+          "metadata"
+        ],
+        "properties": {
+          "kind": {
+            "const": "Service"
+          },
+          "metadata": {
+            "properties": {
+              "name": {
+                "const": "wcs"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/service_wcs"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "kind",
+          "metadata"
+        ],
+        "properties": {
+          "kind": {
+            "const": "Service"
+          },
+          "metadata": {
+            "properties": {
+              "name": {
+                "const": "wmts"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/service_wmts"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Service"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "properties": {
+              "name": {
+                "enum": [
+                  "wms",
+                  "wfs",
+                  "wcs",
+                  "wmts"
+                ],
+                "description": "wms, wfs, wcs or wmts"
+              }
+            }
           }
         }
       }
@@ -548,6 +700,489 @@
         },
         "workspace": {
           "$ref": "#/$defs/geoserverName"
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workspace": {
+          "$ref": "#/$defs/geoserverName"
+        },
+        "contact": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "contactPerson": {
+              "type": "string"
+            },
+            "contactOrganization": {
+              "type": "string"
+            },
+            "contactPosition": {
+              "type": "string"
+            },
+            "contactEmail": {
+              "type": "string"
+            },
+            "contactVoice": {
+              "type": "string"
+            },
+            "contactFacsimile": {
+              "type": "string"
+            },
+            "addressType": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            },
+            "addressDeliveryPoint": {
+              "type": "string"
+            },
+            "addressCity": {
+              "type": "string"
+            },
+            "addressState": {
+              "type": "string"
+            },
+            "addressPostalCode": {
+              "type": "string"
+            },
+            "addressCountry": {
+              "type": "string"
+            },
+            "onlineResource": {
+              "type": "string"
+            },
+            "welcome": {
+              "type": "string"
+            }
+          }
+        },
+        "proxyBaseUrl": {
+          "type": "string"
+        },
+        "useHeadersProxyURL": {
+          "type": "boolean"
+        },
+        "numDecimals": {
+          "type": "integer"
+        },
+        "charset": {
+          "type": "string"
+        },
+        "verbose": {
+          "type": "boolean"
+        },
+        "verboseExceptions": {
+          "type": "boolean"
+        },
+        "localWorkspaceIncludesPrefix": {
+          "type": "boolean"
+        },
+        "showCreatedTimeColumnsInAdminList": {
+          "type": "boolean"
+        },
+        "showModifiedTimeColumnsInAdminList": {
+          "type": "boolean"
+        },
+        "showModifiedUserAdminList": {
+          "type": "boolean"
+        },
+        "global": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "globalServices": {
+              "type": "boolean"
+            },
+            "resourceErrorHandling": {
+              "enum": [
+                "OGC_EXCEPTION_REPORT",
+                "SKIP_MISCONFIGURED_LAYERS"
+              ]
+            },
+            "webUIMode": {
+              "enum": [
+                "DEFAULT",
+                "REDIRECT",
+                "DO_NOT_REDIRECT"
+              ]
+            },
+            "xmlPostRequestLogBufferSize": {
+              "type": "integer"
+            },
+            "featureTypeCacheSize": {
+              "type": "integer"
+            },
+            "trailingSlashMatch": {
+              "type": "boolean"
+            },
+            "allowStoredQueriesPerWorkspace": {
+              "type": "boolean"
+            },
+            "geoserver": {
+              "type": "object",
+              "description": "any other field, as GeoServer's REST API names it"
+            }
+          }
+        },
+        "geoserver": {
+          "type": "object",
+          "description": "any other field, as GeoServer's REST API names it"
+        }
+      }
+    },
+    "service_wms": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "abstract": {
+          "type": "string"
+        },
+        "keywords": {
+          "$ref": "#/$defs/keywords"
+        },
+        "maintainer": {
+          "type": "string"
+        },
+        "fees": {
+          "type": "string"
+        },
+        "accessConstraints": {
+          "type": "string"
+        },
+        "onlineResource": {
+          "type": "string"
+        },
+        "citeCompliant": {
+          "type": "boolean"
+        },
+        "schemaBaseURL": {
+          "type": "string"
+        },
+        "verbose": {
+          "type": "boolean"
+        },
+        "geoserver": {
+          "type": "object",
+          "description": "any other field, as GeoServer's REST API names it"
+        },
+        "srs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bboxForEachCRS": {
+          "type": "boolean"
+        },
+        "interpolation": {
+          "enum": [
+            "Nearest",
+            "Bilinear",
+            "Bicubic"
+          ]
+        },
+        "watermark": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "url": {
+              "type": "string"
+            },
+            "position": {
+              "enum": [
+                "TOP_LEFT",
+                "TOP_CENTER",
+                "TOP_RIGHT",
+                "MID_LEFT",
+                "MID_CENTER",
+                "MID_RIGHT",
+                "BOT_LEFT",
+                "BOT_CENTER",
+                "BOT_RIGHT"
+              ]
+            },
+            "transparency": {
+              "type": "integer"
+            }
+          }
+        },
+        "maxBuffer": {
+          "type": "integer"
+        },
+        "maxRequestMemory": {
+          "type": "integer"
+        },
+        "maxRenderingTime": {
+          "type": "integer"
+        },
+        "maxRenderingErrors": {
+          "type": "integer"
+        },
+        "maxRequestedDimensionValues": {
+          "type": "integer"
+        },
+        "getFeatureInfoMimeTypeCheckingEnabled": {
+          "type": "boolean"
+        },
+        "getMapMimeTypeCheckingEnabled": {
+          "type": "boolean"
+        },
+        "dynamicStylingDisabled": {
+          "type": "boolean"
+        },
+        "featuresReprojectionDisabled": {
+          "type": "boolean"
+        },
+        "defaultGroupStyleEnabled": {
+          "type": "boolean"
+        },
+        "transformFeatureInfoDisabled": {
+          "type": "boolean"
+        },
+        "autoEscapeTemplateValues": {
+          "type": "boolean"
+        },
+        "cacheConfiguration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "maxEntries": {
+              "type": "integer"
+            },
+            "maxEntrySize": {
+              "type": "integer"
+            }
+          }
+        },
+        "remoteStyleMaxRequestTime": {
+          "type": "integer"
+        },
+        "remoteStyleTimeout": {
+          "type": "integer"
+        }
+      }
+    },
+    "service_wfs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "abstract": {
+          "type": "string"
+        },
+        "keywords": {
+          "$ref": "#/$defs/keywords"
+        },
+        "maintainer": {
+          "type": "string"
+        },
+        "fees": {
+          "type": "string"
+        },
+        "accessConstraints": {
+          "type": "string"
+        },
+        "onlineResource": {
+          "type": "string"
+        },
+        "citeCompliant": {
+          "type": "boolean"
+        },
+        "schemaBaseURL": {
+          "type": "string"
+        },
+        "verbose": {
+          "type": "boolean"
+        },
+        "geoserver": {
+          "type": "object",
+          "description": "any other field, as GeoServer's REST API names it"
+        },
+        "srs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "serviceLevel": {
+          "enum": [
+            "BASIC",
+            "TRANSACTIONAL",
+            "COMPLETE"
+          ]
+        },
+        "maxFeatures": {
+          "type": "integer"
+        },
+        "featureBounding": {
+          "type": "boolean"
+        },
+        "canonicalSchemaLocation": {
+          "type": "boolean"
+        },
+        "encodeFeatureMember": {
+          "type": "boolean"
+        },
+        "hitsIgnoreMaxFeatures": {
+          "type": "boolean"
+        },
+        "includeWFSRequestDumpFile": {
+          "type": "boolean"
+        },
+        "disableStoredQueriesManagement": {
+          "type": "boolean"
+        },
+        "allowGlobalQueries": {
+          "type": "boolean"
+        },
+        "simpleConversionEnabled": {
+          "type": "boolean"
+        },
+        "getFeatureOutputTypeCheckingEnabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "service_wcs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "abstract": {
+          "type": "string"
+        },
+        "keywords": {
+          "$ref": "#/$defs/keywords"
+        },
+        "maintainer": {
+          "type": "string"
+        },
+        "fees": {
+          "type": "string"
+        },
+        "accessConstraints": {
+          "type": "string"
+        },
+        "onlineResource": {
+          "type": "string"
+        },
+        "citeCompliant": {
+          "type": "boolean"
+        },
+        "schemaBaseURL": {
+          "type": "string"
+        },
+        "verbose": {
+          "type": "boolean"
+        },
+        "geoserver": {
+          "type": "object",
+          "description": "any other field, as GeoServer's REST API names it"
+        },
+        "srs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gmlPrefixing": {
+          "type": "boolean"
+        },
+        "latLon": {
+          "type": "boolean"
+        },
+        "subsamplingEnabled": {
+          "type": "boolean"
+        },
+        "maxInputMemory": {
+          "type": "integer"
+        },
+        "maxOutputMemory": {
+          "type": "integer"
+        },
+        "defaultDeflateCompressionLevel": {
+          "type": "integer"
+        },
+        "maxRequestedDimensionValues": {
+          "type": "integer"
+        },
+        "overviewPolicy": {
+          "enum": [
+            "IGNORE",
+            "NEAREST",
+            "QUALITY",
+            "SPEED"
+          ]
+        }
+      }
+    },
+    "service_wmts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "abstract": {
+          "type": "string"
+        },
+        "keywords": {
+          "$ref": "#/$defs/keywords"
+        },
+        "maintainer": {
+          "type": "string"
+        },
+        "fees": {
+          "type": "string"
+        },
+        "accessConstraints": {
+          "type": "string"
+        },
+        "onlineResource": {
+          "type": "string"
+        },
+        "citeCompliant": {
+          "type": "boolean"
+        },
+        "schemaBaseURL": {
+          "type": "string"
+        },
+        "verbose": {
+          "type": "boolean"
+        },
+        "geoserver": {
+          "type": "object",
+          "description": "any other field, as GeoServer's REST API names it"
         }
       }
     }

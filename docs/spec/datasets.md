@@ -37,6 +37,7 @@ uk-basemap/
     boundary-line.yaml
   layers/
     survey-sites.yaml       # Layers on tables you load yourself
+  server.yaml               # Settings and Services: contact details, service titles, limits
   styles/
     os-road-link.sld        # style files, picked up by name
     os-road-node.sld
@@ -46,7 +47,7 @@ Every resource has the same outer shape:
 
 ```yaml
 apiVersion: gisdata/v1alpha1
-kind: Layer                 # Project, Source, Dataset, Layer, LayerGroup or Style
+kind: Layer                 # Project, Source, Dataset, Layer, LayerGroup, Style, Settings or Service
 metadata:
   name: road-links          # unique per kind; lowercase letters, digits and dashes
 spec: {}                    # what you want; differs per kind
@@ -291,6 +292,70 @@ spec:
 
 Not in the file, worked out on apply: the group's bounding box (from its members) and its projection.
 
+### Settings
+
+GeoServer's own settings: the contact details every service's capabilities show, the proxy address, number formatting and the rest of the web UI's *Global* and *Contact Information* pages. With `workspace`, a workspace's own settings instead (the web UI's workspace *Settings* tab), which its workspace-specific services use.
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: Settings
+metadata:
+  name: global
+spec:
+  contact:
+    contactPerson: Map Team
+    contactOrganization: Example Council
+    contactEmail: maps@example.org
+    addressCity: Guildford
+    addressCountry: United Kingdom
+  proxyBaseUrl: https://maps.example.org/geoserver-cloud
+  numDecimals: 6
+  global:                                # global-only settings
+    resourceErrorHandling: SKIP_MISCONFIGURED_LAYERS
+```
+
+| Field | Meaning |
+| --- | --- |
+| `workspace` | This workspace's own settings, made if it has none. Default: the global settings |
+| `contact` | `contactPerson`, `contactOrganization`, `contactPosition`, `contactEmail`, `contactVoice`, `contactFacsimile`, `addressType`, `address`, `addressDeliveryPoint`, `addressCity`, `addressState`, `addressPostalCode`, `addressCountry`, `onlineResource`, `welcome` |
+| `proxyBaseUrl`, `useHeadersProxyURL` | The address clients see in capabilities documents, when GeoServer sits behind a proxy |
+| `numDecimals`, `charset`, `verbose`, `verboseExceptions`, `localWorkspaceIncludesPrefix`, `showCreatedTimeColumnsInAdminList`, `showModifiedTimeColumnsInAdminList`, `showModifiedUserAdminList` | As in the web UI |
+| `global` | Only without `workspace`: `globalServices`, `resourceErrorHandling` (`OGC_EXCEPTION_REPORT`, `SKIP_MISCONFIGURED_LAYERS`), `webUIMode` (`DEFAULT`, `REDIRECT`, `DO_NOT_REDIRECT`), `xmlPostRequestLogBufferSize`, `featureTypeCacheSize`, `trailingSlashMatch`, `allowStoredQueriesPerWorkspace`, and `geoserver:` for any other global field |
+| `geoserver` | Any other settings field, as GeoServer's REST API names it |
+
+At most one `Settings` for the global settings and one per workspace.
+
+### Service
+
+One OGC service's settings: the web UI's *WMS*, *WFS*, *WCS* and *WMTS* pages. `metadata.name` is the service.
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: Service
+metadata:
+  name: wms                              # wms, wfs, wcs or wmts
+spec:
+  title: Example Council maps
+  abstract: Open data maps for Surrey.
+  keywords: [maps, open data]
+  accessConstraints: Open Government Licence v3.0
+  srs: [EPSG:27700, EPSG:4326, EPSG:3857]   # the CRSs capabilities list
+  maxRenderingTime: 60
+  watermark: { enabled: true, url: https://example.org/logo.png, position: BOT_RIGHT, transparency: 80 }
+```
+
+| Fields | Services |
+| --- | --- |
+| `enabled`, `title`, `abstract`, `keywords`, `maintainer`, `fees`, `accessConstraints`, `onlineResource`, `citeCompliant`, `schemaBaseURL`, `verbose` | All |
+| `srs`, `bboxForEachCRS`, `interpolation` (`Nearest`, `Bilinear`, `Bicubic`), `watermark` (`enabled`, `url`, `position`, `transparency`), `maxBuffer`, `maxRequestMemory`, `maxRenderingTime`, `maxRenderingErrors`, `maxRequestedDimensionValues`, `cacheConfiguration` (`enabled`, `maxEntries`, `maxEntrySize`), `remoteStyleMaxRequestTime`, `remoteStyleTimeout`, `getFeatureInfoMimeTypeCheckingEnabled`, `getMapMimeTypeCheckingEnabled`, `dynamicStylingDisabled`, `featuresReprojectionDisabled`, `defaultGroupStyleEnabled`, `transformFeatureInfoDisabled`, `autoEscapeTemplateValues` | WMS |
+| `srs`, `serviceLevel` (`BASIC`, `TRANSACTIONAL`, `COMPLETE`), `maxFeatures`, `featureBounding`, `canonicalSchemaLocation`, `encodeFeatureMember`, `hitsIgnoreMaxFeatures`, `includeWFSRequestDumpFile`, `disableStoredQueriesManagement`, `allowGlobalQueries`, `simpleConversionEnabled`, `getFeatureOutputTypeCheckingEnabled` | WFS |
+| `srs`, `gmlPrefixing`, `latLon`, `subsamplingEnabled`, `maxInputMemory`, `maxOutputMemory`, `defaultDeflateCompressionLevel`, `maxRequestedDimensionValues`, `overviewPolicy` (`IGNORE`, `NEAREST`, `QUALITY`, `SPEED`) | WCS |
+| `geoserver` | All: any other field, as GeoServer's REST API names it |
+
+**How they're compared and applied.** Both kinds change objects GeoServer already has, so `plan` shows them as `~` (or `+` for a workspace's first settings of its own), and only the fields the files set are compared. The fields are GeoServer's own names, except `abstract` (GeoServer's `abstrct`), and lists are plain lists. GeoServer replaces whatever a PUT leaves out of its settings, so `apply` reads the whole object, sets the files' fields in it, and writes it all back. A project without `Settings` or `Service` resources leaves them alone.
+
+**Not possible yet:** a workspace's own *service* settings (the web UI's per-workspace WMS, WFS… tabs): GeoServer Cloud's REST API has no endpoint for them. The contact field `addressElectronicMailAddress` isn't kept by GeoServer; use `contactEmail`.
+
 ## Secrets
 
 A `secret` field names a secret; the files never hold its value. Where the tool looks:
@@ -307,6 +372,7 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 - Everything inside it (stores, layers, workspace styles) is compared with the files. Anything there that the files don't mention is shown by `plan` as `unmanaged` and removed only with `apply --prune`.
 - Global styles and other workspaces are never changed or deleted, unless a resource names them.
 - Tables: only tables a Dataset declares, in the configured schemas, are created, replaced or backed up. A Layer on someone else's table only publishes it.
+- Settings and services: only the ones a `Settings` or `Service` resource names, and only the fields it sets. They are never deleted. GeoServer has one set of global settings, so when several projects share a GeoServer, let one of them hold the global `Settings` and the `Service`s.
 
 ## Commands
 

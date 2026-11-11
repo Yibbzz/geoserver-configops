@@ -21,14 +21,14 @@ from pathlib import Path
 
 import psycopg2
 
-from . import discover, ingest, remote, sync
+from . import discover, ingest, remote, server, sync
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "store", "style", "table", "layer", "group"]
+ORDER = ["workspace", "settings", "service", "store", "style", "table", "layer", "group"]
 DELETE_ORDER = ["group", "layer", "style", "store"]
 
 # `cache: true`: what GeoServer itself would cache
@@ -42,7 +42,7 @@ SOURCE_ATTRIBUTION = {"os-downloads": "Contains OS data © Crown copyright and d
 @dataclass
 class Change:
     action: str  # + add, ~ change, - delete, ? unmanaged (left alone), ! can't be done
-    kind: str  # workspace, store, style, table, layer, group
+    kind: str  # workspace, settings, service, store, style, table, layer, group
     target: str
     fields: list[tuple[str, object, object]] = field(default_factory=list)  # (field, live, wanted)
     note: str = ""
@@ -159,6 +159,7 @@ class Planner:
         for ws in managed:
             if self.gs.workspace(ws) is None:
                 self.add("+", "workspace", ws, run=lambda ws=ws: self.gs.upsert_workspace(ws))
+        server.plan(self)
         self.plan_stores()
         self.plan_styles()
         self.plan_layers()
