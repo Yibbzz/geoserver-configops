@@ -59,7 +59,7 @@ def differing(live: dict, props: dict, defaults: dict) -> dict:
     """The schema's fields (`props`) whose live value is set and isn't the default, in the spec's form."""
     out = {}
     for name, prop in props.items():
-        if name in ("geoserver", "workspace", "global", "contact", "catalogMode", "masterPassword", "tileCaching", "service"):
+        if name in ("geoserver", "workspace", "global", "contact", "catalogMode", "masterPassword", "tileCaching", "service", "security"):
             continue
         value = unwrap(live.get("abstrct" if name == "abstract" else name))
         if value in (None, "", []):
@@ -94,6 +94,9 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
     caching = tile_caching(gs, props["global"]["properties"]["tileCaching"]["properties"])
     if caching:
         top["tileCaching"] = caching
+    security = security_settings(gs)
+    if security:
+        top["security"] = security
     if top:
         spec["global"] = top
     if spec:
@@ -218,4 +221,79 @@ def security_resources(gs) -> tuple[list[dict], list[str], list[str]]:
         missing = [r for r in rule_roles if r != "*" and r not in roles and r not in BUILT_IN_ROLES]
         if missing:
             notes.append(f"rule {kind} {key} names role(s) GeoServer doesn't have: {', '.join(missing)}; add Roles for them")
+    found += auth_resources(gs, notes)
     return found, notes, keys
+
+
+def security_defaults() -> dict:
+    import json
+    from pathlib import Path
+
+    return json.loads((Path(__file__).parent / "security_defaults.json").read_text())
+
+
+def auth_resources(gs, notes: list[str]) -> list[dict]:
+    """Password policies, authentication filters and providers, user/group and role services that differ from a fresh GeoServer's."""
+    import xml.etree.ElementTree as ET
+
+    from .auth import FOLDERS, POLICY, to_value
+
+    defaults = security_defaults()["objects"]
+    out = []
+    for kind, folder in FOLDERS.items():
+        listing = gs.request("GET", f"resource/security/{folder}", params={"format": "xml"}, ok=(200, 404))
+        if listing.status_code != 200:
+            continue
+        for name in [n.text for n in ET.fromstring(listing.text).findall(".//child/name")]:
+            r = gs.request("GET", f"resource/security/{folder}/{name}/config.xml", ok=(200, 404))
+            if r.status_code != 200 or not r.text.lstrip().startswith("<"):
+                continue
+            root = ET.fromstring(r.text)
+            live = {c.tag: to_value(c) for c in root if c.tag not in ("id", "name")}
+            fresh = defaults.get(f"{kind}/{name}")
+            changed = {k: v for k, v in live.items() if fresh is None or fresh.get(k) != v}
+            if not changed:
+                continue
+            meta = resource_name(name)[0]
+            spec: dict = {"name": name} if meta != name else {}
+            if kind == "PasswordPolicy":
+                names = {v: k for k, v in POLICY.items()}
+                for k, v in changed.items():
+                    if k in names:
+                        spec[names[k]] = v == "true" if v in ("true", "false") else int(v)
+            else:
+                if fresh is None:  # a new one: what it is, and all of its fields
+                    spec["class"], spec["className"] = root.tag, live.pop("className", "")
+                    changed = live
+                if changed:
+                    spec["config"] = {k: typed(v) for k, v in changed.items() if k != "className"}
+            out.append(resource(kind, meta, spec))
+            if kind != "PasswordPolicy" and fresh is None and root.tag[:1].islower():
+                notes.append(f"{kind} {name}: GeoServer names its class {root.tag}; check spec.class before applying it elsewhere")
+    return out
+
+
+def typed(value):
+    """A value from GeoServer's XML as YAML would write it: booleans and numbers as such."""
+    if isinstance(value, str):
+        if value in ("true", "false"):
+            return value == "true"
+        if value.lstrip("-").isdigit():
+            return int(value)
+    if isinstance(value, dict) and set(value) != {"class", "value"}:
+        return {k: typed(v) for k, v in value.items()}
+    return value
+
+
+def security_settings(gs) -> dict:
+    """The security settings (security/config.xml) that differ from a fresh GeoServer's."""
+    from .auth import SECURITY_FILE, live_security
+
+    r = gs.request("GET", SECURITY_FILE, ok=(200, 404))
+    if r.status_code != 200 or not r.text.lstrip().startswith("<"):
+        return {}
+    live, fresh = live_security(r.text), security_defaults()["settings"]
+    out = {k: v for k, v in live.items() if v != fresh.get(k)}
+    if "bruteForcePrevention" in out:
+        out["bruteForcePrevention"] = typed(out["bruteForcePrevention"])
+    return out

@@ -48,6 +48,7 @@ def validate(project: Project) -> list[Problem]:
     problems += check_rasters(project)
     problems += check_workspaces_and_styles(project)
     problems += check_blob_stores(project)
+    problems += check_auth(project)
     return sorted(problems, key=lambda p: (str(p.file), p.line, p.severity, p.message))
 
 
@@ -116,7 +117,8 @@ def check_project(project: Project) -> list[Problem]:
     for extra in projects[1:]:
         problems.append(Problem(extra.file, extra.line(), "a second Project: every directory has exactly one", extra.label))
 
-    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store", "Workspace", "Gridset", "BlobStore"):
+    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store", "Workspace", "Gridset", "BlobStore",
+                 "PasswordPolicy", "AuthFilter", "AuthProvider", "UserGroupService", "RoleService"):
         first: dict[str, Resource] = {}
         for r in project.of_kind(kind):
             if r.name in first and kind != "Project":
@@ -459,4 +461,30 @@ def check_blob_stores(project: Project) -> list[Problem]:
         name = cache.get("blobStore") if isinstance(cache, dict) else None
         if name and name not in stores:
             problems.append(Problem(r.file, r.line(("spec", "cache", "blobStore")), f"spec.cache.blobStore: no BlobStore named {name!r}{known(stores)}", r.label))
+    return problems
+
+
+def check_auth(project: Project) -> list[Problem]:
+    """Security objects say what they are; filter chains keep one for the REST API and name filters that exist."""
+    from .auth import BUILT_IN_FILTERS, KINDS
+
+    problems = []
+    for r in [r for kind in KINDS if kind != "PasswordPolicy" for r in project.of_kind(kind)]:
+        if bool(r.spec.get("class")) != bool(r.spec.get("className")):
+            problems.append(Problem(r.file, r.line(("spec",)), "spec.class and spec.className: give both (a new one needs them), "
+                                    "or neither (changing one GeoServer has)", r.label))
+    filters = BUILT_IN_FILTERS | {r.spec.get("name") or r.name for r in project.of_kind("AuthFilter")}
+    for r in project.of_kind("Settings"):
+        chains = ((r.spec.get("global") or {}).get("security") or {}).get("filterChains")
+        if not chains:
+            continue
+        if not any(p.startswith("/rest") for c in chains for p in c["paths"]):
+            problems.append(Problem(r.file, r.line(("spec", "global", "security", "filterChains")),
+                                    "spec.global.security.filterChains: no chain for /rest/**: configops would lock itself out", r.label))
+        for i, c in enumerate(chains):
+            for f in c.get("filters", []):
+                if f not in filters:
+                    problems.append(Problem(r.file, r.line(("spec", "global", "security", "filterChains", i)),
+                                            f"filter {f!r} isn't GeoServer's own or an AuthFilter in the files: it must exist in GeoServer",
+                                            r.label, "warning"))
     return problems

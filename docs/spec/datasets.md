@@ -702,6 +702,48 @@ An `AccessRule` has exactly one of `layer`, `service` or `rest`. Roles are named
 
 Changes reach every GeoServer Cloud service within a minute or so.
 
+### PasswordPolicy, AuthFilter, AuthProvider, UserGroupService and RoleService
+
+The web UI's *Authentication*, *Passwords* and *Users, Groups, Roles* pages: how GeoServer logs people in, and where it keeps users and roles.
+
+```yaml
+apiVersion: configops/v1alpha1
+kind: PasswordPolicy
+metadata: { name: default }                # GeoServer's own; or a new one, which a user/group service names
+spec: { minLength: 12, digit: true, uppercase: true }
+---
+apiVersion: configops/v1alpha1
+kind: AuthFilter
+metadata: { name: proxy-header }
+spec:
+  class: org.geoserver.security.config.RequestHeaderAuthenticationFilterConfig
+  className: org.geoserver.security.filter.GeoServerRequestHeaderAuthenticationFilter
+  config:                                  # its fields, as GeoServer's own file names them
+    principalHeaderAttribute: X-User
+    userGroupServiceName: default
+    roleSource: { class: "org.geoserver.security.config.PreAuthenticatedUserNameFilterConfig$PreAuthenticatedUserNameRoleSource", value: UserGroupService }
+---
+apiVersion: configops/v1alpha1
+kind: Settings
+metadata: { name: global }
+spec:
+  global:
+    security:
+      roleService: default
+      authProviders: [default]             # tried in this order
+      bruteForcePrevention: { enabled: true, maxDelaySeconds: 5 }
+      filterChains:                        # every chain, in the order GeoServer tries them
+        - { name: wms-by-header, paths: ["/wms/**"], filters: [proxy-header, anonymous], interceptor: interceptor, exceptionTranslation: exception }
+        - { name: web, paths: ["/web/**", "/gwc/rest/web/**", "/"], filters: [rememberme, form, gateway-shared-auth, anonymous] }
+        # ... and the rest of GeoServer's chains: import --settings writes them all
+```
+
+`AuthFilter`, `AuthProvider`, `UserGroupService` and `RoleService` take any kind GeoServer has (LDAP, JDBC, request headers, …): `class` is its configuration class and `className` the class that does the work, both needed for a new one and left out to change one GeoServer has; `config` holds its other fields, with `{ class, value }` for a field that has a class. `PasswordPolicy` takes `uppercase`, `lowercase`, `digit`, `minLength` and `maxLength` (-1: none).
+
+`Settings` `global.security` holds the security settings: `roleService` (the active role service), `authProviders`, `encryptUrlParams`, `passwordEncryption`, `bruteForcePrevention` (`enabled`, `minDelaySeconds`, `maxDelaySeconds`, `maxBlockedThreads`, `whitelistedMasks`), and `filterChains`: the whole list, each `{ name, paths, filters }` plus `class`, `interceptor`, `exceptionTranslation`, `roleFilter`, `disabled`, `allowSessionCreation`, `ssl`, `matchHTTPMethod`, `httpMethods`; a chain's settings the file leaves out stay as GeoServer has them. `validate` refuses a list without a chain for `/rest`, which would lock configops out.
+
+**How they're applied.** GeoServer Cloud's REST API has no endpoints for most of these, but GeoServer keeps each in a file (`security/<kind>/<name>/config.xml`, `security/config.xml`) that `/rest/resource` reads and writes. `apply` writes the file, then has GeoServer read its security files again (by saving its default authentication provider unchanged); the other services follow within a minute. Objects are written before the settings that name them. If GeoServer refuses new settings, `apply` puts the old file back. Only the fields a file sets are compared; nothing is removed. A workspace administrator is an `AccessRule` with `access: admin` on the workspace's layers.
+
 ## Secrets
 
 A `secret` field names a secret; the files never hold its value. Where the tool looks:

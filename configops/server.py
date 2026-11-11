@@ -114,6 +114,11 @@ def plan_settings(planner, gs, r: Resource) -> None:
     top_spec = dict(spec.pop("global", None) or {})
     catalog_mode = top_spec.pop("catalogMode", None)
     tile_caching = top_spec.pop("tileCaching", None)
+    security_settings = top_spec.pop("security", None)
+    if security_settings:
+        from . import auth
+
+        auth.plan_settings(planner, security_settings)
     master = top_spec.pop("masterPassword", None)
     top = to_geoserver(top_spec)
     settings = to_geoserver(spec)
