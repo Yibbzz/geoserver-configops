@@ -34,12 +34,14 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | PostGIS through the JNDI datasource | Yes | Made for you: one store per schema the layers use |
 | PostGIS with a password | Yes | `Store` `type: postgis`, login from a Secret |
 | Oracle, SQL Server | Not yet | |
-| GeoPackage, Shapefile, directory of shapefiles, FlatGeobuf, GeoParquet, PMTiles, property files | Not yet | Need the files on a volume every GeoServer service can read (next) |
+| GeoPackage, Shapefile, directory of shapefiles, FlatGeobuf, PMTiles | Yes | `Store` with `path:` on the shared data volume (`values-data-volume.yaml`); PMTiles also over `url:` |
+| GeoParquet, property files | Not yet | |
 | Remote WFS (cascaded) | Yes | `Store` `type: wfs` |
 | Remote WMS, WMTS (cascaded) | Yes | `Store` `type: wms`, `wmts` |
 | Cloud-Optimised GeoTIFF (HTTP, S3, Azure, Google) | Yes | `Store` `type: cog` |
-| GeoTIFF on disk | Not yet | Needs the shared volume (next) |
-| Image mosaic, image pyramid, world image, ArcGrid | Not yet | Need the shared volume (next) |
+| GeoTIFF on disk | Yes | `Store` `type: geotiff` with `path:` |
+| Image mosaic, world image, ArcGrid | Yes | `Store` `type: imagemosaic`, `worldimage`, `arcgrid` |
+| Image pyramid | Not yet | |
 | App-schema (complex features) | Not yet | |
 | Store description, enabled | Yes | For `Store`s; the JNDI PostGIS stores have none |
 

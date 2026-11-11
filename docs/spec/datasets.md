@@ -215,7 +215,7 @@ Not in the file, worked out on apply: native and lat/lon bounding boxes (compute
 
 ### Store
 
-Data GeoServer reads where it is, rather than a table gisdata loads: a Cloud-Optimised GeoTIFF over HTTP or object storage, a remote WMS, WMTS or WFS to cascade, or a PostGIS database reached with a password. A `Layer` with `store:` publishes one thing from it.
+Data GeoServer reads where it is, rather than a table gisdata loads: a Cloud-Optimised GeoTIFF over HTTP or object storage, a remote WMS, WMTS or WFS to cascade, a PostGIS database reached with a password, or files on the shared data volume. A `Layer` with `store:` publishes one thing from it.
 
 ```yaml
 apiVersion: gisdata/v1alpha1
@@ -268,6 +268,14 @@ spec:
 | `wmts` | The capabilities address | A remote tile layer | |
 | `wfs` | The capabilities address | A remote feature type, as if it were local | Only as fast as the remote server: one 30 km map from the EA's WFS took 75 s |
 | `postgis` | (none: `connection`) | A table | `connection`: `host`, `port`, `database`, `schema` and any other parameter as GeoServer names it |
+| `geopackage`, `flatgeobuf` | (none: `path`) | A table or layer in the file | |
+| `shapefile` | (none: `path`) | The shapefile | `path` is the `.shp` |
+| `shapefiles` | (none: `path`) | One of the folder's shapefiles | `path` is a folder |
+| `pmtiles` | `path`, or `url` (`https://`, `s3://`) | A layer of the vector tiles | |
+| `geotiff`, `worldimage`, `arcgrid` | (none: `path`) | The raster | A COG on the volume is a `geotiff` |
+| `imagemosaic` | (none: `path`) | The mosaic of a folder's rasters | GeoServer writes its index into the folder |
+
+**Files** are read from the shared data volume, which the chart mounts at `/data` in every GeoServer service with `-f values-data-volume.yaml`. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you (or a Dataset, next); `gisdata import` writes stores whose files are under `/data`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -276,8 +284,6 @@ spec:
 | `description`, `enabled` | none; `true` | |
 
 A `Layer` on a store takes `store` and `resource` (the name the store gives it: a coverage, remote layer or table) instead of `dataset` and `table`; `resource` can be left out when the store offers only one thing. Everything else about the layer (title, styles, cache, attribution, access rules) works as for any layer. A store the files don't name, in a workspace the project owns, is unmanaged and removed only with `--prune`.
-
-Files on disk (GeoPackage, Shapefile, plain GeoTIFF, image mosaics) need a volume every GeoServer service can read, which the chart doesn't have yet; they come next.
 
 ### Style
 
