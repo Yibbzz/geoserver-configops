@@ -103,6 +103,7 @@ Styles are SLD files in the project's `styles/` folder, and `LayerGroup`s combin
 | --- | --- |
 | [`examples/quickstart`](examples/quickstart/) | One dataset (Surrey Heath conservation areas from data.gov.uk, 10 polygons) and its layer. Loads in seconds |
 | [`examples/uk-basemap`](examples/uk-basemap/) | The worked example, and the chart's default: OS Open Roads (7.3M features), OS Boundary-Line, the Environment Agency's flood zones (415k polygons) and the conservation areas; 6 layers with their own styles, a basemap group drawn as one layer, tile caching, WMS and WFS service settings, and a layer on a table you load yourself. Downloads about 3 GB; the first load takes 20 minutes or so |
+| [`examples/terrain`](examples/terrain/) | Rasters: OS Terrain 50 (heights of Great Britain, 50 m) made into one Cloud-Optimised GeoTIFF on the data volume and drawn with a colour ramp. Needs `-f values-data-volume.yaml` |
 | [`examples/smoke`](examples/smoke/) | CI's test project: its data file is served inside the test cluster |
 
 ## How to

@@ -20,17 +20,20 @@ FORMAT_PREFERENCE = [
     "MapInfo",
 ]
 
+# Raster formats, best first, for a Dataset with `raster:`
+RASTER_PREFERENCE = ["GeoTIFF", "ASCII Grid and GML (Grid)", "ASCII Grid"]
+
 # Area OS uses for a single download covering all of Great Britain
 WHOLE_AREA = "GB"
 
 
-def choose(downloads: list[Download]) -> Download | None:
+def choose(downloads: list[Download], preference: list[str] = FORMAT_PREFERENCE) -> Download | None:
     """
     The download sync would use: the most preferred format available as one
     file. A format offered only as many grid-square tiles is skipped, since
     each tile would become its own table.
     """
-    for fmt in FORMAT_PREFERENCE:
+    for fmt in preference:
         candidates = [d for d in downloads if d.format == fmt]
         if len(candidates) == 1:
             return candidates[0]
@@ -97,7 +100,7 @@ class OSDownloads:
             details = list(pool.map(lambda p: self._json(f"{self.base}/{p['id']}", p["id"]), listing))
         return Listing(sorted((self._product(d) for d in details), key=lambda p: p.id.lower()), total)
 
-    def product(self, product_id: str, resource: str | None = None) -> Product:
+    def product(self, product_id: str, resource: str | None = None, raster: bool = False) -> Product:
         if resource:
             raise SourceError("OS products have no resources to pick; sync uses the download marked *")
         product = self._product(self._json(f"{self.base}/{product_id}", product_id))
@@ -116,7 +119,7 @@ class OSDownloads:
             for d in items
             if d.get("format") and d.get("url")
         ]
-        product.chosen = choose(product.downloads)
+        product.chosen = choose(product.downloads, RASTER_PREFERENCE if raster else FORMAT_PREFERENCE)
         product.loads_as = product.chosen.format if product.chosen else None
         return product
 

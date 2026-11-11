@@ -138,7 +138,7 @@ Each type is a plug-in with two parts: list what's available, and fetch one prod
 
 ### Dataset
 
-One product from a source, loaded into one or more tables, with an update schedule.
+One product from a source, loaded into one or more tables (or, with `raster:`, made into one Cloud-Optimised GeoTIFF), with an update schedule.
 
 ```yaml
 apiVersion: gisdata/v1alpha1
@@ -168,6 +168,39 @@ spec:
 | `validation.minRows` | no | `1` | Fail the update (keep the old table) below this count |
 
 A product is a *version* at the source (OS publishes `2026-10`, for example). `sync` loads a new version only when the source has one, and keeps the last `backups` versions of each table.
+
+#### Raster Datasets
+
+With `raster:` instead of `tables:`, the download becomes one Cloud-Optimised GeoTIFF on the shared data volume (`-f values-data-volume.yaml`), and a `Store` with `dataset:` publishes it:
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: Dataset
+metadata:
+  name: terrain-50
+spec:
+  source: os
+  product: Terrain50                 # OS's ASCII Grid download: ~2,800 tiles in zips inside a zip
+  update: monthly
+  raster:
+    path: rasters/os-terrain-50.tif  # under /data
+    crs: EPSG:27700                  # the grids carry no CRS of their own
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata:
+  name: terrain-50
+spec:
+  type: geotiff
+  dataset: terrain-50                # the Dataset's file
+```
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `raster.path` | required | Where the COG goes, under the data volume; ends in `.tif` |
+| `raster.crs` | the rasters' own, else the project's `crs` | Assigned to the result |
+
+`sync` downloads the product (for `os-downloads`, a raster format: GeoTIFF, then ASCII Grid; for `ckan`, name the file with `resource`), unpacks every raster in it, through zips inside zips, mosaics them through a GDAL VRT and writes one deflate-compressed COG with overviews. It writes beside the live file, checks GDAL can read it, then renames it over the live file, so GeoServer never reads half a file; the old one moves to `.gisdata-backups/` on the volume, and the newest `backups` are kept. Then it resets the GeoServer stores on the file, works their layers' bounds out again and clears their cached tiles. `plan` loads a raster Dataset that has never loaded before making its store. Outside the cluster, `GISDATA_DATA_DIR` stands in for `/data`.
 
 ### Layer
 
@@ -275,10 +308,11 @@ spec:
 | `geotiff`, `worldimage`, `arcgrid` | (none: `path`) | The raster | A COG on the volume is a `geotiff` |
 | `imagemosaic` | (none: `path`) | The mosaic of a folder's rasters | GeoServer writes its index into the folder |
 
-**Files** are read from the shared data volume, which the chart mounts at `/data` in every GeoServer service with `-f values-data-volume.yaml`. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you (or a Dataset, next); `gisdata import` writes stores whose files are under `/data`.
+**Files** are read from the shared data volume, which the chart mounts at `/data` in every GeoServer service with `-f values-data-volume.yaml`. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you, or a raster Dataset makes them (above); `gisdata import` writes stores whose files are under `/data`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
+| `dataset` | none | A raster Dataset whose file this `geotiff` store reads, instead of `path` |
 | `credentials` | none | `{ secret }`: a Secret with keys `username` and `password`, for a `postgis` or `wfs` store or a WMS or WMTS that needs a login. In the chart, add it to `gisdata.secrets`. GeoServer keeps the password encrypted, so it's set but not compared |
 | `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
 | `description`, `enabled` | none; `true` | |

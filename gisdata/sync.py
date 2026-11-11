@@ -17,7 +17,7 @@ from pathlib import Path
 
 import psycopg2
 
-from . import discover, ingest, remote, schedule, secrets
+from . import discover, ingest, raster, remote, schedule, secrets
 from .geoserver import GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import Product, SourceError
@@ -107,7 +107,11 @@ def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, datas
     started = datetime.now()
     spec = dataset.spec
     src = discover.resolve(spec["source"], root)
-    product: Product = src.client.product(spec["url"] if src.type == "url" else spec["product"], spec.get("resource"))
+    raster_spec = spec.get("raster")
+    if raster_spec and src.type == "os-downloads":
+        product: Product = src.client.product(spec["product"], spec.get("resource"), raster=True)
+    else:
+        product = src.client.product(spec["url"] if src.type == "url" else spec["product"], spec.get("resource"))
     chosen = product.chosen
     if chosen is None:
         raise ingest.LoadError(f"{product.id} has nothing gisdata can load; `gisdata discover` shows what it offers")
@@ -118,6 +122,8 @@ def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, datas
 
     validation = spec.get("validation") or {}
     project_crs = project.spec.get("crs") or DEFAULT_CRS
+    if raster_spec:
+        return sync_raster(conn, dataset, src, product, last, started, force, project, project_crs)
     with tempfile.TemporaryDirectory(prefix="gisdata-sync-") as tmp:
         sha = None
         if chosen.service:
@@ -153,6 +159,51 @@ def sync_dataset(conn, db: ingest.Database, root: Path, project: Resource, datas
     return message + "".join(f"\n  note: {n}" for n in notes), tables
 
 
+def sync_raster(conn, dataset: Resource, src, product: Product, last, started: datetime, force: bool,
+                project: Resource, project_crs: str) -> tuple[str, list[str]]:
+    """Download a raster product and make it the dataset's COG on the data volume."""
+    options, chosen = dataset.spec["raster"], product.chosen
+    path = options["path"]
+    with tempfile.TemporaryDirectory(prefix="gisdata-sync-") as tmp:
+        work = Path(tmp)
+        download = work / (Path(chosen.file_name).name if chosen.file_name else "download")
+        sha = ingest.download(src.client.download_url(chosen), download, chosen.md5)
+        if not force and last and last.tables == [path] and raster.live_path(path).exists() and \
+                ((product.version and last.version == product.version) or last.sha256 == sha):
+            ingest.record(conn, dataset.name, last.version, chosen.format, "skipped", started, sha=sha, tables=[path])
+            return f"{dataset.name}: up to date ({discover.version(last.version)})", []
+        t0 = time.monotonic()
+        pixels = raster.load(download, work, path, options.get("crs"), project_crs, project.spec.get("backups", 3))
+    version = product.version or f"sha256:{sha[:16]}"
+    ingest.record(conn, dataset.name, version, chosen.format, "success", started, rows=pixels, sha=sha, tables=[path])
+    return (f"{dataset.name}: loaded {discover.version(version)} in {time.monotonic() - t0:.0f}s: "
+            f"{raster.data_root()}/{path} ({pixels:,} pixels)"), [path]
+
+
+def refresh_rasters(gs: GeoServer, files: Project, dataset: str) -> tuple[int, list[str]]:
+    """Reset the stores on a raster dataset's file and work out their coverages' bounds again; (count, layer targets)."""
+    project = files.of_kind("Project")[0]
+    default_ws = project.spec["workspace"]
+    stores = [s for s in files.of_kind("Store") if s.spec.get("dataset") == dataset]
+    targets, refreshed = [], 0
+    for store in stores:
+        ws, name = store.spec.get("workspace") or default_ws, geoserver_name(store)
+        if gs.get(f"workspaces/{ws}/coveragestores/{name}") is None:
+            continue  # not made yet: apply does that
+        gs.request("POST", f"workspaces/{ws}/coveragestores/{name}/reset")
+        for layer in files.of_kind("Layer"):
+            if layer.spec.get("store") != store.name:
+                continue
+            lws, lname = layer.spec.get("workspace") or default_ws, geoserver_name(layer)
+            path = f"workspaces/{ws}/coveragestores/{name}/coverages/{lname}"
+            if gs.get(path) is not None:
+                gs.request("PUT", path, {"coverage": {"enabled": layer.spec.get("enabled", True)}},
+                           params={"calculate": "nativebbox,latlonbbox"})
+                refreshed += 1
+                targets.append(f"{lws}:{lname}")
+    return refreshed, targets
+
+
 def refresh(gs: GeoServer, files: Project, db: ingest.Database, dataset: str) -> str:
     """
     After new data: work out again the bounding boxes of the layers on the
@@ -162,9 +213,11 @@ def refresh(gs: GeoServer, files: Project, db: ingest.Database, dataset: str) ->
     project = files.of_kind("Project")[0]
     default_ws = project.spec["workspace"]
     layers = [r for r in files.of_kind("Layer") if r.spec.get("dataset") == dataset]
-    if not layers:
+    raster_stores = {s.name for s in files.of_kind("Store") if s.spec.get("dataset") == dataset}
+    raster_layers = [r for r in files.of_kind("Layer") if r.spec.get("store") in raster_stores]
+    if not layers and not raster_layers:
         return ""
-    names = {r.name for r in layers}
+    names = {r.name for r in layers + raster_layers}
     groups = files.named("LayerGroup")
     holding: set[str] = set()
     changed = True
@@ -176,6 +229,13 @@ def refresh(gs: GeoServer, files: Project, db: ingest.Database, dataset: str) ->
                 changed = True
     refreshed, cleared = 0, 0
     try:
+        if raster_layers:
+            count, targets = refresh_rasters(gs, files, dataset)
+            refreshed += count
+            for target in targets:
+                if gs.tile_layer(target):
+                    gs.truncate(target)
+                    cleared += 1
         for r in layers:
             ws, name = r.spec.get("workspace") or default_ws, geoserver_name(r)
             if gs.featuretype(ws, db.live, name) is None:
