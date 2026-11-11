@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the whole chart into the current kind cluster and check it works end to end:
-# every pod becomes ready, OGC services answer through the gateway, the catalog
-# import/export round trip (tests/test_e2e_rest.py) passes against the real deployment,
-# and the gisdata apply Job deploys a project (examples/smoke) that then draws through WMS.
+# every pod becomes ready, OGC services answer through the gateway, the e2e tests
+# (pytest -m e2e) pass against the real deployment, and the gisdata apply Job deploys a project (examples/smoke) that then draws through WMS.
 #
 #   kind create cluster --name gscloud
 #   tests/kind/deploy-test.sh        # needs helm, kubectl, curl, jq and the Python test deps
@@ -94,14 +93,8 @@ if ! kubectl -n "$NS" wait --for=condition=complete job/sync-now --timeout=10m; 
 fi
 kubectl -n "$NS" logs job/sync-now
 
-echo "== Catalog round trip (tests/test_e2e_rest.py) against the deployment"
+echo "== e2e tests (pytest -m e2e) against the deployment"
 E2E_GEOSERVER_URL=$BASE/rest E2E_DB_HOST=localhost E2E_DB_PORT=15432 E2E_DB_PASSWORD="$PG_PASS" \
   python3 -m pytest -m e2e -v -p no:cacheprovider
-
-echo "== A layer renders through WMS"
-type=$(curl -s -o /tmp/gscloud-map -w '%{content_type}' \
-  "$BASE/wms?service=WMS&version=1.1.1&request=GetMap&layers=test:openroads&styles=&srs=EPSG:27700&bbox=0,0,700000,1300000&width=256&height=256&format=image/png")
-[ "$type" = "image/png" ] || { echo "FAIL GetMap returned $type"; head -c 400 /tmp/gscloud-map; exit 1; }
-echo "ok   GetMap test:openroads -> image/png"
 
 echo "All deployment checks passed."

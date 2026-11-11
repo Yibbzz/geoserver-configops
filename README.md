@@ -2,7 +2,7 @@
 
 A Helm deployment of [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud) that:
 
-- **keeps the GeoServer catalog in git**: workspaces, datastores, layers and styles are exported to JSON/SLD files and can be re-imported into a fresh cluster;
+- **keeps what GeoServer publishes in git**: workspaces, stores, styles, layers and layer groups are YAML and SLD files, and `gisdata apply` makes GeoServer match them;
 - **keeps open data up to date**: the datasets you choose are described in YAML (a `gisdata` project), and a nightly job checks each one for a new version and loads it into PostGIS with staging, validation and backups. Sources: the Ordnance Survey Downloads API, CKAN portals such as data.gov.uk, WFS and OGC API Features services, and plain links.
 
 > **Status: early proof of concept.** It works end to end on a local k3d cluster with OS OpenData. The longer-term aim is a tool where you choose datasets, add your API keys, deploy, and get a version-controlled GIS data server. Expect breaking changes.
@@ -15,8 +15,8 @@ A Helm deployment of [GeoServer Cloud](https://github.com/geoserver/geoserver-cl
  Open data sources ──► gisdata-sync CronJob ──► PostGIS (data_layers schema) ──► GeoServer Cloud ──► WMS / WFS / WCS / tiles
   (OS, CKAN, WFS, …)    (gisdata sync)                                     ▲      (gateway, wms, wfs,
                                                                            │       wcs, gwc, rest, webui)
-                          geoserver-config/  ◄── export / import ──────────┘
-                          (catalog as files in git)
+                          gisdata-apply Job ───────────────────────────────┘
+                          (gisdata apply: layers, styles, groups)
 ```
 
 | Path | What it is |
@@ -25,8 +25,6 @@ A Helm deployment of [GeoServer Cloud](https://github.com/geoserver/geoserver-cl
 | `charts/` | Vendored camptocamp `application` chart, which templates the GeoServer services |
 | `values-local-registry.yaml` | Override to pull images from a local k3d registry instead of Docker Hub |
 | `geoserver-secrets.example.yaml` | Template for the Kubernetes secrets the chart expects |
-| `export-geoserver-config.sh`, `import-geoserver-config.sh` | Catalog export and import over the GeoServer REST API |
-| `geoserver-config/` | The exported catalog (example: a `test` workspace with OS Open Roads, Open Greenspace and Boundary-Line) |
 | `gisdata/`, `pyproject.toml`, `Dockerfile` | The `gisdata` command (validate, discover, sync) and its image |
 | `examples/uk-basemap/` | A worked `gisdata` project, and the one the chart deploys by default |
 | `docs/spec/datasets.md` | The project file format and the commands |
@@ -107,15 +105,7 @@ Secrets come from `GISDATA_<SECRET>_<KEY>` environment variables or a git-ignore
 
 ## Config as code
 
-The GeoServer catalog lives in the `pgconfig` schema in Postgres. To version it:
-
-```bash
-kubectl port-forward deployment/geoserver-gsc-rest 9090:8080 &
-export GEOSERVER_PASSWORD=...           # GEOSERVER_URL, GEOSERVER_USER, CONFIG_DIR are optional
-./export-geoserver-config.sh            # cluster -> geoserver-config/
-git diff geoserver-config/
-./import-geoserver-config.sh            # geoserver-config/ -> cluster (create or update)
-```
+The project's files are the record of what GeoServer publishes: `gisdata plan` shows how GeoServer differs from them, and `gisdata apply` makes it match. To bring an existing workspace under it, `gisdata import <workspace>` writes the files that describe it (see the spec).
 
 Datastores use the JNDI datasource `java:comp/env/jdbc/mypostgis` (`templates/jndi-configmap.yaml`), so no database passwords are stored in the exported files.
 
@@ -133,10 +123,9 @@ CI (`.github/workflows/ci.yaml`) runs on every pull request and push to `main`:
 | --- | --- |
 | Helm chart | `helm lint`, `kubeconform` schema checks on the rendered manifests, and `tests/test_chart.py` (renders the chart and checks services, images, the sync job and its project ConfigMap, and that every secret it uses is in `geoserver-secrets.example.yaml`) |
 | gisdata | Unit tests with sources faked (`tests/test_gisdata_*.py`), and `sync` end to end against a real PostGIS (`tests/test_gisdata_sync_integration.py`) |
-| Config scripts | `shellcheck`, and an import-then-export round trip against a fake GeoServer REST API (`tests/test_config_scripts.py`) |
 | gisdata image | Docker build, and a smoke test that validates the example project inside it |
-| Real GeoServer REST | `tests/e2e/up.sh` starts GeoServer Cloud's REST service, PostGIS and RabbitMQ in Docker with the chart's images and `jndi.yml`; `tests/test_e2e_rest.py` imports `geoserver-config/`, re-imports, exports and checks nothing drifts |
-| Full deployment | `tests/kind/deploy-test.sh` installs the whole chart on a kind cluster, waits for every pod, checks WMS, WFS, WCS and WMTS through the gateway, runs the same round trip against it, and renders a layer with WMS GetMap |
+| Real GeoServer REST | `tests/e2e/up.sh` starts GeoServer Cloud's REST service, PostGIS and RabbitMQ in Docker with the chart's images and `jndi.yml`; the e2e tests (`pytest -m e2e`) run the GeoServer client and `plan`/`apply` against it |
+| Full deployment | `tests/kind/deploy-test.sh` installs the whole chart on a kind cluster, waits for every pod, checks WMS, WFS, WCS and WMTS through the gateway, runs the same e2e tests against it, deploys `examples/smoke` through the apply Job and draws it with WMS GetMap |
 
 Run them locally (needs `helm`, `jq`, `curl`, and `ogr2ogr` for the integration tests):
 

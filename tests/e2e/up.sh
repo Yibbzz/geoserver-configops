@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the real GeoServer Cloud REST service for tests/test_e2e_rest.py.
+# Start the real GeoServer Cloud REST service for the e2e tests (pytest -m e2e).
 # Image tags and jndi.yml come from the Helm chart, so this tests what the chart deploys.
 #   tests/e2e/up.sh            start and wait until healthy
 #   tests/e2e/up.sh down       stop and remove everything

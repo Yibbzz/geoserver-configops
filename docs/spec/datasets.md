@@ -506,7 +506,7 @@ The notes say what couldn't be carried over as it is: a store not named after it
 ## Known problems this spec has to answer
 
 - **One table per product** (fixed in PR #4). The pipeline loaded one layer of a multi-layer file into one table, so the `openroads` layer held only road nodes, not road links. It now loads every layer into its own table. Run on its own, it names them after the provider's product ID (`openroads_road_link`); run by the tool, it gets the Dataset's name, giving the default above (`os_open_roads_road_link`).
-- **Layer-to-style links aren't exported today.** `export-geoserver-config.sh` saves feature types, not GeoServer's layer records, so which style a layer uses isn't in git. `Layer.style` covers it.
+- **Layer-to-style links weren't in git.** The old export script (since removed) saved feature types, not GeoServer's layer records, so which style a layer used wasn't recorded. `Layer.style` covers it.
 - **Client gaps** (tracked in the roadmap): bounding boxes, full JNDI settings, deleting styles, tile cache seed/truncate, layer publishing settings. Layer groups are supported (create, read, delete).
 
 ## Decided

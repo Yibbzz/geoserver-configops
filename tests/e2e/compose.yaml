@@ -1,6 +1,6 @@
 # The real GeoServer Cloud REST service, wired the way the Helm chart wires it:
 # same images and tags, same pgconfig settings and the chart's rendered jndi.yml.
-# Started by tests/e2e/up.sh; used by tests/test_e2e_rest.py.
+# Started by tests/e2e/up.sh; used by the e2e tests (pytest -m e2e).
 name: gscloud-e2e
 x-pgconfig: &pgconfig
   PGCONFIG_HOST: db
