@@ -38,8 +38,9 @@ def gs():
 
 @pytest.fixture
 def project(tmp_path, gs, monkeypatch):
-    for key, value in {"E2EGS_USERNAME": "admin", "E2EGS_PASSWORD": PASSWORD, "E2EDB_HOST": "localhost", "E2EDB_PORT": "55433",
-                       "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": "postgres", "E2EDB_PASSWORD": "postgres"}.items():
+    for key, value in {"E2EGS_USERNAME": "admin", "E2EGS_PASSWORD": PASSWORD, "E2EDB_HOST": os.environ.get("E2E_DB_HOST", "localhost"),
+                       "E2EDB_PORT": os.environ.get("E2E_DB_PORT", "55433"), "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": "postgres",
+                       "E2EDB_PASSWORD": os.environ.get("E2E_DB_PASSWORD", "postgres")}.items():
         monkeypatch.setenv(f"CONFIGOPS_{key}", value)
     chains = live_security(gs.request("GET", SECURITY_FILE).text)["filterChains"]
     chains = [c for c in chains if c["name"] != "e2e-about"]
