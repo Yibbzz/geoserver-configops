@@ -231,3 +231,13 @@ def test_data_volume_is_mounted_in_every_service_and_configops():
         claims = {v["name"]: v["persistentVolumeClaim"]["claimName"] for v in pod["volumes"] if "persistentVolumeClaim" in v}
         mounted = {m["mountPath"]: m["name"] for m in pod["containers"][0]["volumeMounts"]}
         assert claims.get(mounted.get("/data")) == "geoserver-data", name
+
+
+def test_app_schema_is_off_unless_turned_on():
+    def switched_on(manifests) -> set[str]:
+        return {n for n, d in by_kind(manifests, "Deployment").items()
+                if any(e["name"] == "GEOSERVER_EXTENSION_APPSCHEMA_ENABLED" and e.get("value") == "true"
+                       for e in containers(d)[0].get("env", []))}
+    assert switched_on(helm_template()) == set()
+    on = switched_on(helm_template("-f", str(ROOT / "values-app-schema.yaml")))
+    assert {"geoserver-gsc-rest", "geoserver-gsc-wms", "geoserver-gsc-wfs", "geoserver-gsc-webui"} <= on

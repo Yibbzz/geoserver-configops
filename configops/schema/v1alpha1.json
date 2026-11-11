@@ -2400,7 +2400,13 @@
             "geotiff",
             "worldimage",
             "arcgrid",
-            "imagemosaic"
+            "imagemosaic",
+            "imagepyramid",
+            "geoparquet",
+            "property",
+            "csv",
+            "appschema",
+            "sqlserver"
           ]
         },
         "url": {

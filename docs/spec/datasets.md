@@ -352,13 +352,19 @@ spec:
 | `pmtiles` | `path`, or `url` (`https://`, `s3://`) | A layer of the vector tiles | |
 | `geotiff`, `worldimage`, `arcgrid` | (none: `path`) | The raster | A COG on the volume is a `geotiff` |
 | `imagemosaic` | (none: `path`) | The mosaic of a folder's rasters | GeoServer writes its index into the folder |
+| `imagepyramid` | (none: `path`) | A raster at several resolutions | A folder as `gdal_retile.py -levels N` makes it, with the full-size tiles moved into `0/` |
+| `geoparquet` | (none: `path`) | The file's features | |
+| `property` | (none: `path`) | One of the folder's `.properties` files | GeoServer's own simple text format |
+| `csv` | (none: `path`) | The file's rows as features | `connection: { strategy: LatLon, latField, lngField }` or `{ strategy: WKT, wktField }` |
+| `sqlserver` | (none: `connection`) | A table | As `postgis`; `credentials` for the login |
+| `appschema` | (none: `path`) | A complex feature type the mapping file defines | The mapping and its schema on the data volume; the layer names its feature type in `resource`. GeoServer Cloud ships the extension off: install with `-f values-app-schema.yaml`. `apply` makes an `app-schema-cache` folder beside the mapping (when the data volume is mounted where it runs), where GeoServer keeps the schemas it downloads; the workspace's namespace URI must be the mapping's target namespace (`Workspace` `namespace`) |
 
 **Files** are read from the shared data volume, which the chart mounts at `/data` in every GeoServer service with `-f values-data-volume.yaml`. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you, or a raster Dataset makes them (above); `configops import` writes stores whose files are under `/data`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `dataset` | none | A raster Dataset whose file this `geotiff` store reads, instead of `path` |
-| `credentials` | none | `{ secret }`: a Secret with keys `username` and `password`, for a `postgis` or `wfs` store or a WMS or WMTS that needs a login. In the chart, add it to `configops.secrets`. GeoServer keeps the password encrypted, so it's set but not compared |
+| `credentials` | none | `{ secret }`: a Secret with keys `username` and `password`, for a `postgis`, `sqlserver` or `wfs` store or a WMS or WMTS that needs a login. In the chart, add it to `configops.secrets`. GeoServer keeps the password encrypted, so it's set but not compared |
 | `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
 | `description`, `enabled` | none; `true` | |
 
