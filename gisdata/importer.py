@@ -68,6 +68,8 @@ class Importer:
         self.notes: list[str] = []
         self.names: dict[str, str] = {}  # GeoServer name -> resource name, for group members
         self.styles: dict[str, tuple[str, str]] = {}  # style name -> (suffix, text)
+        self.store_resources: dict[str, dict] = {}  # GeoServer store name -> Store resource, for stores that aren't the JNDI PostGIS
+        self.secrets: list[str] = []  # Secrets the imported stores name
 
     def style(self, ref: str | None) -> str | None:
         """A live style reference as the files write it, or None if it can't be."""
@@ -85,26 +87,119 @@ class Importer:
         return None
 
     def stores(self) -> dict[str, dict]:
+        """The PostGIS stores on the JNDI datasource (by name: their parameters); other stores become Store resources."""
         found = {}
         for name in self.gs.names(f"workspaces/{self.ws}/datastores", "dataStore"):
             store = self.gs.datastore(self.ws, name)["dataStore"]
             entries = {e["@key"]: e.get("$") for e in as_list((store.get("connectionParameters") or {}).get("entry"))}
-            found[name] = entries
-            if entries.get("schema") and name != entries["schema"]:
-                self.notes.append(f"store {name}: apply moves its layers to a store named after their schema ({entries['schema']})")
-            if not entries.get("jndiReferenceName"):
-                self.notes.append(f"store {name} connects with a password; apply uses the project's JNDI datasource instead")
+            if entries.get("jndiReferenceName"):
+                found[name] = entries
+                if entries.get("schema") and name != entries["schema"]:
+                    self.notes.append(f"store {name}: apply moves its layers to a store named after their schema ({entries['schema']})")
+            elif entries.get("dbtype") == "postgis":
+                connection = {k: entries[k] for k in ("host", "port", "database", "schema") if entries.get(k)}
+                secret = f"{resource_name(name)[0]}-credentials"
+                self.secrets.append(secret)
+                self.store_resource(store, name, {"type": "postgis", "connection": connection, "credentials": {"secret": secret}})
+            elif entries.get("WFSDataStoreFactory:GET_CAPABILITIES_URL"):
+                self.store_resource(store, name, {"type": "wfs", "url": entries["WFSDataStoreFactory:GET_CAPABILITIES_URL"]})
+            else:
+                self.notes.append(f"store {name} ({store.get('type')}) isn't a kind the files have yet; left out, with its layers")
+        for name in self.gs.names(f"workspaces/{self.ws}/coveragestores", "coverageStore"):
+            store = self.gs.get(f"workspaces/{self.ws}/coveragestores/{name}")["coverageStore"]
+            cog = any(isinstance(e, dict) and e.get("@key") == "CogSettings.Key" for e in as_list((store.get("metadata") or {}).get("entry")))
+            if cog:
+                self.store_resource(store, name, {"type": "cog", "url": store.get("url")})
+            else:
+                self.notes.append(f"store {name} ({store.get('type')}) isn't a kind the files have yet; left out, with its layers")
+        for kind, key in (("wmsstores", "wmsStore"), ("wmtsstores", "wmtsStore")):
+            for name in self.gs.names(f"workspaces/{self.ws}/{kind}", key):
+                store = self.gs.get(f"workspaces/{self.ws}/{kind}/{name}")[key]
+                spec = {"type": kind[:-6], "url": store.get("capabilitiesURL")}
+                if store.get("username"):
+                    secret = f"{resource_name(name)[0]}-credentials"
+                    self.secrets.append(secret)
+                    spec["credentials"] = {"secret": secret}
+                self.store_resource(store, name, spec)
         return found
+
+    def store_resource(self, live: dict, gs_name: str, spec: dict) -> None:
+        name, explicit = resource_name(gs_name)
+        if explicit:
+            spec["name"] = explicit
+        if self.ws != self.project_ws:
+            spec["workspace"] = self.ws
+        if live.get("description"):
+            spec["description"] = live["description"]
+        if live.get("enabled") is False:
+            spec["enabled"] = False
+        self.store_resources[gs_name] = resource("Store", name, spec)
+
+    def store_of_layer(self, gs_name: str, href: str) -> tuple[str | None, dict]:
+        """(the store a layer is published from, its resource), for layers on Store resources."""
+        for kind, item in (("datastores", "featuretypes"), ("coveragestores", "coverages"), ("wmsstores", "wmslayers")):
+            if f"/{kind}/" in href:
+                store = href.split(f"/{kind}/", 1)[1].split("/", 1)[0]
+                if store in self.store_resources:
+                    return store, next(iter(self.gs.get(f"workspaces/{self.ws}/{kind}/{store}/{item}/{gs_name}").values()))
+                return None, {}
+        for store, r in self.store_resources.items():  # a WMTS layer's resource has no link
+            if r["spec"]["type"] == "wmts":
+                found = self.gs.get(f"workspaces/{self.ws}/wmtsstores/{store}/layers/{gs_name}")
+                if found:
+                    return store, next(iter(found.values()))
+        return None, {}
+
+    def store_layer(self, gs_name: str, layer: dict, store: str, item: dict) -> dict:
+        name, explicit = resource_name(gs_name)
+        self.names[gs_name] = name
+        spec: dict = {}
+        if explicit:
+            spec["name"] = explicit
+        if self.ws != self.project_ws:
+            spec["workspace"] = self.ws
+        spec["store"] = self.store_resources[store]["metadata"]["name"]
+        spec["resource"] = item.get("nativeCoverageName") or item.get("nativeName")
+        if item.get("title") and item["title"] != gs_name:
+            spec["title"] = item["title"]
+        if item.get("abstract"):
+            spec["abstract"] = item["abstract"]
+        keywords = names_of((item.get("keywords") or {}).get("string"))
+        if keywords and not (len(keywords) == 2 and "features" in keywords):  # GeoServer's own: features and the name
+            spec["keywords"] = keywords
+        style = self.style((layer.get("defaultStyle") or {}).get("name"))
+        if style and style not in BUILT_IN_STYLES:
+            spec["style"] = style
+        extra = [s for s in (self.style(n) for n in names_of((layer.get("styles") or {}).get("style"))) if s]
+        if extra:
+            spec["styles"] = extra
+        for flag, live in (("enabled", item.get("enabled", True)), ("advertised", item.get("advertised", True)),
+                           ("queryable", layer.get("queryable", True))):
+            if live is False:
+                spec[flag] = False
+        title = (layer.get("attribution") or {}).get("title")
+        if title:
+            spec["attribution"] = title
+        cache = cache_setting(self.gs.tile_layer(f"{self.ws}:{gs_name}"))
+        if cache:
+            spec["cache"] = cache
+        return resource("Layer", name, spec)
 
     def layers(self, stores: dict[str, dict]) -> list[dict]:
         out = []
         for gs_name in self.gs.names(f"workspaces/{self.ws}/layers", "layer"):
             layer = self.gs.layer(self.ws, gs_name)["layer"]
             href = (layer.get("resource") or {}).get("href", "")
+            on_store, item = self.store_of_layer(gs_name, href)
+            if on_store:
+                out.append(self.store_layer(gs_name, layer, on_store, item))
+                continue
             if "/datastores/" not in href:
-                self.notes.append(f"layer {gs_name} isn't a table (a raster or cascaded layer); left out")
+                self.notes.append(f"layer {gs_name} is on a store the files don't have yet; left out")
                 continue
             store = href.split("/datastores/", 1)[1].split("/", 1)[0]
+            if store not in stores:
+                continue  # its store was left out, with a note
             ft = self.gs.featuretype(self.ws, store, gs_name)["featureType"]
             schema, table = stores.get(store, {}).get("schema") or "public", ft["nativeName"]
             if not TABLE_NAME.match(table) or not TABLE_NAME.match(schema):
@@ -252,13 +347,16 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             layers = imp.layers(stores)
             groups = imp.groups()
             imp.workspace_styles()
-            files[target / f"{ws}.yaml"] = dump(layers + groups)
+            files[target / f"{ws}.yaml"] = dump(list(imp.store_resources.values()) + layers + groups)
             for name, (suffix, text) in imp.styles.items():
                 files[target / "styles" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
             linked = sum(1 for r in layers if "dataset" in r["spec"])
-            report.append(f"{ws}.yaml: {len(layers)} layer(s) ({linked} on a Dataset's table), {len(groups)} group(s); "
-                          f"{len(imp.styles)} style(s) in styles/")
+            report.append(f"{ws}.yaml: {len(imp.store_resources)} store(s), {len(layers)} layer(s) ({linked} on a Dataset's table), "
+                          f"{len(groups)} group(s); {len(imp.styles)} style(s) in styles/")
             notes += imp.notes
+            for secret in imp.secrets:
+                notes.append(f"store passwords can't be read from GeoServer: put the login in Secret {secret} "
+                             "(keys: username, password), and add it to gisdata.secrets")
         if settings:
             found, more = settings_resources(gs)
             files[target / "server.yaml"] = dump(found) if found else "# GeoServer's settings and services are as a fresh install has them\n"

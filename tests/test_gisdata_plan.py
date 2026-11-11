@@ -84,7 +84,7 @@ class FakeGeoServer:
             return [n for (w, n) in self.groups if w == ws]
         if key == "style":
             return [n for (w, n) in self.styles if w == ws]
-        return [k[1] for k in source if k[0] == ws]
+        return [k[1] for k in source or {} if k[0] == ws]
 
     def publish(self, ws, store, name, table, title, queryable=True, style="polygon", styles=()):
         self.fts[(ws, store, name)] = {"featureType": {"name": name, "nativeName": table, "title": title,

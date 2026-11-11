@@ -57,7 +57,7 @@ class FakeGeoServer:
     """A workspace `uk` with one layer and one group, as GeoServer's JSON."""
 
     def names(self, path, key):
-        return {"dataStore": ["data_layers"], "layer": ["road_links"], "layerGroup": ["base"], "style": ["roads"]}[key]
+        return {"dataStore": ["data_layers"], "layer": ["road_links"], "layerGroup": ["base"], "style": ["roads"]}.get(key, [])
 
     def datastore(self, ws, name):
         return {"dataStore": {"connectionParameters": {"entry": [

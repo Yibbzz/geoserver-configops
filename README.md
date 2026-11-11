@@ -156,6 +156,20 @@ kubectl -n gscloud create job sync-now --from=cronjob/gisdata-sync
 kubectl -n gscloud logs -f job/sync-now
 ```
 
+**Publish data GeoServer reads where it is:** a `Store` for a Cloud-Optimised GeoTIFF (over `https://` or `s3://`), a remote WMS, WMTS or WFS to cascade, or another PostGIS database, and a `Layer` with `store:`:
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata: { name: sentinel-2-surrey }
+spec: { type: cog, url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/30/U/XC/2025/8/S2C_30UXC_20250825_0_L2A/TCI.tif" }
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata: { name: sentinel-2 }
+spec: { store: sentinel-2-surrey, title: Sentinel-2 true colour }
+```
+
 **Publish a table you load yourself:** a Layer with `table: { schema: field_data, name: sites }` and no `dataset`. Until the table exists, `plan` shows it as `!` (can't be done yet) and `apply` leaves it, and its place in groups, for later.
 
 **Set contact details, service titles and limits:** a `Settings` resource for GeoServer's global settings (or a workspace's own), and a `Service` per OGC service, in GeoServer's own field names. Only the fields you set are managed:

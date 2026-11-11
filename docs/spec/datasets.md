@@ -48,7 +48,7 @@ Every resource has the same outer shape:
 
 ```yaml
 apiVersion: gisdata/v1alpha1
-kind: Layer                 # Project, Source, Dataset, Layer, LayerGroup, Style, Settings, Service, Role, Group, User or AccessRule
+kind: Layer                 # Project, Source, Dataset, Store, Layer, LayerGroup, Style, Settings, Service, Role, Group, User or AccessRule
 metadata:
   name: road-links          # unique per kind; lowercase letters, digits and dashes
 spec: {}                    # what you want; differs per kind
@@ -171,7 +171,7 @@ A product is a *version* at the source (OS publishes `2026-10`, for example). `s
 
 ### Layer
 
-How a table is published in GeoServer. A layer is either on a dataset's table, or on any table you load yourself.
+How data is published in GeoServer. A layer is on a dataset's table, on any table you load yourself, or on a `Store` (below).
 
 ```yaml
 apiVersion: gisdata/v1alpha1
@@ -199,8 +199,9 @@ spec:
 
 | Field | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `dataset` + `table` | one of the two forms | | A table loaded by a Dataset |
-| `table.schema` + `table.name` | one of the two forms | | Any existing table |
+| `dataset` + `table` | one of the forms | | A table loaded by a Dataset |
+| `table.schema` + `table.name` | one of the forms | | Any existing table |
+| `store` + `resource` | one of the forms | `resource`: the store's only one | Something a `Store` offers (below) |
 | `name` (in GeoServer) | no | `metadata.name` with dashes as underscores | Layer name clients use |
 | `workspace` | no | the project's `workspace` | |
 | `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents |
@@ -211,6 +212,72 @@ spec:
 | `attribution` | no | from the dataset's source, where known | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026" |
 
 Not in the file, worked out on apply: native and lat/lon bounding boxes (computed from the table), attribute list and types (from the table), projection definition (from the CRS), store, links, timestamps.
+
+### Store
+
+Data GeoServer reads where it is, rather than a table gisdata loads: a Cloud-Optimised GeoTIFF over HTTP or object storage, a remote WMS, WMTS or WFS to cascade, or a PostGIS database reached with a password. A `Layer` with `store:` publishes one thing from it.
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata:
+  name: sentinel-2-surrey
+spec:
+  type: cog                                 # a Cloud-Optimised GeoTIFF
+  url: https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/30/U/XC/2025/8/S2C_30UXC_20250825_0_L2A/TCI.tif
+  description: Sentinel-2 true colour, 25 Aug 2025
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata:
+  name: eox
+spec:
+  type: wmts                                # a remote WMTS, cascaded
+  url: https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml
+---
+apiVersion: gisdata/v1alpha1
+kind: Store
+metadata:
+  name: warehouse
+spec:
+  type: postgis                             # another PostGIS database
+  connection: { host: db.example.org, port: 5432, database: gis, schema: public }
+  credentials: { secret: warehouse-login }  # keys username and password
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: sentinel-2
+spec:
+  store: sentinel-2-surrey                  # its only coverage, so no resource needed
+  title: Sentinel-2 true colour
+---
+apiVersion: gisdata/v1alpha1
+kind: Layer
+metadata:
+  name: cloudless
+spec:
+  store: eox
+  resource: s2cloudless-2024_3857           # which of the store's layers
+```
+
+| `type` | `url` | Publishes | Notes |
+| --- | --- | --- | --- |
+| `cog` | The file: `https://`, `s3://`, `gs://` or `az://` | Its coverage | Read in ranges, never downloaded whole. Big rasters need memory in the WMS service: one first request for a 10,980 × 10,980 image went over the default 768 Mi once |
+| `wms` | The capabilities address | A remote layer, drawn by the remote server | |
+| `wmts` | The capabilities address | A remote tile layer | |
+| `wfs` | The capabilities address | A remote feature type, as if it were local | Only as fast as the remote server: one 30 km map from the EA's WFS took 75 s |
+| `postgis` | (none: `connection`) | A table | `connection`: `host`, `port`, `database`, `schema` and any other parameter as GeoServer names it |
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `credentials` | none | `{ secret }`: a Secret with keys `username` and `password`, for a `postgis` or `wfs` store or a WMS or WMTS that needs a login. In the chart, add it to `gisdata.secrets`. GeoServer keeps the password encrypted, so it's set but not compared |
+| `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
+| `description`, `enabled` | none; `true` | |
+
+A `Layer` on a store takes `store` and `resource` (the name the store gives it: a coverage, remote layer or table) instead of `dataset` and `table`; `resource` can be left out when the store offers only one thing. Everything else about the layer (title, styles, cache, attribution, access rules) works as for any layer. A store the files don't name, in a workspace the project owns, is unmanaged and removed only with `--prune`.
+
+Files on disk (GeoPackage, Shapefile, plain GeoTIFF, image mosaics) need a volume every GeoServer service can read, which the chart doesn't have yet; they come next.
 
 ### Style
 
@@ -612,7 +679,7 @@ uk:uk_basemap (group)           yes        no       yes
 
 ## Importing today's config
 
-`gisdata import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles in `styles/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `gisdata plan` on the result has nothing to do. A layer on a table that one of the directory's Datasets loads is written on that Dataset.
+`gisdata import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles in `styles/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `gisdata plan` on the result has nothing to do. A layer on a table that one of the directory's Datasets loads is written on that Dataset. Stores the files have a kind for (Cloud-Optimised GeoTIFFs, cascaded WMS, WMTS and WFS, PostGIS with a password) are written as `Store`s with their layers; a store's password can't be read back, so it names a credentials Secret, which the import lists.
 
 ```
 $ gisdata import test -C my-project --geoserver http://localhost:8080/geoserver-cloud
