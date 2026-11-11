@@ -4,7 +4,7 @@ A Helm chart for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud)
 
 - **choose open datasets** from the Ordnance Survey, CKAN portals such as data.gov.uk, WFS and OGC API Features services, or plain links;
 - **load them into PostGIS** and keep them up to date: a nightly job checks each one for a new version and loads it with staging, checks and backups;
-- **publish them** as GeoServer layers, styles and layer groups, and set GeoServer's own settings and services (contact details, titles, limits), with an OpenTofu-style `plan` and `apply`.
+- **publish them** as GeoServer layers, styles and layer groups, set GeoServer's own settings and services (contact details, titles, limits), and its security (users, groups, roles, who may see and do what), with an OpenTofu-style `plan` and `apply`.
 
 > **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI. Expect breaking changes.
 
@@ -168,6 +168,22 @@ spec:
   title: Example Council features
   maxFeatures: 100000
 ```
+
+**Control who sees and does what:** `Role`, `Group` and `User` resources, with passwords from a Secret (add it to `gisdata.secrets`), and an `AccessRule` per layer, service or REST rule:
+
+```yaml
+apiVersion: gisdata/v1alpha1
+kind: User
+metadata: { name: alice }
+spec: { password: { secret: geoserver-users, key: alice }, groups: [editors] }
+---
+apiVersion: gisdata/v1alpha1
+kind: AccessRule
+metadata: { name: flood-zones-for-editors }
+spec: { layer: { workspace: uk, layer: flood_zones, access: read }, roles: [EDITOR] }
+```
+
+`plan` spots a changed password by logging in with it, and a REST rule GeoServer would never reach. GeoServer's own `admin` user, roles and default rules are left alone unless a file names them.
 
 **Bring in an existing GeoServer workspace:** `gisdata import <workspace> -C my-project` writes the files that describe it, so `plan` on them has nothing to do.
 

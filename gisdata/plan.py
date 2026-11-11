@@ -21,15 +21,15 @@ from pathlib import Path
 
 import psycopg2
 
-from . import discover, ingest, remote, server, sync
+from . import discover, ingest, remote, security, server, sync
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "settings", "service", "store", "style", "table", "layer", "group"]
-DELETE_ORDER = ["group", "layer", "style", "store"]
+ORDER = ["workspace", "settings", "service", "role", "user group", "user", "store", "style", "table", "layer", "group", "rule"]
+DELETE_ORDER = ["rule", "user", "user group", "role", "group", "layer", "style", "store"]
 
 # `cache: true`: what GeoServer itself would cache
 DEFAULT_GRIDSETS = ["EPSG:4326", "EPSG:900913"]
@@ -42,7 +42,7 @@ SOURCE_ATTRIBUTION = {"os-downloads": "Contains OS data © Crown copyright and d
 @dataclass
 class Change:
     action: str  # + add, ~ change, - delete, ? unmanaged (left alone), ! can't be done
-    kind: str  # workspace, settings, service, store, style, table, layer, group
+    kind: str  # workspace, settings, service, role, user group, user, store, style, table, layer, group, rule
     target: str
     fields: list[tuple[str, object, object]] = field(default_factory=list)  # (field, live, wanted)
     note: str = ""
@@ -164,6 +164,7 @@ class Planner:
         self.plan_styles()
         self.plan_layers()
         self.plan_groups()
+        security.plan(self)
         self.plan_unmanaged(managed)
         return self.changes
 
@@ -349,7 +350,7 @@ class Planner:
                 "style": lambda ws, n: self.gs.delete_style(n, ws),
                 "store": lambda ws, n: self.gs.delete_datastore(ws, n),
             }
-            for kind in DELETE_ORDER:
+            for kind in live:  # outermost first, as DELETE_ORDER
                 for n in live[kind]:
                     if f"{ws}:{n}" in wanted[kind]:
                         continue
@@ -445,7 +446,7 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
     try:
         try:
             changes = ordered(Planner(files, root, gs, conn, db, prune).plan())
-        except GeoServerError as e:
+        except (GeoServerError, MissingCredentials) as e:
             raise PlanError(str(e), code=1) from None
         print_plan(changes)
         blocked = any(c.action == "!" for c in changes)
