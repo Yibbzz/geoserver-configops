@@ -464,6 +464,9 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
                 return 1
         if todo:
             print(f"\nApplied {len(todo)} change(s).")
-        return 1 if blocked else 0
+        if blocked:
+            # Not a failure: the tables are yours to load, often after the deploy. plan still exits 1.
+            print("Left for later: the layers marked ! wait for tables you load yourself; apply again once they exist.")
+        return 0
     finally:
         conn.close()
