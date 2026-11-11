@@ -131,7 +131,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Caching defaults | Not yet | |
 | Gridsets (your own) | Yes | `Gridset`, e.g. British National Grid |
 | Disk quota | Can't | `/gwc/rest/diskquota` answers 404 in GeoServer Cloud |
-| Blob stores (S3, Azure, Google Cloud Storage) | Not yet | |
+| Blob stores: a folder, S3 | Yes | `BlobStore` `type: file` (on the data volume) or `s3`; `cache.blobStore` |
+| Blob stores: Azure, Google Cloud Storage | Not yet | In the images; not tested |
 | Seeding, truncating | Partly | Cached tiles are cleared after each load; seeding isn't built |
 
 ## Security

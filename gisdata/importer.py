@@ -63,7 +63,7 @@ def default_style(ft: dict) -> str:
 # GeoWebCache's own gridsets; any other a layer is cached in is written as a Gridset
 BUILT_IN_GRIDSETS = re.compile(r"^(EPSG:(4326|900913|3857|4258)|GlobalCRS84(Pixel|Scale|Geometric)|GoogleCRS84Quad|"
                                r"WebMercatorQuad|WorldCRS84Quad|UPS(Arctic|Antarctic)WGS84Quad(x2)?|UTM\d\dWGS84Quad(x2)?)$")
-GWC_DEFAULTS = {"metaWidthHeight": [4, 4], "gutter": 0, "expireCache": 0, "expireClients": 0}
+GWC_DEFAULTS = {"metaWidthHeight": [4, 4], "gutter": 0, "expireCache": 0, "expireClients": 0, "blobStoreId": None}
 
 
 def cache_setting(tile_layer: dict | None):
@@ -378,8 +378,8 @@ class Importer:
             g = self.gs.gridset(name)
             if g is None:
                 continue
-            meta, explicit = resource_name(name)
-            spec = {"name": name} if (explicit or meta != name) else {}
+            meta = resource_name(name)[0]
+            spec = {"name": name} if meta != name else {}  # gridsets are named as written, dashes and all
             spec.update({"crs": f"EPSG:{g['srs']['number']}", "extent": g["extent"]["coords"], "resolutions": g["resolutions"]})
             if g.get("tileWidth", 256) != 256:
                 spec["tileSize"] = g["tileWidth"]
@@ -388,6 +388,43 @@ class Importer:
             if float(g.get("metersPerUnit") or 1) != 1:
                 spec["metersPerUnit"] = g["metersPerUnit"]
             out.append(resource("Gridset", meta, spec))
+        return out
+
+    def blob_stores(self, resources: list[dict]) -> list[dict]:
+        """BlobStore resources for the blob stores the imported layers' tiles are kept in."""
+        from .tiles import live_blob_store
+
+        names = sorted({r["spec"]["cache"]["blobStore"] for r in resources
+                        if isinstance(r["spec"].get("cache"), dict) and r["spec"]["cache"].get("blobStore")})
+        out = []
+        for name in names:
+            response = self.gs.gwc_request("GET", f"blobstores/{name}", accept="application/xml")
+            if response.status_code != 200:
+                continue
+            live = live_blob_store(response.text)
+            meta = resource_name(name)[0]
+            spec: dict = {"name": name} if meta != name else {}  # blob stores are named as written
+            if "path" in live:
+                path = data_path(live["path"])
+                if not path:
+                    self.notes.append(f"blob store {name}: {live['path']} isn't on the shared data volume; left out")
+                    continue
+                spec.update({"type": "file", "path": path})
+            else:
+                spec["type"] = "s3"
+                spec.update({k: live[k] for k in ("bucket", "prefix", "endpoint", "region", "maxConnections", "gzip") if k in live})
+                if live.get("access") and live["access"] != "PRIVATE":
+                    spec["access"] = live["access"].lower().replace("_", "-")
+                if live.get("accessKey"):
+                    secret = f"{meta}-credentials"
+                    spec["credentials"] = {"secret": secret}
+                    self.notes.append(f"blob store {name}: put its keys in Secret {secret} (keys: accessKey, secretKey), "
+                                      "and add it to gisdata.secrets")
+            if live.get("default"):
+                spec["default"] = True
+            if not live.get("enabled", True):
+                spec["enabled"] = False
+            out.append(resource("BlobStore", meta, spec))
         return out
 
     def workspace(self) -> list[dict]:
@@ -485,7 +522,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
                 suffix = imp.styles[name][0]
                 styles.append(resource("Style", name, {"file": f"styles/{name}{suffix}", "legend": legend}))
             files[target / f"{ws}.yaml"] = dump(imp.workspace() + list(imp.store_resources.values()) + layers + groups + styles
-                                                + imp.gridsets(layers + groups))
+                                                + imp.gridsets(layers + groups) + imp.blob_stores(layers + groups))
             for name, (suffix, text) in imp.styles.items():
                 files[target / "styles" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
             linked = sum(1 for r in layers if "dataset" in r["spec"])
