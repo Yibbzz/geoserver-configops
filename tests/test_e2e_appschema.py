@@ -1,16 +1,20 @@
 """An app-schema store (complex features) against the real GeoServer Cloud REST service: a mapping
 on the shared data volume from a PostGIS table to a feature type of our own schema, published,
-then import and a clean plan. tests/e2e/up.sh switches the extension on, as values-app-schema.yaml does.
+then import and a clean plan; with E2E_SERVICES_URL (the gateway), its features read through WFS.
+tests/e2e/up.sh switches the extension on, as values-app-schema.yaml does in the chart. The files go
+on the data volume: E2E_DATA_DIR, or E2E_DATA_POD (see tests/conftest.py).
 
     E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data pytest -m e2e
 """
 
 import os
 import shutil
+import time
 from pathlib import Path
 
 import psycopg2
 import pytest
+import requests
 
 from configops.cli import main
 from configops.geoserver import GeoServer
@@ -18,9 +22,9 @@ from configops.geoserver import GeoServer
 pytestmark = pytest.mark.e2e
 
 URL = os.environ.get("E2E_GEOSERVER_URL")
-DATA = os.environ.get("E2E_DATA_DIR")
-if not URL or not DATA:
-    pytest.skip("E2E_GEOSERVER_URL or E2E_DATA_DIR not set", allow_module_level=True)
+SERVICES = os.environ.get("E2E_SERVICES_URL")
+if not URL:
+    pytest.skip("E2E_GEOSERVER_URL not set", allow_module_level=True)
 
 WS = "configops_appschema"
 NAMESPACE = "http://example.org/ex"  # the mapping's target namespace: the workspace must have it
@@ -38,19 +42,22 @@ def sql(statement):
 
 
 @pytest.fixture(scope="module")
-def gs():
+def gs(data_volume, tmp_path_factory):
     gs = GeoServer(URL.removesuffix("/rest"), "admin", PASSWORD)
     gs.delete_workspace(WS)
-    folder = Path(DATA) / "e2e-appschema"
-    shutil.rmtree(folder, ignore_errors=True)
-    shutil.copytree(FIXTURES, folder, dirs_exist_ok=True)  # what GeoServer wrote may be left, and not ours to delete
-    folder.chmod(0o777)  # GeoServer downloads the schemas into app-schema-cache here
+    folder = tmp_path_factory.mktemp("appschema") / "e2e-appschema"
+    shutil.copytree(FIXTURES, folder)
+    (folder / "app-schema-cache").mkdir()  # where GeoServer keeps the schemas it downloads (apply makes it too, when it can)
+    data_volume.put(folder, "e2e-appschema")
     sql("CREATE EXTENSION IF NOT EXISTS postgis; DROP SCHEMA IF EXISTS e2e_appschema CASCADE; CREATE SCHEMA e2e_appschema;"
         "CREATE TABLE e2e_appschema.sites (id serial PRIMARY KEY, geom geometry(Point, 4326));"
         "INSERT INTO e2e_appschema.sites (geom) VALUES (ST_SetSRID(ST_MakePoint(1, 1), 4326)), (ST_SetSRID(ST_MakePoint(2, 2), 4326))")
     yield gs
     gs.delete_workspace(WS)
-    shutil.rmtree(folder, ignore_errors=True)
+    try:
+        data_volume.remove("e2e-appschema")
+    except Exception:  # the schemas GeoServer downloaded are its user's, not ours
+        pass
     sql("DROP SCHEMA IF EXISTS e2e_appschema CASCADE")
 
 
@@ -60,7 +67,8 @@ def env(monkeypatch):
                        "E2EDB_PORT": str(DB["port"]), "E2EDB_DATABASE": "postgres", "E2EDB_USERNAME": DB["user"],
                        "E2EDB_PASSWORD": DB["password"]}.items():
         monkeypatch.setenv(f"CONFIGOPS_{key}", value)
-    monkeypatch.setenv("CONFIGOPS_DATA_DIR", str(Path(DATA).resolve()))
+    if os.environ.get("E2E_DATA_DIR"):
+        monkeypatch.setenv("CONFIGOPS_DATA_DIR", str(Path(os.environ["E2E_DATA_DIR"]).resolve()))
 
 
 def project_yaml() -> str:
@@ -109,7 +117,15 @@ def test_apply_import_and_nothing_to_do(gs, project, tmp_path_factory, capsys, e
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     ft = gs.get(f"workspaces/{WS}/datastores/sites/featuretypes/site")["featureType"]
     assert ft["nativeBoundingBox"]["maxx"] == 2  # read through the mapping from the table
-    assert (Path(DATA) / "e2e-appschema" / "app-schema-cache").is_dir()
+    if SERVICES:  # complex features through WFS, in the mapping's own schema
+        end = time.time() + 90
+        while True:
+            r = requests.get(f"{SERVICES}/wfs", timeout=60, params={
+                "service": "WFS", "version": "2.0.0", "request": "GetFeature", "typeNames": f"{WS}:site"})
+            if "label>" in r.text or time.time() > end:
+                break
+            time.sleep(3)
+        assert ":label>site 1</" in r.text and "gml:Point" in r.text and "http://example.org/ex" in r.text, r.text[:3000]
 
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text(project_yaml())

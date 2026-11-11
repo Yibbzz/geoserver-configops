@@ -368,9 +368,9 @@ spec:
 | `geotiff`, `worldimage`, `arcgrid` | (none: `path`) | The raster | A COG on the volume is a `geotiff` |
 | `imagemosaic` | (none: `path`) | The mosaic of a folder's rasters | GeoServer writes its index into the folder |
 | `imagepyramid` | (none: `path`) | A raster at several resolutions | A folder as `gdal_retile.py -levels N` makes it, with the full-size tiles moved into `0/` |
-| `geoparquet` | (none: `path`) | The file's features | |
+| `geoparquet` | (none: `path`) | The file's features | GeoParquet 1.1 with its `bbox` column (GDAL 3.9 or later writes it): without it, the file publishes but maps and bounding box queries fail |
 | `property` | (none: `path`) | One of the folder's `.properties` files | GeoServer's own simple text format |
-| `csv` | (none: `path`) | The file's rows as features | `connection: { strategy: LatLon, latField, lngField }` or `{ strategy: WKT, wktField }` |
+| `csv` | (none: `path`) | The file's rows as features | `connection: { strategy: specify, latField, lngField }`, `{ strategy: wkt, wktField }`, or `{ strategy: guess }` (columns named lat and lon); points in EPSG:4326 |
 | `sqlserver` | (none: `connection`) | A table | As `postgis`; `credentials` for the login |
 | `appschema` | (none: `path`) | A complex feature type the mapping file defines | The mapping and its schema on the data volume; the layer names its feature type in `resource`. GeoServer Cloud ships the extension off: install with `-f values-app-schema.yaml`. `apply` makes an `app-schema-cache` folder beside the mapping (when the data volume is mounted where it runs), where GeoServer keeps the schemas it downloads; the workspace's namespace URI must be the mapping's target namespace (`Workspace` `namespace`) |
 

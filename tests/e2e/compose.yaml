@@ -29,6 +29,15 @@ services:
     command: -scheme http -port 4443 -public-host fakegcs:4443 -backend memory
     volumes: ["./gcs:/data"]  # gcs/<bucket>: the buckets it starts with
     ports: ["${E2E_GCS_PORT:-54443}:4443"]
+  # An LDAP directory for the LDAP login test; up.sh adds ldap/users.ldif
+  ldap:
+    image: osixia/openldap:1.5.0
+    environment: {LDAP_ORGANISATION: Example, LDAP_DOMAIN: example.org, LDAP_ADMIN_PASSWORD: admin}
+    volumes: ["./ldap:/e2e:ro"]
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "dc=example,dc=org", "-D", "cn=admin,dc=example,dc=org", "-w", "admin"]
+      interval: 3s
+      retries: 40
   rest:
     image: geoservercloud/geoserver-cloud-rest:${GEOSERVER_TAG}
     depends_on: {db: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}

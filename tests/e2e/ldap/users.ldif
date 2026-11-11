@@ -1,0 +1,20 @@
+# One person and one group for the LDAP test (tests/test_e2e_auth.py); tests/e2e/up.sh adds them
+dn: ou=people,dc=example,dc=org
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=example,dc=org
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=e2e-ldap-alice,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: e2e-ldap-alice
+cn: Alice
+sn: Example
+userPassword: alice-Ldap-1
+
+dn: cn=mappers,ou=groups,dc=example,dc=org
+objectClass: groupOfNames
+cn: mappers
+member: uid=e2e-ldap-alice,ou=people,dc=example,dc=org

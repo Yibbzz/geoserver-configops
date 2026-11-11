@@ -8,6 +8,7 @@
       <Parameter><name>dbtype</name><value>postgis</value></Parameter>
       <Parameter><name>jndiReferenceName</name><value>java:comp/env/jdbc/mypostgis</value></Parameter>
       <Parameter><name>schema</name><value>e2e_appschema</value></Parameter>
+      <Parameter><name>Expose primary keys</name><value>true</value></Parameter>
     </parameters></DataStore>
   </sourceDataStores>
   <targetTypes><FeatureType><schemaUri>site.xsd</schemaUri></FeatureType></targetTypes>
@@ -17,8 +18,8 @@
       <sourceType>sites</sourceType>
       <targetElement>ex:Site</targetElement>
       <attributeMappings>
-        <AttributeMapping><targetAttribute>ex:Site</targetAttribute><idExpression><OCQL>strConcat('site.', id)</OCQL></idExpression></AttributeMapping>
-        <AttributeMapping><targetAttribute>ex:label</targetAttribute><sourceExpression><OCQL>strConcat('site ', id)</OCQL></sourceExpression></AttributeMapping>
+        <AttributeMapping><targetAttribute>ex:Site</targetAttribute><idExpression><OCQL>Concatenate('site.', id)</OCQL></idExpression></AttributeMapping>
+        <AttributeMapping><targetAttribute>ex:label</targetAttribute><sourceExpression><OCQL>Concatenate('site ', id)</OCQL></sourceExpression></AttributeMapping>
         <AttributeMapping><targetAttribute>ex:position</targetAttribute><sourceExpression><OCQL>geom</OCQL></sourceExpression></AttributeMapping>
       </attributeMappings>
     </FeatureTypeMapping>
