@@ -288,6 +288,7 @@ The repository's root is the Helm chart, and the `configops` command sits beside
 | `examples/` | Example projects |
 | `docs/spec/datasets.md` | The file format and every command |
 | `docs/coverage.md` | Every page of GeoServer's web UI, and what the tool covers |
+| `docs/geoserver-cloud-notes.md` | What we learned about GeoServer Cloud's REST API, GeoWebCache and services: quirks, shapes, timing |
 | `tests/` | Unit tests; `tests/e2e/` runs GeoServer Cloud's REST service in Docker; `tests/kind/` deploys the whole chart |
 
 ## Testing
