@@ -107,7 +107,7 @@ jobs:
         run: pytest -m e2e -v
       - name: Logs on failure
         if: failure()
-        run: docker compose -f tests/e2e/compose.yaml -p gscloud-e2e logs --tail=200
+        run: docker logs --tail 300 gscloud-e2e-rest-1  # compose would need up.sh's image variables
 
   # The whole chart on a throwaway kind cluster: every pod ready, OGC services through
   # the gateway, the e2e tests against the deployment, and examples/smoke drawn with WMS.
