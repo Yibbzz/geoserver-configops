@@ -99,6 +99,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Tile caching | Yes | |
 | Enabled, advertised, metadata links | Yes | |
 | Queryable, attribution, authority URLs and identifiers | Yes | `queryable`, `attribution`, `authorityURLs`, `identifiers` |
+| Group styles (other named sets of members and styles) | Can't | GeoServer Cloud's catalog database doesn't keep their members: after a restart the group can't be read, and WMS never draws them (docs/geoserver-cloud-notes.md) |
 | Earth observation groups (root layer) | Yes | `mode: eo`, `rootLayer`, `rootStyle` |
 
 ### Styles

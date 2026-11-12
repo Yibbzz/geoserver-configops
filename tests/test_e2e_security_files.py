@@ -39,6 +39,7 @@ def gs():
                  f"security/roles/role/{CHILD}", f"security/roles/role/{PARENT}"):
         gs.request("DELETE", path, ok=(200, 400, 404))
     gs.request("PUT", REST_FILE, rules, content_type="text/plain")
+    gs.delete_workspace("configops_security_files")  # apply makes the project's workspace
 
 
 @pytest.fixture

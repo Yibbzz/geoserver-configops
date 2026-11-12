@@ -50,6 +50,7 @@ def gs():
     current.pop("updateSequence", None)
     current["metadata"] = before.get("metadata") or {}  # a PUT without metadata keeps it
     gs.request("PUT", "settings", {"global": current})
+    gs.delete_workspace("configops_url_checks")  # apply makes the project's workspace
 
 
 def project(tmp_path, monkeypatch, *docs) -> str:
