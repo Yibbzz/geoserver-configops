@@ -181,6 +181,12 @@ def plan_settings(planner, gs, r: Resource) -> None:
             if (gs.get("security/masterpw") or {}).get("oldMasterPassword") != new_master:
                 raise GeoServerError("PUT", "security/masterpw", 422,
                                      "GeoServer refused the new master password (its policy wants at least 8 characters)")
+            # GeoServer Cloud tells its other services before it has swapped the keystore in. If one of them
+            # swaps it first, the REST service keeps the old keystore in memory and can't read any store
+            # password until it reads its security files again
+            from . import auth
+
+            auth.reload_security(gs)
         if not ws and contact:  # the contact has its own endpoint, which is what the services read
             current_contact = (gs.get("settings/contact") or {}).get("contact") or {}
             gs.request("PUT", "settings/contact", {"contact": merge(current_contact, contact)})

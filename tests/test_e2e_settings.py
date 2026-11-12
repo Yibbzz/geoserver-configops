@@ -181,11 +181,18 @@ def test_drift_is_shown_and_put_back(gs, project, capsys):
     assert configops(capsys, "plan", "-C", str(project))[0] == 0
 
 
-@pytest.mark.late  # on a fresh GeoServer Cloud with several services, store passwords set after it can't be read
 def test_master_password_is_changed_and_back(gs, project, capsys, monkeypatch):
     """The master password from a Secret: apply sets it (twice, from a value it set itself), plan then has
-    nothing to do. The old one is put back: by configops, or by GeoServer's API if configops can't."""
+    nothing to do. The old one is put back: by configops, or by GeoServer's API if configops can't.
+    A store's password can be read after every change: with several services, GeoServer Cloud's REST service
+    could be left with the old keystore in memory (500, "Cannot find alias: config:password:key")."""
     old = gs.get("security/masterpw")["oldMasterPassword"]
+    params = {"host": "nowhere", "port": "5432", "database": "x", "user": "u", "passwd": "store-secret", "dbtype": "postgis"}
+    store = f"workspaces/{WS}/datastores/with_password"
+    if not gs.exists(store):
+        gs.request("POST", f"workspaces/{WS}/datastores", {"dataStore": {
+            "name": "with_password", "connectionParameters": {"entry": [{"@key": k, "$": v} for k, v in params.items()]}}})
+    assert gs.get(store)
     (project / "master.yaml").write_text(yaml.safe_dump({"apiVersion": "configops/v1alpha1", "kind": "Settings",
         "metadata": {"name": "master"}, "spec": {"global": {"masterPassword": {"secret": "e2emaster", "key": "password"}}}}))
     (project / "project.yaml").write_text((project / "project.yaml").read_text().split("\n---\n")[0] + "\n")
@@ -196,6 +203,7 @@ def test_master_password_is_changed_and_back(gs, project, capsys, monkeypatch):
             code, out = configops(capsys, "apply", "-C", str(project))
             assert code == 0, out
             assert gs.get("security/masterpw")["oldMasterPassword"] == new
+            assert gs.get(store)
             assert configops(capsys, "plan", "-C", str(project))[0] == 0
     finally:
         monkeypatch.setenv("CONFIGOPS_E2EMASTER_PASSWORD", old)
@@ -205,3 +213,4 @@ def test_master_password_is_changed_and_back(gs, project, capsys, monkeypatch):
             warnings.warn(f"configops couldn't put the master password back ({len(old)} characters): {out.replace(old, '***')}")
             gs.request("PUT", "security/masterpw", {"oldMasterPassword": current, "newMasterPassword": old})
     assert gs.get("security/masterpw")["oldMasterPassword"] == old
+    assert gs.get(store)
