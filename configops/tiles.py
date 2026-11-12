@@ -19,14 +19,30 @@ from .geoserver import GeoServerError, MissingCredentials
 def wanted(spec: dict) -> dict:
     return {"crs": spec["crs"], "extent": [float(v) for v in spec["extent"]], "resolutions": [float(r) for r in spec["resolutions"]],
             "tileSize": spec.get("tileSize", 256), "alignTopLeft": spec.get("alignTopLeft", False),
-            "metersPerUnit": float(spec.get("metersPerUnit", 1))}
+            "metersPerUnit": float(spec.get("metersPerUnit", 1)),
+            **{k: spec[k] for k in ("description", "levelNames", "yAxisFirst") if k in spec},
+            **({"pixelSize": float(spec["pixelSize"])} if "pixelSize" in spec else {})}
 
 
 def live(gridset: dict) -> dict:
     tile = gridset.get("tileWidth")
     return {"crs": f"EPSG:{(gridset.get('srs') or {}).get('number')}", "extent": [float(v) for v in (gridset.get("extent") or {}).get("coords", [])],
             "resolutions": [float(r) for r in gridset.get("resolutions") or []], "tileSize": tile,
-            "alignTopLeft": gridset.get("alignTopLeft", False), "metersPerUnit": float(gridset.get("metersPerUnit") or 1)}
+            "alignTopLeft": gridset.get("alignTopLeft", False), "metersPerUnit": float(gridset.get("metersPerUnit") or 1),
+            "description": gridset.get("description") or None, "pixelSize": float(gridset.get("pixelSize") or 2.8e-4),
+            "levelNames": level_names(gridset.get("scaleNames")),
+            "yAxisFirst": gridset.get("yCoordinateFirst", False)}
+
+
+def level_names(value) -> list | None:
+    """GeoWebCache's scale names: a plain list in its JSON (or {"string": [...]})."""
+    if isinstance(value, dict):
+        value = value.get("string")
+    return as_list(value) or None
+
+
+def as_list(value) -> list:
+    return [] if value in (None, "") else value if isinstance(value, list) else [value]
 
 
 def plan(planner) -> None:
@@ -38,7 +54,9 @@ def plan(planner) -> None:
 
         def run(name=name, want=want):
             gs.put_gridset(name, int(want["crs"].split(":", 1)[1]), want["extent"], want["resolutions"], want["tileSize"],
-                           want["alignTopLeft"], want["metersPerUnit"])
+                           want["alignTopLeft"], want["metersPerUnit"],
+                           {g: want[k] for k, g in (("description", "description"), ("levelNames", "scaleNames"),
+                                                     ("pixelSize", "pixelSize"), ("yAxisFirst", "yCoordinateFirst")) if k in want})
         current = gs.gridset(name)
         if current is None:
             planner.add("+", "gridset", name, note=f"{want['crs']}, {len(want['resolutions'])} levels", run=run)
@@ -61,12 +79,13 @@ FIELDS = {
            "maxConnections": "maxConnections", "gzip": "useGzip"},
     "azure": {"container": "container", "prefix": "prefix", "endpoint": "serviceURL", "maxConnections": "maxConnections"},
     "gcs": {"bucket": "bucket", "prefix": "prefix", "project": "projectId", "endpoint": "endpointUrl",
-            "defaultCredentials": "useDefaultCredentialsChain"},
+            "defaultCredentials": "useDefaultCredentialsChain", "quotaProject": "quotaProjectId"},
 }
 TAGS = {"file": "FileBlobStore", "s3": "S3BlobStore", "azure": "AzureBlobStore", "gcs": "GoogleCloudStorageBlobStore"}
 KEYS = {"s3": {"accessKey": "awsAccessKey", "secretKey": "awsSecretKey"},  # the Secret's keys -> GeoWebCache's
         "azure": {"accountName": "accountName", "accountKey": "accountKey"}, "gcs": {"apiKey": "apiKey"}}
-SECRET_KEYS = ("secretKey", "accountKey", "apiKey")  # never shown
+SECRET_KEYS = ("secretKey", "accountKey", "apiKey", "proxy.password")  # never shown
+PROXY = {"host": "proxyHost", "port": "proxyPort", "domain": "proxyDomain", "workstation": "proxyWorkstation"}  # S3 has all; Azure host, port
 
 
 def xml_value(value) -> str:
@@ -82,6 +101,9 @@ def wanted_blob_store(r, root) -> tuple[str, dict]:
     if kind == "file":
         fields["path"] = f"{DATA}/{spec['path'].strip('/')}"
         body += f"<baseDirectory>{escape(fields['path'])}</baseDirectory><fileSystemBlockSize>{spec.get('blockSize', 4096)}</fileSystemBlockSize>"
+        if "layout" in spec:
+            fields["layout"] = spec["layout"]
+            body += f"<pathGeneratorType>{spec['layout'].upper()}</pathGeneratorType>"
         return f"<FileBlobStore {head}>{body}</FileBlobStore>", fields
     ref = (spec.get("credentials") or {}).get("secret")
     keys = {}
@@ -99,6 +121,18 @@ def wanted_blob_store(r, root) -> tuple[str, dict]:
         if values.get(k) not in ("", None):
             body += f"<{tag}>{xml_value(values[k])}</{tag}>"
     body += "".join(f"<{KEYS[kind][k]}>{escape(v)}</{KEYS[kind][k]}>" for k, v in keys.items())
+    proxy = spec.get("proxy") or {}
+    for k, tag in PROXY.items():
+        if k in proxy:
+            fields[f"proxy.{k}"] = proxy[k]
+            body += f"<{tag}>{xml_value(proxy[k])}</{tag}>"
+    login = (proxy.get("credentials") or {}).get("secret")
+    if login:
+        user, password = secrets.lookup(login, "username", root), secrets.lookup(login, "password", root)
+        if user is None or password is None:
+            raise MissingCredentials(f"blob store {r.name}: secret {login} needs keys username and password")
+        fields["proxy.username"], fields["proxy.password"] = user, password
+        body += f"<proxyUsername>{escape(user)}</proxyUsername><proxyPassword>{escape(password)}</proxyPassword>"
     if kind in ("s3", "azure"):
         body += f"<useHTTPS>{str(not str(values.get('endpoint', '')).startswith('http://')).lower()}</useHTTPS>"
     return f"<{TAGS[kind]} {head}>{body}</{TAGS[kind]}>", fields
@@ -112,6 +146,7 @@ def live_blob_store(xml: str) -> dict:
     out["type"] = kind
     if kind == "file":
         out["path"] = text("baseDirectory")
+        out["layout"] = text("pathGeneratorType").lower() or "default"
         return out
     for k, tag in FIELDS.get(kind, {}).items():
         value = text(tag)
@@ -120,6 +155,9 @@ def live_blob_store(xml: str) -> dict:
     for k, tag in KEYS.get(kind, {}).items():
         if text(tag):
             out[k] = text(tag)
+    for k, tag in {**PROXY, "username": "proxyUsername", "password": "proxyPassword"}.items():
+        if text(tag):
+            out[f"proxy.{k}"] = int(text(tag)) if k == "port" else text(tag)
     return out
 
 

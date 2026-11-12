@@ -1430,8 +1430,8 @@ pages:
         status: 'yes'
         spec: settings.global.tileCaching.cacheNonDefaultStyles
       multiLayerCachingEnabled:
-        status: 'no'
-        note: 'caching defaults: cache requests for several layers'
+        status: 'yes'
+        spec: settings.global.tileCaching.multiLayerCachingEnabled
       metaTilingX:
         status: 'yes'
         spec: settings.global.tileCaching.metaTilingX
@@ -1439,14 +1439,14 @@ pages:
         status: 'yes'
         spec: settings.global.tileCaching.metaTilingY
       metaTilingThreads:
-        status: 'no'
-        note: 'caching defaults: metatiling threads'
+        status: 'yes'
+        spec: settings.global.tileCaching.metaTilingThreads
       seederCorePoolSize:
-        status: 'no'
-        note: seeding threads
+        status: 'yes'
+        spec: settings.global.tileCaching.seederCorePoolSize
       seederMaxPoolSize:
-        status: 'no'
-        note: seeding threads
+        status: 'yes'
+        spec: settings.global.tileCaching.seederMaxPoolSize
       gutter:
         status: 'yes'
         spec: settings.global.tileCaching.gutter
@@ -1464,7 +1464,7 @@ pages:
         spec: settings.global.tileCaching.defaultOtherCacheFormats
       lockProviderName:
         status: 'no'
-        note: 'caching defaults: lock provider'
+        note: "GeoServer Cloud sets its clustering lock provider; changing it could break locking between services: left alone"
       cacheWarningSkips:
         status: 'no'
         note: 'caching defaults: warn when a tile is skipped'
@@ -1495,8 +1495,8 @@ pages:
         status: 'yes'
         spec: cache.expireCache
       expireCacheList:
-        status: 'no'
-        note: 'tile layer: expiry by zoom level'
+        status: 'yes'
+        spec: cache.expireByZoom
       expireClients:
         status: 'yes'
         spec: cache.expireClients
@@ -1510,8 +1510,8 @@ pages:
         status: none
         note: not shown in the web UI
       cacheWarningSkips:
-        status: 'no'
-        note: 'tile layer: warn when a tile is skipped'
+        status: 'yes'
+        spec: cache.warningSkips
     StyleParameterFilter:
       allowedStyles:
         status: 'yes'
@@ -1533,15 +1533,17 @@ pages:
         note: default
     CaseNormalizingParameterFilter:
       normalize:
-        status: 'no'
-        note: 'parameter filters: case normalisation'
+        status: 'yes'
+        spec: cache.parameterFilters.<name>.case
     CaseNormalizer:
       kase:
-        status: 'no'
-        note: 'parameter filters: case normalisation'
+        status: 'yes'
+        spec: cache.parameterFilters.<name>.case
+        test: test_e2e_tiles.py::test_apply_then_nothing_to_do
       locale:
-        status: 'no'
-        note: 'parameter filters: case normalisation'
+        status: 'yes'
+        spec: cache.parameterFilters.<name>.locale
+        test: test_e2e_tiles.py::test_apply_then_nothing_to_do
     StringParameterFilter:
       values:
         status: 'yes'
@@ -1572,18 +1574,18 @@ pages:
         note: threshold
     ExpirationRule:
       minZoom:
-        status: 'no'
-        note: 'tile layer: expiry by zoom level'
+        status: 'yes'
+        spec: cache.expireByZoom
       expiration:
-        status: 'no'
-        note: 'tile layer: expiry by zoom level'
+        status: 'yes'
+        spec: cache.expireByZoom
     XMLGridSet:
       name:
         status: 'yes'
         spec: gridset.name
       description:
-        status: 'no'
-        note: gridset description
+        status: 'yes'
+        spec: gridset.description
       srs:
         status: 'yes'
         spec: gridset.crs
@@ -1606,11 +1608,11 @@ pages:
         status: 'yes'
         spec: gridset.metersPerUnit
       pixelSize:
-        status: 'no'
-        note: gridset pixel size
+        status: 'yes'
+        spec: gridset.pixelSize
       scaleNames:
-        status: 'no'
-        note: gridset level names
+        status: 'yes'
+        spec: gridset.levelNames
       tileHeight:
         status: 'yes'
         spec: gridset.tileSize
@@ -1618,27 +1620,27 @@ pages:
         status: 'yes'
         spec: gridset.tileSize
       yCoordinateFirst:
-        status: 'no'
-        note: gridset axis order
+        status: 'yes'
+        spec: gridset.yAxisFirst
     XMLGridSubset:
       gridSetName:
         status: 'yes'
         spec: cache.gridsets
       extent:
-        status: 'no'
-        note: 'tile layer: gridset bounds'
+        status: 'yes'
+        spec: cache.levels.<gridset>.bounds
       zoomStart:
-        status: 'no'
-        note: 'tile layer: published zoom levels'
+        status: 'yes'
+        spec: cache.levels.<gridset>.published
       zoomStop:
-        status: 'no'
-        note: 'tile layer: published zoom levels'
+        status: 'yes'
+        spec: cache.levels.<gridset>.published
       minCachedLevel:
-        status: 'no'
-        note: 'tile layer: cached zoom levels'
+        status: 'yes'
+        spec: cache.levels.<gridset>.cached
       maxCachedLevel:
-        status: 'no'
-        note: 'tile layer: cached zoom levels'
+        status: 'yes'
+        spec: cache.levels.<gridset>.cached
     BlobStoreInfo:
       name:
         status: none
@@ -1662,8 +1664,8 @@ pages:
         status: 'yes'
         spec: blobStore.blockSize
       pathGeneratorType:
-        status: 'no'
-        note: 'folder blob store: tile layout (default or TMS)'
+        status: 'yes'
+        spec: blobStore.layout
     S3BlobStoreInfo:
       bucket:
         status: 'yes'
@@ -1687,14 +1689,24 @@ pages:
         status: 'yes'
         spec: blobStore.endpoint
         note: from the endpoint's scheme
-      proxyDomain: &id006
-        status: 'no'
-        note: 'blob store: through a proxy'
-      proxyWorkstation: *id006
-      proxyHost: *id006
-      proxyPort: *id006
-      proxyUsername: *id006
-      proxyPassword: *id006
+      proxyDomain:
+        status: 'yes'
+        spec: blobStore.proxy.domain
+      proxyWorkstation:
+        status: 'yes'
+        spec: blobStore.proxy.workstation
+      proxyHost:
+        status: 'yes'
+        spec: blobStore.proxy.host
+      proxyPort:
+        status: 'yes'
+        spec: blobStore.proxy.port
+      proxyUsername:
+        status: 'yes'
+        spec: blobStore.proxy.credentials
+      proxyPassword:
+        status: 'yes'
+        spec: blobStore.proxy.credentials
       useGzip:
         status: 'yes'
         spec: blobStore.gzip
@@ -1721,10 +1733,18 @@ pages:
         status: 'yes'
         spec: blobStore.endpoint
         note: from the endpoint's scheme
-      proxyHost: *id006
-      proxyPort: *id006
-      proxyUsername: *id006
-      proxyPassword: *id006
+      proxyHost:
+        status: 'yes'
+        spec: blobStore.proxy.host
+      proxyPort:
+        status: 'yes'
+        spec: blobStore.proxy.port
+      proxyUsername:
+        status: 'yes'
+        spec: blobStore.proxy.credentials
+      proxyPassword:
+        status: 'yes'
+        spec: blobStore.proxy.credentials
       serviceURL:
         status: 'yes'
         spec: blobStore.endpoint
@@ -1733,8 +1753,8 @@ pages:
         status: 'yes'
         spec: blobStore.project
       quotaProjectId:
-        status: 'no'
-        note: 'Google Cloud blob store: quota project'
+        status: 'yes'
+        spec: blobStore.quotaProject
       bucket:
         status: 'yes'
         spec: blobStore.bucket
