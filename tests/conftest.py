@@ -99,3 +99,52 @@ def data_volume() -> DataVolume:
     if not volume.available:
         pytest.skip("E2E_DATA_DIR or E2E_DATA_POD not set")
     return volume
+
+
+# --- e2e: what the tests write to GeoServer and read back, and which tests pass, for
+# tests/test_e2e_coverage.py (which runs last) to work out which fields are proved.
+
+LIVE_EVENTS: list[tuple[str, str, object]] = []  # ("write" or "read", URL path, body)
+PASSED: set[str] = set()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def record_live_requests():
+    import os
+
+    if not os.environ.get("E2E_GEOSERVER_URL"):
+        yield
+        return
+    import re
+    from urllib.parse import urlparse
+
+    import requests
+
+    from tests.geoserver_coverage import DOCUMENTS, rest_path
+
+    original = requests.Session.request
+
+    def request(self, method, url, *args, **kwargs):
+        response = original(self, method, url, *args, **kwargs)
+        path = urlparse(url).path
+        if response.ok and any(re.search(p, rest_path(path)) for p, _, _ in DOCUMENTS):
+            if method.upper() in ("PUT", "POST"):
+                body = kwargs.get("json") if kwargs.get("json") is not None else kwargs.get("data")
+                LIVE_EVENTS.append(("write", path, body))
+            elif method.upper() == "GET":
+                LIVE_EVENTS.append(("read", path, response.text))
+        return response
+
+    requests.Session.request = request
+    yield
+    requests.Session.request = original
+
+
+def pytest_runtest_logreport(report):
+    if report.when == "call" and report.passed:
+        PASSED.add(report.nodeid)
+
+
+def pytest_collection_modifyitems(items):
+    """Tests marked `last` run after the others (stable: the rest keep their order)."""
+    items.sort(key=lambda item: item.get_closest_marker("last") is not None)

@@ -2,6 +2,8 @@
 
 Every page of GeoServer's web UI, and whether `configops` can define it in files and apply it with `plan`/`apply`. The aim is everything that can be configured, as code. Update this page in the same PR as any change to what's covered.
 
+This page is the overview. [geoserver-fields.yaml](geoserver-fields.yaml) goes field by field: every field of GeoServer's configuration, read from GeoServer's and GeoWebCache's source at the versions GeoServer Cloud runs, sorted as here, and [geoserver-tested.txt](geoserver-tested.txt) lists the ones the e2e tests have proved: configops changed the field and GeoServer then showed the new value. The README's figure counts only those. `tests/geoserver_coverage.py` explains how; `refresh` after a GeoServer Cloud upgrade brings in new fields, and the tests fail until each is sorted.
+
 | Status | Meaning |
 | --- | --- |
 | **Yes** | In the files: `plan` shows drift, `apply` sets it, `import` writes it |
@@ -111,7 +113,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | WMS, WFS, WCS, WMTS | Yes | `Service`: every field on the page, plus `geoserver:` for others |
 | WPS | Chart | Off in the chart (`geoserver.services.wps.enabled`) |
-| OGC API Features | Can't | In the images, but GeoServer Cloud's REST API has no endpoint for its settings, and they're kept in the catalog database, not in a file |
+| OGC API Features | Not yet | Its settings (which conformance classes it offers) are a `metadata` entry, `ogcapiFeatures`, on the WFS settings: a PUT to `/rest/services/wfs/settings` changes them |
 | Turning a service on or off | Yes | `enabled:` in a `Service`; whether the service runs at all is `geoserver.services.<name>.enabled` in the chart |
 
 ## Settings

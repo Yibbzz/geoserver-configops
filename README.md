@@ -1,5 +1,7 @@
 # GeoServer ConfigOps
 
+![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-41%25-orange) Of the 657 settings GeoServer Cloud's REST API can set, configops sets 428, and the e2e tests have proved 275 of those (13 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
+
 GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud): a Helm chart, plus `configops`, a small command that keeps your GIS data and what GeoServer publishes in YAML files:
 
 - **choose open datasets** from the Ordnance Survey, CKAN portals such as data.gov.uk, WFS and OGC API Features services, or plain links;
@@ -7,7 +9,7 @@ GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https:/
 - **publish them** as GeoServer layers, styles and layer groups, alongside other stores (Cloud-Optimised GeoTIFFs, GeoPackages and other files, cascaded WMS, WMTS and WFS, other PostGIS databases), SQL views and tile caching; set GeoServer's own settings and services (contact details, titles, limits), and its security (users, groups, roles, who may see and do what, the master password), with an OpenTofu-style `plan` and `apply`;
 - **catch drift and keep it:** an hourly check shows when GeoServer no longer matches the files, `apply` puts it back, and `import` brings a change made in the web UI back into the files instead.
 
-> **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI. Expect breaking changes. [docs/coverage.md](docs/coverage.md) tracks which of GeoServer's settings the tool covers so far.
+> **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI. Expect breaking changes. [docs/coverage.md](docs/coverage.md) goes through the web UI page by page; the coverage figure above counts every field of GeoServer's configuration, read from its source (`tests/geoserver_coverage.py`).
 
 ## Quick start
 
@@ -215,12 +217,11 @@ spec: { layer: { workspace: uk, layer: flood_zones, access: read }, roles: [EDIT
 
 ## What can't be done as code
 
-Everything on GeoServer's web UI can be kept in the files ([docs/coverage.md](docs/coverage.md) goes page by page), except:
+Most of GeoServer's web UI can be kept in the files: [docs/coverage.md](docs/coverage.md) goes page by page, and [docs/geoserver-fields.yaml](docs/geoserver-fields.yaml) field by field, with what isn't built yet. GeoServer Cloud has no way to set these at all:
 
 | What | Why |
 | --- | --- |
 | Oracle stores | GeoServer Cloud's images don't ship Oracle's JDBC driver |
-| OGC API Features settings | GeoServer Cloud has no REST endpoint for them, and keeps them in its catalog database rather than a file |
 | Tile cache disk quota | GeoServer Cloud switches it off and has no REST endpoint for it |
 
 Some settings take effect only when GeoServer's services restart, and `apply` says so: the tile caching defaults. A few live in the Helm chart rather than the project files: which services run, logging, WPS and GeoServer ACL.
