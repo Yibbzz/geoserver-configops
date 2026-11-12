@@ -96,6 +96,9 @@ DEFAULTS_KEY = "x-defaults"  # on an imported resource only while updating files
 
 
 def resource(kind: str, name: str, spec: dict) -> dict:
+    for plain, translated in (("title", "internationalTitle"), ("abstract", "internationalAbstract")):
+        if spec.get(plain) and spec[plain] in (spec.get(translated) or {}).values():
+            del spec[plain]  # GeoServer fills an empty title or abstract with a translation by itself
     return {"apiVersion": API, "kind": kind, "metadata": {"name": name}, "spec": spec}
 
 
@@ -425,9 +428,8 @@ class Importer:
             for flag in ("enabled", "advertised"):
                 if g.get(flag) is False:
                     spec[flag] = False
-            links = details.to_spec(g, {}).get("metadataLinks")
-            if links:
-                spec["metadataLinks"] = links
+            as_resource = details.to_spec(g, {})
+            spec.update({k: as_resource[k] for k in ("metadataLinks", *details.TRANSLATED) if k in as_resource})
             as_layer = details.to_spec({}, g)
             spec.update({k: as_layer[k] for k in ("attribution", "authorityURLs", "identifiers") if k in as_layer})
             if g.get("queryDisabled"):

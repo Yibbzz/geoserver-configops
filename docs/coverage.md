@@ -137,6 +137,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | Global | Yes | `Settings`: proxy address, decimals, charset, verbose, error handling, web UI mode and the rest |
 | Contact information | Yes | `Settings` `contact:` |
+| Translations (titles, abstracts, contact details in other languages) | Yes | `internationalTitle`, `internationalAbstract` on layers, groups and services; `contact.international*` |
 | JAI, coverage access | Yes | `Settings` `global.jai`, `global.coverageAccess` |
 | Image processing | Yes | As JAI |
 | Logging | Chart | GeoServer Cloud logs through Spring Boot, set in the chart's environment |

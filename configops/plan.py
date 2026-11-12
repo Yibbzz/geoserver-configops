@@ -526,7 +526,7 @@ class Planner:
                 if root[1]:
                     wanted.append(("rootStyle", root[1]))
             extra = {"enabled": spec.get("enabled", True), "advertised": spec.get("advertised", True)}
-            links = details.wanted_resource({"metadataLinks": spec["metadataLinks"]}) if "metadataLinks" in spec else {}
+            links = details.wanted_resource({k: spec[k] for k in ("metadataLinks", *details.TRANSLATED) if k in spec})
             layer_fields = {k: spec[k] for k in ("attribution", "authorityURLs", "identifiers") if k in spec}
             if isinstance(layer_fields.get("attribution"), str):
                 layer_fields["attribution"] = {"title": layer_fields["attribution"]}
