@@ -13,6 +13,7 @@ service has its own. Only the fields a file sets are compared. Nothing is ever r
 
 from __future__ import annotations
 
+import time
 import xml.etree.ElementTree as ET
 
 from .geoserver import GeoServerError
@@ -103,11 +104,21 @@ def root_tag(r) -> str:
     return "org.geoserver.security.validation.PasswordPolicyConfig" if r.kind == "PasswordPolicy" else r.spec["class"]
 
 
-def reload_security(gs) -> None:
-    """Have GeoServer read its security files again: save its default authentication provider as it is."""
+def reload_security(gs, seconds: float = 30, every: float = 2) -> None:
+    """Have GeoServer read its security files again: save its default authentication provider as it is.
+    Right after a master password change GeoServer may still be reloading by itself, and answers
+    500 "Cannot save security configuration" until it's done: try again for a while."""
     url = f"{gs.rest}/security/authproviders/default"
-    body = gs.session.get(url, headers={"Accept": "application/xml"}, timeout=60).text
-    gs.request("PUT", "security/authproviders/default", body, content_type="application/xml")
+    deadline = time.monotonic() + seconds
+    while True:
+        body = gs.session.get(url, headers={"Accept": "application/xml"}, timeout=60).text
+        try:
+            gs.request("PUT", "security/authproviders/default", body, content_type="application/xml")
+            return
+        except GeoServerError as e:
+            if e.status != 500 or time.monotonic() + every > deadline:
+                raise
+        time.sleep(every)
 
 
 def plan(planner) -> None:
