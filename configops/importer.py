@@ -15,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from . import details, secrets
+from . import assets, details, secrets
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import default_table, load
 from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, SOURCE_ATTRIBUTION, PlanError, as_list, names_of
@@ -527,7 +527,7 @@ def dump(resources: list[dict]) -> str:
 
 
 def update_files(target: Path, existing, docs: dict[Path, list[dict]], files: dict[Path, str], ws: str | None,
-                 settings: bool, security: bool, prune: bool, notes: list[str]) -> int:
+                 settings: bool, security: bool, prune: bool, notes: list[str], found: dict[str, bytes]) -> int:
     """Import into an existing project: change only what's different (configops/update.py)."""
     from .update import merge
 
@@ -541,7 +541,8 @@ def update_files(target: Path, existing, docs: dict[Path, list[dict]], files: di
             where.parent.mkdir(parents=True, exist_ok=True)
             where.write_text(text, encoding="utf-8")
             result.styles.append(str(where.relative_to(target)))
-    lines = [("changed", result.changed), ("added", result.added), ("removed", result.removed), ("style files written", result.styles)]
+    lines = [("changed", result.changed), ("added", result.added), ("removed", result.removed), ("style files written", result.styles),
+             ("images and templates written", assets.write(target, found))]
     said = [f"{len(items)} {what}: {', '.join(items)}" for what, items in lines if items]
     print("Updated the files: " + "; ".join(said) if said else "No changes: the files already match GeoServer.")
     for item in result.missing:
@@ -598,6 +599,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
 
     files: dict[Path, str] = {}  # style files, and a note for a kind with nothing in it
     docs: dict[Path, list[dict]] = {}  # resources, by the file a fresh import writes them to
+    asset_files: dict[str, bytes] = {}  # the workspace's images and templates, by their path in the project
     report, notes = [], []
     try:
         if ws:
@@ -625,6 +627,11 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             report.append(f"{ws}.yaml: {len(imp.store_resources)} store(s), {len(layers)} layer(s) ({linked} on a Dataset's table), "
                           f"{len(groups)} group(s); {len(imp.styles)} style(s) in styles/")
             notes += imp.notes
+            asset_files, more = assets.download(gs, ws, {r["spec"].get("name") or r["metadata"]["name"].replace("-", "_"): r["metadata"]["name"]
+                                                   for r in layers})
+            notes += more
+            if asset_files:
+                report.append(f"{len(asset_files)} image(s) and template(s) in styles/ and templates/")
             for secret in imp.secrets:
                 notes.append(f"store passwords can't be read from GeoServer: put the login in Secret {secret} "
                              "(keys: username, password), and add it to configops.secrets")
@@ -652,7 +659,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
 
         default_ws = project.spec.get("workspace")
         if any(p.exists() for p in docs) or any(in_scope(r, ws, settings, security, default_ws) for r in existing.resources):
-            return update_files(target, existing, docs, files, ws, settings, security, prune, notes)
+            return update_files(target, existing, docs, files, ws, settings, security, prune, notes, asset_files)
 
     for path, found in docs.items():
         found = [{k: v for k, v in r.items() if k != DEFAULTS_KEY} for r in found]
@@ -671,6 +678,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
     for path, text in files.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+    assets.write(target, asset_files)
 
     print("Wrote " + "; ".join(report))
     for note in dict.fromkeys(notes):

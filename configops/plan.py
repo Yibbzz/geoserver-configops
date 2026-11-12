@@ -21,15 +21,15 @@ from pathlib import Path
 
 import psycopg2
 
-from . import auth, details, discover, ingest, remote, security, server, stores, sync, tiles
+from . import assets, auth, details, discover, ingest, remote, security, server, stores, sync, tiles
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "settings", "service", "security", "security settings", "role", "user group", "user", "raster", "store", "style", "blobstore", "gridset", "table", "layer", "group", "rule"]
-DELETE_ORDER = ["rule", "user", "user group", "role", "group", "layer", "style", "store"]
+ORDER = ["workspace", "settings", "service", "security", "security settings", "role", "user group", "user", "raster", "store", "file", "style", "blobstore", "gridset", "table", "layer", "template", "group", "rule"]
+DELETE_ORDER = ["rule", "user", "user group", "role", "group", "template", "layer", "style", "file", "store"]
 
 # Every kind of store a workspace can hold: (REST collection, JSON key)
 STORE_COLLECTIONS = [("datastores", "dataStore"), ("coveragestores", "coverageStore"), ("wmsstores", "wmsStore"), ("wmtsstores", "wmtsStore")]
@@ -273,6 +273,7 @@ class Planner:
         self.plan_groups()
         security.plan(self)
         tiles.plan(self)
+        assets.plan(self, managed)
         self.plan_unmanaged(managed)
         return self.changes
 

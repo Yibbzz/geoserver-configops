@@ -86,6 +86,13 @@ type=$(curl -s -o /tmp/gscloud-smoke -w '%{content_type}' \
   "$BASE/wms?service=WMS&version=1.1.1&request=GetMap&layers=smoke:squares&styles=&srs=EPSG:27700&bbox=0,0,700000,1300000&width=256&height=256&format=image/png")
 [ "$type" = "image/png" ] || { echo "FAIL GetMap smoke:squares returned $type"; head -c 400 /tmp/gscloud-smoke; exit 1; }
 echo "ok   GetMap smoke:squares -> image/png"
+echo "== The style's image and the layer's template came through the ConfigMap"
+curl -fsu admin:geoserver "$BASE/rest/resource/workspaces/smoke/styles/marks/dot.png" | cmp - examples/smoke/styles/marks/dot.png \
+  || { echo "FAIL GeoServer's styles/marks/dot.png isn't the project's (binaryData)"; exit 1; }
+echo "ok   styles/marks/dot.png is byte for byte the project's"
+info=$(curl -s "$BASE/wms?service=WMS&version=1.1.1&request=GetFeatureInfo&layers=smoke:squares&query_layers=smoke:squares&styles=&srs=EPSG:27700&bbox=400000,200000,500000,300000&width=100&height=100&x=50&y=50&info_format=text/html")
+grep -q '<p class="square">Square a</p>' <<<"$info" || { echo "FAIL GetFeatureInfo didn't use templates/squares/content.ftl"; head -c 400 <<<"$info"; exit 1; }
+echo "ok   GetFeatureInfo smoke:squares uses the layer's template"
 echo "== configops sync, run from its CronJob"
 kubectl -n "$NS" create job sync-now --from=cronjob/configops-sync
 if ! kubectl -n "$NS" wait --for=condition=complete job/sync-now --timeout=10m; then

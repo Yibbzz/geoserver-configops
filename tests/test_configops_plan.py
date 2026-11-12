@@ -4,7 +4,7 @@ import textwrap
 
 import pytest
 
-from configops import ingest
+from configops import assets, ingest
 from configops.loader import load
 from configops.plan import Planner, ordered, print_plan
 
@@ -55,6 +55,33 @@ class FakeGeoServer:
     def __init__(self):
         self.workspaces, self.stores, self.styles, self.layers, self.fts, self.groups = {}, {}, {}, {}, {}, {}
         self.tiles = {}  # ws:name -> GeoWebCache settings
+        self.resources: dict[str, bytes] = {}  # GeoServer's resource store, by path
+        self.resets = 0
+
+    def read(self, path):
+        if path.startswith("resource/"):
+            return self.resources.get(path.removeprefix("resource/"))
+        return self.resources.get(self.template_file(path))
+
+    @staticmethod
+    def template_file(path):
+        """workspaces/<ws>[/datastores/<store>/featuretypes/<name>]/templates/<file>, where GeoServer keeps it."""
+        p = path.split("/")
+        return "/".join([*p[:2], p[3], p[5], p[-1]] if len(p) == 8 else [*p[:2], p[-1]])
+
+    def files(self, folder):
+        return sorted(p for p in self.resources if p.startswith(folder + "/"))
+
+    def request(self, method, path, body=None, *args, **kwargs):
+        if path == "reset":
+            self.resets += 1
+        elif path.startswith("resource/"):
+            if method == "PUT":
+                self.resources[path.removeprefix("resource/")] = body
+            else:
+                del self.resources[path.removeprefix("resource/")]
+        else:  # a template, PUT through its workspace or resource
+            self.resources[self.template_file(path)] = body
 
     def tile_layer(self, name):
         return self.tiles.get(name)
@@ -332,3 +359,52 @@ def test_wait_covers_a_database_still_starting(project, monkeypatch):
     attempts.clear()
     with pytest.raises(plan_module.PlanError, match="Connection refused"):
         plan_module.connect(project, None, wait=0)  # no wait: the first refusal is final
+
+
+def test_style_images_fonts_and_templates_then_nothing_to_do_then_pruned(project, tables):
+    (project / "styles" / "icons").mkdir()
+    (project / "styles" / "icons" / "pin.svg").write_text("<svg/>")
+    (project / "styles" / "label.ttf").write_bytes(b"\x00\x01font")
+    (project / "templates" / "road-links").mkdir(parents=True)
+    (project / "templates" / "header.ftl").write_text("<h1>uk</h1>\n")
+    (project / "templates" / "road-links" / "content.ftl").write_text("${type.name}\n")
+    gs = converged()
+    changes = plan(project, gs)
+    assert lines(changes) == [
+        ("+", "file", "workspaces/uk/styles/icons/pin.svg"),  # beside the workspace's styles, at the same path
+        ("+", "file", "styles/label.ttf"),  # fonts are GeoServer's own, in its global styles folder
+        ("+", "template", "uk header.ftl"),
+        ("+", "template", "uk:road_links content.ftl"),
+    ]
+    for c in changes:
+        c.run()
+    assert gs.resets == 1  # once, after the last upload: services re-read images and fonts
+    assert gs.resources["workspaces/uk/data_layers/road_links/content.ftl"] == b"${type.name}\n"
+    assert plan(project, gs) == []
+
+    (project / "styles" / "icons" / "pin.svg").write_text("<svg>new</svg>")
+    assert lines(plan(project, gs)) == [("~", "file", "workspaces/uk/styles/icons/pin.svg")]
+    for c in plan(project, gs):
+        c.run()
+
+    gs.resources["workspaces/uk/styles/old.png"] = b"png"
+    gs.resources["workspaces/uk/old.ftl"] = b"old"
+    gs.resources["workspaces/uk/styles/roads.sld"] = b"<sld/>"  # a style's own file: the style's business, not ours
+    gs.resources["workspaces/other/styles/x.png"] = b"png"  # not the project's workspace
+    gs.resources["styles/other.ttf"] = b"font"  # fonts are global: never pruned
+    assert lines(plan(project, gs)) == [("?", "file", "workspaces/uk/styles/old.png"), ("?", "template", "workspaces/uk/old.ftl")]
+    for c in plan(project, gs, prune=True):
+        c.run()
+    assert sorted(gs.resources) == ["styles/label.ttf", "styles/other.ttf", "workspaces/other/styles/x.png",
+                                    "workspaces/uk/data_layers/road_links/content.ftl", "workspaces/uk/header.ftl",
+                                    "workspaces/uk/styles/icons/pin.svg", "workspaces/uk/styles/roads.sld"]
+
+    # import: GeoServer's paths back to the project's, and only what differs is written
+    gs.resources["workspaces/uk/other_store/rivers/content.ftl"] = b"x"  # a resource with no Layer in the files
+    found, notes = assets.download(gs, "uk", {"road_links": "road-links"})
+    assert found == {"styles/icons/pin.svg": b"<svg>new</svg>", "templates/header.ftl": b"<h1>uk</h1>\n",
+                     "templates/road-links/content.ftl": b"${type.name}\n"}
+    assert notes == ["template workspaces/uk/other_store/rivers/content.ftl isn't the workspace's or a layer's: not imported"]
+    assert assets.write(project, found) == []
+    (project / "templates" / "header.ftl").unlink()
+    assert assets.write(project, found) == ["templates/header.ftl"]

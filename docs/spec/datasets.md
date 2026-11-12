@@ -42,6 +42,10 @@ uk-basemap/
   styles/
     os-road-link.sld        # style files, picked up by name
     os-road-node.sld
+    icons/church.svg        # images a style points to (icons/church.svg), and fonts (.ttf, .otf)
+  templates/
+    header.ftl              # FreeMarker templates for the workspace (GetFeatureInfo and others)
+    road-links/content.ftl  # ... and for one Layer, in a folder named after it
 ```
 
 Every resource has the same outer shape:
@@ -411,6 +415,30 @@ A Style resource can also give a legend graphic of its own, which GetLegendGraph
 
 Formats: SLD (`.sld`) and MBStyle (`.mbstyle`); CSS (`.css`) if the GeoServer images include it and the client gains support. Files are uploaded exactly as written, never re-encoded by GeoServer.
 
+#### Images and fonts
+
+Images under `styles/` (`.png`, `.svg`, `.jpg`, `.jpeg`, `.gif`) are uploaded beside the styles, at the same path, so a style points to them relative to `styles/`: `styles/icons/church.svg` is `xlink:href="icons/church.svg"`, whatever folder the style file is in. They go to every workspace the project has styles in, and to GeoServer's global styles folder too if it has a global style. Fonts under `styles/` (`.ttf`, `.otf`) go to GeoServer's global styles folder, where GeoServer looks for them; labels name the font's full name as GeoServer lists it (`/rest/fonts`), such as `Noto Sans Regular`.
+
+`plan` shows them as `file` lines, compared byte for byte, before the styles that use them:
+
+```
++ file workspaces/uk/styles/icons/church.svg   (styles/icons/church.svg)
++ file styles/ordnance.ttf                     (styles/ordnance.ttf)
+```
+
+GeoServer's services keep images and fonts in memory, so `apply` has them all read the files again after the last upload (`POST /rest/reset`); a changed image is drawn on the next request.
+
+### Templates
+
+FreeMarker templates shape what GeoServer writes for GetFeatureInfo (`header.ftl`, `content.ftl`, `footer.ftl`) and other outputs. `templates/*.ftl` are the project workspace's; `templates/<layer>/*.ftl` are one Layer's, in a folder named after the Layer (`metadata.name`). `validate` reports any other file or folder there. They are not a kind: the file is the template, written as it is.
+
+```
++ template uk header.ftl                (templates/header.ftl)
+~ template uk:road_links content.ftl    (templates/road-links/content.ftl differs from GeoServer's copy)
+```
+
+Templates take effect on the next request. A layer's template is written after the layer is made. Templates for a store, or global ones, aren't supported.
+
 #### Scale limits live in styles
 
 At which scales a feature is drawn is part of how it is represented, so it belongs in the style, not on the layer. A style can also give each kind of feature its own range, which one setting on a layer can't. The OS road style does exactly that, one range per road class:
@@ -758,8 +786,8 @@ A `secret` field names a secret; the files never hold its value. Where the tool 
 
 The tool must never touch what it didn't create. The rule is simple: **a workspace named in the project belongs to the tool**, much like a Kubernetes namespace:
 
-- Everything inside it (stores, layers, workspace styles) is compared with the files. Anything there that the files don't mention is shown by `plan` as `unmanaged` and removed only with `apply --prune`.
-- Global styles and other workspaces are never changed or deleted, unless a resource names them.
+- Everything inside it (stores, layers, workspace styles, the images beside them, templates) is compared with the files. Anything there that the files don't mention is shown by `plan` as `unmanaged` and removed only with `apply --prune`.
+- Global styles and other workspaces are never changed or deleted, unless a resource names them. Fonts are global: added and changed, never deleted.
 - Tables: only tables a Dataset declares, in the configured schemas, are created, replaced or backed up. A Layer on someone else's table only publishes it.
 - Settings and services: only the ones a `Settings` or `Service` resource names, and only the fields it sets. They are never deleted.
 - Security: only when the project has a `Role`, `Group`, `User` or `AccessRule`; then the rest is unmanaged, as in a workspace (see above). GeoServer's own users, roles and default rules are never touched unless a file names them. GeoServer has one set of global settings, so when several projects share a GeoServer, let one of them hold the global `Settings` and the `Service`s.
@@ -876,7 +904,7 @@ Every check (loaded, up to date, failed) is written to the ingest log in `public
 
 The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `CONFIGOPS_GEOSERVER_PGCONFIG_SECRET_HOST=localhost` and so on, or `secrets.yaml`.
 
-In Kubernetes, the Helm chart runs it nightly as the `configops-sync` CronJob, and runs `configops apply --wait` as a `configops-apply-<revision>` Job after every install and upgrade (a plain Job, not a hook, since a first apply loads data and Helm would block on it). It builds the `configops-project` ConfigMap from the project directory (`configops.project`: YAML and style files, never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `configops.secrets` (the database's, `geoserver-admin` for the refresh after loads, and source keys) as files under `$CONFIGOPS_SECRETS_DIR/<secret>/<key>`, where `configops` looks after the environment.
+In Kubernetes, the Helm chart runs it nightly as the `configops-sync` CronJob, and runs `configops apply --wait` as a `configops-apply-<revision>` Job after every install and upgrade (a plain Job, not a hook, since a first apply loads data and Helm would block on it). It builds the `configops-project` ConfigMap from the project directory (`configops.project`: YAML, style files and the images and fonts beside them, templates; never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `configops.secrets` (the database's, `geoserver-admin` for the refresh after loads, and source keys) as files under `$CONFIGOPS_SECRETS_DIR/<secret>/<key>`, where `configops` looks after the environment.
 
 Known gaps:
 
@@ -939,7 +967,7 @@ uk:uk_basemap (group)           yes        no       yes
 
 ## Importing today's config
 
-`configops import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles in `styles/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `configops plan` on the result has nothing to do. A layer on a table that one of the directory's Datasets loads is written on that Dataset. Stores the files have a kind for (Cloud-Optimised GeoTIFFs, cascaded WMS, WMTS and WFS, PostGIS with a password) are written as `Store`s with their layers; a store's password can't be read back, so it names a credentials Secret, which the import lists.
+`configops import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles and the images beside them in `styles/`, its templates and its layers' in `templates/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `configops plan` on the result has nothing to do. A layer on a table that one of the directory's Datasets loads is written on that Dataset. Stores the files have a kind for (Cloud-Optimised GeoTIFFs, cascaded WMS, WMTS and WFS, PostGIS with a password) are written as `Store`s with their layers; a store's password can't be read back, so it names a credentials Secret, which the import lists.
 
 ```
 $ configops import test -C my-project --geoserver http://localhost:8080/geoserver-cloud

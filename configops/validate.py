@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 from collections import defaultdict
 from importlib import resources as package_files
 from pathlib import Path
@@ -39,6 +40,7 @@ def validate(project: Project) -> list[Problem]:
     problems += check_project(project)
     problems += check_references(project)
     problems += check_styles(project)
+    problems += check_templates(project)
     problems += check_groups(project)
     problems += check_names(project)
     problems += check_unused(project)
@@ -189,6 +191,23 @@ def style_names(project: Project) -> tuple[set[str], list[Problem]]:
         if isinstance(f, str) and not (project.root / f).is_file():
             problems.append(Problem(s.file, s.line(("spec", "file")), f"spec.file: {f} not found under {project.root}", s.label))
     return set(by_stem) | set(project.named("Style")) | BUILT_IN_STYLES, problems
+
+
+def check_templates(project: Project) -> list[Problem]:
+    """templates/x.ftl is the workspace's, templates/<layer>/x.ftl a Layer's: anything else would be left out."""
+    problems = []
+    folder = project.root / "templates"
+    layers = project.named("Layer")
+    for d, _, names in os.walk(folder, followlinks=True):
+        for f in sorted(Path(d) / n for n in names):
+            parts = f.relative_to(folder).parts
+            if f.suffix != ".ftl":
+                problems.append(Problem(f, 0, "templates/ holds FreeMarker templates (.ftl) only"))
+            elif len(parts) > 2:
+                problems.append(Problem(f, 0, "a template goes in templates/ (the workspace's) or templates/<layer>/ (one Layer's)"))
+            elif len(parts) == 2 and parts[0] not in layers:
+                problems.append(Problem(f, 0, f"templates/{parts[0]}/: no Layer named {parts[0]!r}"))
+    return problems
 
 
 def check_styles(project: Project) -> list[Problem]:

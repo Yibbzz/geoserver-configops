@@ -1,6 +1,7 @@
 # Every field of GeoServer's configuration, from its source, and whether configops sets it.
 # tests/geoserver_coverage.py writes the list; the statuses, `spec` and `note` are kept by hand.
-#   yes: configops sets it (spec: where, as a path in configops/schema/v1alpha1.json's $defs)
+#   yes: configops sets it (spec: where, as a path in configops/schema/v1alpha1.json's $defs,
+#        or a project folder: styles/, templates/)
 #   no: possible through GeoServer Cloud's REST API, not built yet
 #   cant: GeoServer Cloud has no way to set it
 #   none: not configuration (ids, timestamps, values worked out by GeoServer or configops)
@@ -2324,17 +2325,23 @@ pages:
   Files:
     ResourceFiles:
       templates:
-        status: 'no'
-        note: FreeMarker templates (GetFeatureInfo and others), per layer, store, workspace or global
+        status: 'yes'
+        spec: templates/
+        note: FreeMarker templates (GetFeatureInfo and others), for the workspace or one layer
         extra: true
+        test: test_e2e_assets.py::test_templates_for_the_workspace_and_for_a_layer
       styleGraphics:
-        status: 'no'
+        status: 'yes'
+        spec: styles/
         note: icons and images a style points to
         extra: true
+        test: test_e2e_assets.py::test_a_styles_image_is_drawn_and_drawn_again_when_it_changes
       fonts:
-        status: 'no'
+        status: 'yes'
+        spec: styles/
         note: fonts for labels
         extra: true
+        test: test_e2e_assets.py::test_a_font_is_loaded
       masterPassword:
         status: 'yes'
         spec: settings.global.masterPassword

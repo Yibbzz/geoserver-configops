@@ -1,5 +1,6 @@
 """Render the Helm chart and check the manifests it produces."""
 
+import base64
 import shutil
 import subprocess
 
@@ -61,13 +62,25 @@ def test_project_files_are_in_a_configmap_at_their_paths():
     project = ROOT / "examples" / "uk-basemap"
     expected = {
         str(f.relative_to(project)) for f in project.rglob("*")
-        if f.suffix in (".yaml", ".yml", ".sld", ".mbstyle", ".css") and f.name not in ("secrets.yaml", "secrets.yml")
+        if f.suffix in (".yaml", ".yml", ".sld", ".mbstyle", ".css", ".ftl", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ttf", ".otf")
+        and f.name not in ("secrets.yaml", "secrets.yml")
     }
     assert set(paths) == expected
     assert paths["project.yaml"] == (project / "project.yaml").read_text()
     assert paths["styles/os-road-link.sld"] == (project / "styles" / "os-road-link.sld").read_bytes().decode()
     mounts = {m["name"]: m["mountPath"] for m in containers(by_kind(manifests, "CronJob")["configops-sync"])[0]["volumeMounts"]}
     assert mounts["project"] == "/project"
+
+
+def test_images_fonts_and_templates_are_in_the_configmap_images_as_binary():
+    manifests = helm_template("--set", "configops.project=examples/smoke")
+    configmap = by_kind(manifests, "ConfigMap")["configops-project"]
+    pod = by_kind(manifests, "CronJob")["configops-sync"]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    items = {i["path"]: i["key"] for i in next(v for v in pod["volumes"] if v["name"] == "project")["configMap"]["items"]}
+    project = ROOT / "examples" / "smoke"
+    assert set(items) == {"project.yaml", "styles/squares.sld", "styles/marks/dot.png", "templates/squares/content.ftl"}
+    assert base64.b64decode(configmap["binaryData"][items["styles/marks/dot.png"]]) == (project / "styles/marks/dot.png").read_bytes()
+    assert configmap["data"][items["templates/squares/content.ftl"]] == (project / "templates/squares/content.ftl").read_text()
 
 
 def test_secrets_are_mounted_as_files_and_may_be_missing():

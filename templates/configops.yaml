@@ -8,14 +8,20 @@ hourly drift check. All run the same pod.
 {{- /* The project's files, keyed 000-<name> (ConfigMap keys can't hold "/"), mounted back at their paths */ -}}
 {{- $dir := trimSuffix "/" $g.project }}
 {{- $files := dict }}  {{- /* path -> content */}}
+{{- $binary := dict }} {{- /* path -> content in base64: images and fonts */}}
 {{- $keys := dict }}   {{- /* path -> ConfigMap key */}}
 {{- $size := 0 }}
 {{- range $path, $_ := .Files.Glob (printf "%s/**" $dir) }}
 {{- $name := base $path }}
-{{- if and (regexMatch "\\.(ya?ml|sld|mbstyle|css)$" $path) (not (regexMatch "^secrets\\.ya?ml$" $name)) }}
+{{- if and (regexMatch "\\.(ya?ml|sld|mbstyle|css|ftl|svg|png|jpe?g|gif|ttf|otf)$" $path) (not (regexMatch "^secrets\\.ya?ml$" $name)) }}
 {{- $_ := set $keys $path (printf "%03d-%s" (len $keys) (regexReplaceAll "[^-._a-zA-Z0-9]" $name "_")) }}
+{{- if regexMatch "\\.(png|jpe?g|gif|ttf|otf)$" $path }}
+{{- $_ := set $binary $path ($.Files.Get $path | b64enc) }}
+{{- $size = add $size (len (get $binary $path)) }}
+{{- else }}
 {{- $_ := set $files $path ($.Files.Get $path) }}
 {{- $size = add $size (len ($.Files.Get $path)) }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- if not $files }}
@@ -24,7 +30,7 @@ hourly drift check. All run the same pod.
 {{- if gt $size 900000 }}
 {{- fail (printf "configops.project: %s holds %d bytes of files, more than a ConfigMap can (about 1 MB)" $dir $size) }}
 {{- end }}
-{{- $ctx := dict "g" $g "dir" $dir "keys" $keys "checksum" (toJson $files | sha256sum) "data" .Values.dataVolume.enabled }}
+{{- $ctx := dict "g" $g "dir" $dir "keys" $keys "checksum" (toJson (merge (dict) $files $binary) | sha256sum) "data" .Values.dataVolume.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -32,6 +38,12 @@ metadata:
 data:
 {{- range $path, $content := $files }}
   {{ get $keys $path }}: {{ $content | toJson }}
+{{- end }}
+{{- if $binary }}
+binaryData:
+{{- range $path, $content := $binary }}
+  {{ get $keys $path }}: {{ $content }}
+{{- end }}
 {{- end }}
 {{- if $g.apply.enabled }}
 ---

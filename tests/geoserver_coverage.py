@@ -294,7 +294,8 @@ def save(manifest: dict) -> None:
 HEADER = """\
 # Every field of GeoServer's configuration, from its source, and whether configops sets it.
 # tests/geoserver_coverage.py writes the list; the statuses, `spec` and `note` are kept by hand.
-#   yes: configops sets it (spec: where, as a path in configops/schema/v1alpha1.json's $defs)
+#   yes: configops sets it (spec: where, as a path in configops/schema/v1alpha1.json's $defs,
+#        or a project folder: styles/, templates/)
 #   no: possible through GeoServer Cloud's REST API, not built yet
 #   cant: GeoServer Cloud has no way to set it
 #   none: not configuration (ids, timestamps, values worked out by GeoServer or configops)
@@ -357,6 +358,14 @@ def schema_has(path: str, schema: dict | None = None) -> bool:
     return True
 
 
+PROJECT_FOLDERS = {"styles/", "templates/"}  # files taken as they are, with no schema: see configops/assets.py
+
+
+def in_files(path: str, schema: dict) -> bool:
+    """A schema path, or one of the project's folders of files."""
+    return path in PROJECT_FOLDERS or schema_has(path, schema)
+
+
 def resolve(node: dict, defs: dict) -> dict:
     """Follow $ref and merge allOf/anyOf/oneOf branches' properties into one view."""
     while "$ref" in node:
@@ -385,7 +394,7 @@ def problems(manifest: dict) -> list[str]:
             out.append(f"{where} is {status}: sort it ({', '.join(STATUSES)})")
         elif status == "yes" and not entry.get("spec"):
             out.append(f"{where} is yes but has no spec path")
-        elif status == "yes" and not all(schema_has(p.strip(), schema) for p in str(entry["spec"]).split(",")):
+        elif status == "yes" and not all(in_files(p.strip(), schema) for p in str(entry["spec"]).split(",")):
             out.append(f"{where}: spec {entry['spec']} isn't in the schema")
         elif status == "cant" and not entry.get("note"):
             out.append(f"{where} is cant but has no note saying why")

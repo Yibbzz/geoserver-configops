@@ -1,5 +1,5 @@
-# The smallest whole project: one dataset, its layer with a style of its own and a tile
-# cache, and a group. The kind deployment test (tests/kind/deploy-test.sh) deploys it,
+# The smallest whole project: one dataset, its layer with a style of its own (and an image
+# the style draws), a GetFeatureInfo template, a tile cache, and a group. The kind deployment test (tests/kind/deploy-test.sh) deploys it,
 # with the data file served inside the cluster.
 apiVersion: configops/v1alpha1
 kind: Project
