@@ -562,18 +562,18 @@ pages:
         spec: layer.attribution.logo.type
     AuthorityURL:
       name:
-        status: 'no'
-        note: WMS authority URLs
+        status: 'yes'
+        spec: service_wms.authorityURLs.name
       href:
-        status: 'no'
-        note: WMS authority URLs
+        status: 'yes'
+        spec: service_wms.authorityURLs.href
     LayerIdentifier:
       authority:
-        status: 'no'
-        note: WMS identifiers
+        status: 'yes'
+        spec: service_wms.identifiers.authority
       identifier:
-        status: 'no'
-        note: WMS identifiers
+        status: 'yes'
+        spec: service_wms.identifiers.identifier
     Keyword:
       value:
         status: 'yes'
@@ -786,8 +786,8 @@ pages:
         status: none
         note: the versions GeoServer supports
       disabledVersions:
-        status: 'no'
-        note: turning off service versions
+        status: 'yes'
+        spec: service_wms.disabledVersions
       keywords:
         status: 'yes'
         spec: service_wms.keywords
@@ -795,8 +795,8 @@ pages:
         status: none
         note: not shown in the web UI
       metadataLink:
-        status: 'no'
-        note: service metadata link
+        status: 'yes'
+        spec: service_wms.metadataLink
       citeCompliant:
         status: 'yes'
         spec: service_wms.citeCompliant
@@ -823,8 +823,8 @@ pages:
         status: 'yes'
         spec: service_wms.srs
       allowedURLsForAuthForwarding:
-        status: 'no'
-        note: URLs that get the user's credentials
+        status: 'yes'
+        spec: service_wms.allowedURLsForAuthForwarding
       bboxForEachCRS:
         status: 'yes'
         spec: service_wms.bboxForEachCRS
@@ -838,14 +838,14 @@ pages:
         status: 'yes'
         spec: service_wms.getFeatureInfoMimeTypeCheckingEnabled
       getFeatureInfoMimeTypes:
-        status: 'no'
-        note: the allowed GetFeatureInfo formats
+        status: 'yes'
+        spec: service_wms.getFeatureInfoMimeTypes
       getMapMimeTypeCheckingEnabled:
         status: 'yes'
         spec: service_wms.getMapMimeTypeCheckingEnabled
       getMapMimeTypes:
-        status: 'no'
-        note: the allowed GetMap formats
+        status: 'yes'
+        spec: service_wms.getMapMimeTypes
       dynamicStylingDisabled:
         status: 'yes'
         spec: service_wms.dynamicStylingDisabled
@@ -853,11 +853,11 @@ pages:
         status: 'yes'
         spec: service_wms.featuresReprojectionDisabled
       authorityURLs:
-        status: 'no'
-        note: WMS authority URLs
+        status: 'yes'
+        spec: service_wms.authorityURLs
       identifiers:
-        status: 'no'
-        note: WMS identifiers
+        status: 'yes'
+        spec: service_wms.identifiers
       maxBuffer:
         status: 'yes'
         spec: service_wms.maxBuffer
@@ -906,68 +906,68 @@ pages:
         spec: service_wms.geoserver
         note: passed through as GeoServer names it
       metadata.pngCompression:
-        status: 'no'
-        note: 'raster rendering: PNG compression'
+        status: 'yes'
+        spec: service_wms.metadata.pngCompression
         extra: true
       metadata.jpegCompression:
-        status: 'no'
-        note: 'raster rendering: JPEG compression'
+        status: 'yes'
+        spec: service_wms.metadata.jpegCompression
         extra: true
       metadata.svgRenderer:
-        status: 'no'
-        note: SVG options
+        status: 'yes'
+        spec: service_wms.metadata.svgRenderer
         extra: true
       metadata.svgAntiAlias:
-        status: 'no'
-        note: SVG options
+        status: 'yes'
+        spec: service_wms.metadata.svgAntiAlias
         extra: true
       metadata.kmlReflectorMode:
-        status: 'no'
-        note: KML options
+        status: 'yes'
+        spec: service_wms.metadata.kmlReflectorMode
         extra: true
       metadata.kmlSuperoverlayMode:
-        status: 'no'
-        note: KML options
+        status: 'yes'
+        spec: service_wms.metadata.kmlSuperoverlayMode
         extra: true
       metadata.kmlAttr:
-        status: 'no'
-        note: KML options
+        status: 'yes'
+        spec: service_wms.metadata.kmlAttr
         extra: true
       metadata.kmlPlacemark:
-        status: 'no'
-        note: KML options
+        status: 'yes'
+        spec: service_wms.metadata.kmlPlacemark
         extra: true
       metadata.kmlKmscore:
-        status: 'no'
-        note: KML options
+        status: 'yes'
+        spec: service_wms.metadata.kmlKmscore
         extra: true
       metadata.advancedProjectionHandling:
-        status: 'no'
-        note: advanced projection handling
+        status: 'yes'
+        spec: service_wms.metadata.advancedProjectionHandling
         extra: true
       metadata.advancedProjectionDensification:
-        status: 'no'
-        note: advanced projection handling
+        status: 'yes'
+        spec: service_wms.metadata.advancedProjectionDensification
         extra: true
       metadata.disableDatelineWrappingHeuristic:
-        status: 'no'
-        note: advanced projection handling
+        status: 'yes'
+        spec: service_wms.metadata.disableDatelineWrappingHeuristic
         extra: true
       metadata.mapWrapping:
-        status: 'no'
-        note: continuous map wrapping
+        status: 'yes'
+        spec: service_wms.metadata.mapWrapping
         extra: true
       metadata.rootLayerInCapabilities:
-        status: 'no'
-        note: whether capabilities has a root layer
+        status: 'yes'
+        spec: service_wms.metadata.rootLayerInCapabilities
         extra: true
       metadata.MarkFactoryList:
-        status: 'no'
-        note: mark factory order
+        status: 'yes'
+        spec: service_wms.metadata.MarkFactoryList
         extra: true
       metadata.scalehintMapunitsPixel:
-        status: 'no'
-        note: scale hints in map units per pixel
+        status: 'yes'
+        spec: service_wms.metadata.scalehintMapunitsPixel
         extra: true
     WatermarkInfoImpl:
       enabled:
@@ -984,8 +984,8 @@ pages:
         spec: service_wms.watermark.url
     WFSInfoImpl:
       gml:
-        status: 'no'
-        note: GML settings per WFS version
+        status: 'yes'
+        spec: service_wfs.gml
       serviceLevel:
         status: 'yes'
         spec: service_wfs.serviceLevel
@@ -1023,34 +1023,37 @@ pages:
         status: 'yes'
         spec: service_wfs.getFeatureOutputTypeCheckingEnabled
       getFeatureOutputTypes:
-        status: 'no'
-        note: the allowed GetFeature formats
+        status: 'yes'
+        spec: service_wfs.getFeatureOutputTypes
       csvDateFormat:
         status: 'yes'
         spec: service_wfs.geoserver
         note: passed through as GeoServer names it
       metadata.SHAPE-ZIP_DEFAULT_PRJ_IS_ESRI:
-        status: 'no'
-        note: 'shapefile output: ESRI .prj'
+        status: 'yes'
+        spec: service_wfs.metadata.SHAPE-ZIP_DEFAULT_PRJ_IS_ESRI
         extra: true
       metadata.maxNumberOfFeaturesForPreview:
-        status: 'no'
-        note: 'layer preview: most features shown'
+        status: 'yes'
+        spec: service_wfs.metadata.maxNumberOfFeaturesForPreview
         extra: true
       metadata.ogcapiFeatures:
-        status: 'no'
-        note: 'OGC API Features settings: FeatureConformance'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures
         extra: true
     GMLInfoImpl:
       srsNameStyle:
-        status: 'no'
-        note: GML settings per WFS version
+        status: 'yes'
+        spec: service_wfs.gml.<version>.srsNameStyle
+        test: test_e2e_settings.py::test_every_field_is_applied_then_nothing_to_do
       overrideGMLAttributes:
-        status: 'no'
-        note: GML settings per WFS version
+        status: 'yes'
+        spec: service_wfs.gml.<version>.overrideGMLAttributes
+        test: test_e2e_settings.py::test_every_field_is_applied_then_nothing_to_do
       mimeTypeToForce:
-        status: 'no'
-        note: GML settings per WFS version
+        status: 'yes'
+        spec: service_wfs.gml.<version>.mimeTypeToForce
+        test: test_e2e_settings.py::test_every_field_is_applied_then_nothing_to_do
     WCSInfoImpl:
       srs:
         status: 'yes'
@@ -1082,41 +1085,41 @@ pages:
     WMTSInfoImpl: {}
     FeatureConformance:
       core:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.core
       gml321:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.gml321
       gmlSF0:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.gmlSF0
       gmlSF2:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.gmlSF2
       featuresFilter:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.featuresFilter
       crsByReference:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.crsByReference
       filter:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.filter
       search:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.search
       queryables:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.queryables
       ids:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.ids
       sortBy:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.sortBy
       propertySelection:
-        status: 'no'
-        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+        status: 'yes'
+        spec: service_wfs.metadata.ogcapiFeatures.propertySelection
   Settings:
     GeoServerInfoImpl:
       id: *id004

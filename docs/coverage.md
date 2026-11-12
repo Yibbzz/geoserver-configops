@@ -116,7 +116,9 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | WMS, WFS, WCS, WMTS | Yes | `Service`: every field on the page, plus `geoserver:` for others |
 | WPS | Chart | Off in the chart (`geoserver.services.wps.enabled`) |
-| OGC API Features | Not yet | Its settings (which conformance classes it offers) are a `metadata` entry, `ogcapiFeatures`, on the WFS settings: a PUT to `/rest/services/wfs/settings` changes them |
+| OGC API Features | Yes | The WFS `Service`'s `metadata.ogcapiFeatures`: which conformance classes it offers |
+| WMS options: KML, SVG, PNG/JPEG compression, projection handling, map wrapping, root layer, authority URLs | Yes | The WMS `Service`'s `metadata`, `authorityURLs`, `identifiers` |
+| GML per WFS version, allowed output formats, disabled versions, metadata link | Yes | `Service` `gml`, `getFeatureOutputTypes`, `getMapMimeTypes`, `disabledVersions`, `metadataLink` |
 | Turning a service on or off | Yes | `enabled:` in a `Service`; whether the service runs at all is `geoserver.services.<name>.enabled` in the chart |
 
 ## Settings

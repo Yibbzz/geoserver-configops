@@ -35,7 +35,11 @@ SAVED = ["settings", "settings/contact", "services/wms/settings", "services/wfs/
 VALUES = {
     "charset": "UTF-8", "schemaBaseURL": "https://schemas.example.org", "onlineResource": "https://maps.example.org",
     "proxyBaseUrl": "https://maps.example.org/geoserver-cloud", "srs": ["EPSG:27700", "EPSG:4326"],
-    "keywords": ["e2e", "maps"], "enabled": True, "memoryCapacity": 0.5, "memoryThreshold": 0.75, "defaultDeflateCompressionLevel": 7, "url": "https://example.org/logo.png",
+    "keywords": ["e2e", "maps"], "enabled": True, "disabledVersions": ["1.0.0"], "getMapMimeTypes": ["image/png", "image/jpeg"],
+    "getFeatureInfoMimeTypes": ["text/html", "application/json"], "getFeatureOutputTypes": ["application/json", "GML2"],
+    "allowedURLsForAuthForwarding": ["https://styles.example.org"], "authorityURLs": [{"name": "e2e", "href": "https://example.org/authority"}],
+    "identifiers": [{"authority": "e2e", "identifier": "e2e-root"}], "MarkFactoryList": "WKTMarkFactory,WellKnownMarkFactory",
+    "gml": {"1.0": {"srsNameStyle": "URN", "overrideGMLAttributes": False, "mimeTypeToForce": "text/xml"}, "1.1": {"srsNameStyle": "URL", "overrideGMLAttributes": True}, "2.0": {"srsNameStyle": "NORMAL"}}, "type": "text/xml", "maxNumberOfFeaturesForPreview": 25, "pngCompression": 40, "jpegCompression": 60, "kmlKmscore": 30, "memoryCapacity": 0.5, "memoryThreshold": 0.75, "defaultDeflateCompressionLevel": 7, "url": "https://example.org/logo.png",
 }
 
 
@@ -51,6 +55,12 @@ def restore(live: dict, saved: dict) -> dict:
             out[key] = ""
         elif isinstance(value, dict) and "string" in value:
             out[key] = {"string": []}
+        elif key == "metadataLink":
+            out[key] = {k: "" for k in value}  # GeoServer keeps the element once there is one: blank it
+        elif key == "metadata":
+            out[key] = {}  # a PUT replaces the metadata whole
+        elif isinstance(value, dict) and len(value) == 1:  # a list GeoServer wraps: disabledVersions, authorityURLs, identifiers
+            out[key] = {next(iter(value)): []}
     return out
 
 

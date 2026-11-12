@@ -139,3 +139,23 @@ def test_a_single_metadata_entry_is_read_like_a_list():
     assert server.metadata(many) == {"logRequestsEnabled": "true", "requestLogBufferSize": "64"}
     assert server.metadata({}) == {}
     assert (server.typed("true"), server.typed("64")) == (True, 64)
+
+
+def test_service_metadata_and_gml_are_merged_not_replaced():
+    live = {"metadata": {"entry": [{"@key": "maxNumberOfFeaturesForPreview", "$": "50"},
+                                   {"@key": "ogcapiFeatures", "ogcapiFeatures": {"ids": True}}]},
+            "gml": {"@class": "linked-hash-map", "entry": [{"version": "V_10", "gml": {"srsNameStyle": "XML"}},
+                                                            {"version": "V_20", "gml": {"srsNameStyle": "URN2"}}]},
+            "metadataLink": {"type": "text/xml", "content": "https://example.org/a.xml"}}
+    wanted = {"metadata": {"ogcapiFeatures": {"search": False}, "SHAPE-ZIP_DEFAULT_PRJ_IS_ESRI": True},
+              "gml": {"2.0": {"overrideGMLAttributes": True}}, "metadataLink": {"url": "https://example.org/b.xml"}}
+    assert server.compare_special(server.service_view(live), wanted) == [
+        ("metadata.ogcapiFeatures.search", None, False), ("metadata.SHAPE-ZIP_DEFAULT_PRJ_IS_ESRI", None, True),
+        ("gml.2.0.overrideGMLAttributes", None, True), ("metadataLink.url", "https://example.org/a.xml", "https://example.org/b.xml")]
+    body = server.special_body(live, wanted)
+    assert body["metadata"]["entry"] == [
+        {"@key": "maxNumberOfFeaturesForPreview", "$": "50"}, {"@key": "ogcapiFeatures", "ogcapiFeatures": {"ids": True, "search": False}},
+        {"@key": "SHAPE-ZIP_DEFAULT_PRJ_IS_ESRI", "$": "true"}]
+    assert body["gml"]["entry"] == [{"version": "V_10", "gml": {"srsNameStyle": "XML"}},
+                                    {"version": "V_20", "gml": {"srsNameStyle": "URN2", "overrideGMLAttributes": True}}]
+    assert body["metadataLink"] == {"type": "text/xml", "content": "https://example.org/b.xml"}
