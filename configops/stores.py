@@ -288,6 +288,60 @@ def remote_body(remote: dict) -> dict:
     return out
 
 
+# --- coverage views: a raster layer made from bands of a store's coverages (metadata entry COVERAGE_VIEW)
+
+ENVELOPES = {"intersection": "INTERSECTION", "union": "UNION"}
+RESOLUTIONS = {"best": "BEST", "worst": "WORST"}
+
+
+def wanted_view(name: str, spec: dict) -> dict:
+    """A layer's `view` as compared."""
+    out = {"bands": [{"coverage": b["coverage"], "band": int(b.get("band", 0))} for b in spec["bands"]],
+           "envelope": spec.get("envelope", "intersection"), "resolution": spec.get("resolution", "best"),
+           "resolutionIndex": int(spec.get("resolutionIndex", -1)), "fillMissingBands": bool(spec.get("fillMissingBands", False))}
+    if "formula" in spec:
+        out["formula"] = {"script": spec["formula"]["script"], "output": spec["formula"]["output"]}
+    return out
+
+
+def view_body(name: str, view: dict) -> dict:
+    bands = []
+    for i, b in enumerate(view["bands"]):
+        bands.append({"inputCoverageBands": {"inputCoverageBand": [{"coverageName": b["coverage"], "band": b["band"]}]},
+                      "definition": f"{b['coverage']}@{b['band']}", "index": i, "compositionType": "BAND_SELECT"})
+    body = {"coverageBands": {"coverageBand": bands}, "name": name, "envelopeCompositionType": ENVELOPES[view["envelope"]],
+            "selectedResolution": RESOLUTIONS[view["resolution"]], "selectedResolutionIndex": view["resolutionIndex"],
+            "fillMissingBands": view["fillMissingBands"]}
+    if "formula" in view:  # a Jiffle script over the bands, giving one band named `output`
+        body.update(compositionType="JIFFLE", definition=view["formula"]["script"], outputName=view["formula"]["output"])
+    return body
+
+
+def live_view(item: dict) -> dict | None:
+    """A live coverage's view in wanted_view's form, or None if it isn't one."""
+    entries = as_list((item.get("metadata") or {}).get("entry"))
+    v = next((e.get("coverageView") for e in entries if isinstance(e, dict) and e.get("@key") == "COVERAGE_VIEW"), None)
+    if not v:
+        return None
+    bands = []
+    for b in as_list((v.get("coverageBands") or {}).get("coverageBand")):
+        source = as_list((b.get("inputCoverageBands") or {}).get("inputCoverageBand"))
+        first = source[0] if source else {}
+        bands.append({"coverage": first.get("coverageName"), "band": int(first.get("band", 0))})
+    names = {v: k for k, v in ENVELOPES.items()}
+    res = {v: k for k, v in RESOLUTIONS.items()}
+    return {"bands": bands, "envelope": names.get(v.get("envelopeCompositionType"), "intersection"),
+            "resolution": res.get(v.get("selectedResolution"), "best"), "resolutionIndex": int(v.get("selectedResolutionIndex", -1)),
+            "fillMissingBands": bool(v.get("fillMissingBands", False)),
+            **({"formula": {"script": v.get("definition"), "output": v.get("outputName")}} if v.get("compositionType") == "JIFFLE" else {})}
+
+
+def with_view(item: dict, body: dict) -> dict:
+    """The coverage's metadata with its view set, the other entries kept."""
+    entries = [e for e in as_list((item.get("metadata") or {}).get("entry")) if not (isinstance(e, dict) and e.get("@key") == "COVERAGE_VIEW")]
+    return {"entry": [*entries, {"@key": "COVERAGE_VIEW", "coverageView": body}]}
+
+
 def as_list(value) -> list:
     return [] if value in (None, "") else value if isinstance(value, list) else [value]
 
@@ -301,7 +355,8 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
     path, _ = store_path(store_ws, store)
     item_path = f"{path}/{fam['items']}/{q(name)}"
     title = spec.get("title") or name
-    native = spec.get("resource")
+    view = wanted_view(name, spec["view"]) if spec.get("view") else None
+    native = name if view else spec.get("resource")
 
     live_layer = gs.layer(ws, name)
     live_item = ((gs.get(item_path) or {}).get(fam["item"]) or {}) if live_layer else {}
@@ -326,6 +381,8 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         wanted_item.append(("resource", spec["resource"]))
     remote = remote_options(spec.get("remote") or {})
     wanted_item += [(f"remote.{k}", v) for k, v in remote.items()]
+    if view:
+        wanted_item.append(("view", view))
     wanted_layer, settings = planner.layer_settings(layer, (item_path, fam["item"]))
 
     def run(old_store=None):
@@ -341,6 +398,9 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         if fam["native"] != "nativeName":
             item["nativeName"] = resource
         item.update(remote_body(remote))
+        if view:
+            current = (gs.get(item_path) or {}).get(fam["item"]) or {}
+            item["metadata"] = with_view(current, view_body(name, view))
         gs.upsert(item_path, f"{path}/{fam['items']}", {fam["item"]: item})
         settings()
 
@@ -354,7 +414,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         live_store_name = geoserver_name(store) if live_item else None
     current = {"title": live_item.get("title"), "enabled": live_item.get("enabled", True),
                "advertised": live_item.get("advertised", True), "abstract": live_item.get("abstract"),
-               "resource": live_item.get(fam["native"]) or live_item.get("nativeName"),
+               "resource": live_item.get(fam["native"]) or live_item.get("nativeName"), "view": live_view(live_item),
                **{f"remote.{k}": v for k, v in live_remote(live_item).items()}, **planner.live_layer_settings(layer, live_layer, live_item)}
     changed = [(k, current[k], v) for k, v in wanted_item + wanted_layer if current[k] != v]
     live_keywords = (live_item.get("keywords") or {}).get("string")

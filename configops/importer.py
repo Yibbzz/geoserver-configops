@@ -300,7 +300,12 @@ class Importer:
         if self.ws != self.project_ws:
             spec["workspace"] = self.ws
         spec["store"] = self.store_resources[store]["metadata"]["name"]
-        spec["resource"] = item.get("nativeCoverageName") or item.get("nativeName")
+        view = stores.live_view(item)
+        if view:
+            defaults = {"envelope": "intersection", "resolution": "best", "resolutionIndex": -1, "fillMissingBands": False}
+            spec["view"] = {k: v for k, v in view.items() if defaults.get(k, object()) != v}
+        else:
+            spec["resource"] = item.get("nativeCoverageName") or item.get("nativeName")
         if item.get("title") and item["title"] != gs_name:
             spec["title"] = item["title"]
         if item.get("abstract"):

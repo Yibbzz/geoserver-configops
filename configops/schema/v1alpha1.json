@@ -1820,6 +1820,78 @@
         },
         "internationalAbstract": {
           "$ref": "#/$defs/translations"
+        },
+        "view": {
+          "type": "object",
+          "required": [
+            "bands"
+          ],
+          "additionalProperties": false,
+          "description": "A coverage view: a raster made from bands of the store's coverages (with store:, instead of resource:)",
+          "properties": {
+            "bands": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": [
+                  "coverage"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "coverage": {
+                    "type": "string",
+                    "description": "One of the store's coverages (its native name)"
+                  },
+                  "band": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Default: 0"
+                  }
+                }
+              }
+            },
+            "envelope": {
+              "enum": [
+                "intersection",
+                "union"
+              ],
+              "description": "The view's bounds from its coverages'. Default: intersection"
+            },
+            "resolution": {
+              "enum": [
+                "best",
+                "worst"
+              ],
+              "description": "Default: best"
+            },
+            "resolutionIndex": {
+              "type": "integer",
+              "description": "A resolution level to read at, instead of best or worst"
+            },
+            "fillMissingBands": {
+              "type": "boolean",
+              "description": "Fill bands a coverage lacks instead of failing"
+            },
+            "formula": {
+              "type": "object",
+              "required": [
+                "script",
+                "output"
+              ],
+              "additionalProperties": false,
+              "description": "A Jiffle script computing one band from the bands, e.g. { script: 'ndvi = (s2[7] - s2[3]) / (s2[7] + s2[3]);', output: ndvi }",
+              "properties": {
+                "script": {
+                  "type": "string"
+                },
+                "output": {
+                  "type": "string",
+                  "description": "The band the script writes"
+                }
+              }
+            }
+          }
         }
       },
       "if": {
@@ -1858,7 +1930,13 @@
           ]
         }
       ],
-      "description": "a table (with or without dataset), a store, or sql"
+      "description": "a table (with or without dataset), a store, or sql",
+      "not": {
+        "required": [
+          "view",
+          "resource"
+        ]
+      }
     },
     "layerGroup": {
       "type": "object",
