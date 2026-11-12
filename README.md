@@ -1,6 +1,6 @@
 # GeoServer ConfigOps
 
-![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-100%25-brightgreen) Of the 617 settings GeoServer Cloud's REST API can set, configops sets 617, and the e2e tests have proved 617 of those (46 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
+![GeoServer Cloud coverage](https://img.shields.io/badge/GeoServer_Cloud-93%25-brightgreen) ![GeoServer coverage](https://img.shields.io/badge/GeoServer-92%25-brightgreen) Of the 664 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (46 more it can't set) and 617 on standard GeoServer (1 more it can't set) ([field by field](docs/geoserver-fields.yaml)).
 
 GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud): a Helm chart, plus `configops`, a small command that keeps your GIS data and what GeoServer publishes in YAML files:
 
@@ -9,7 +9,9 @@ GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https:/
 - **publish them** as GeoServer layers, styles and layer groups, alongside other stores (Cloud-Optimised GeoTIFFs, GeoPackages and other files, cascaded WMS, WMTS and WFS, other PostGIS databases), SQL views and tile caching; set GeoServer's own settings and services (contact details, titles, limits), and its security (users, groups, roles, who may see and do what, the master password), with an OpenTofu-style `plan` and `apply`;
 - **catch drift and keep it:** an hourly check shows when GeoServer no longer matches the files, `apply` puts it back, and `import` brings a change made in the web UI back into the files instead.
 
-> **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI. Expect breaking changes. [docs/coverage.md](docs/coverage.md) goes through the web UI page by page; the coverage figure above counts every field of GeoServer's configuration, read from its source (`tests/geoserver_coverage.py`).
+`configops` works with standard GeoServer too: point it at `https://<host>/geoserver` instead. It tells the two apart by the version GeoServer reports; the Helm chart is GeoServer Cloud's.
+
+> **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI; the same e2e tests run against GeoServer Cloud and against standard GeoServer 3.0.2 (the version GeoServer Cloud 3.0 is built on). Expect breaking changes. [docs/coverage.md](docs/coverage.md) goes through the web UI page by page; the figures above count every field of GeoServer's configuration, read from its source (`tests/geoserver_coverage.py`), and what one of them can't set counts against it.
 
 ## Quick start
 
@@ -293,7 +295,7 @@ The repository's root is the Helm chart, and the `configops` command sits beside
 
 ## Testing
 
-CI runs on every pull request and push to `main`: `helm lint` and schema checks of the rendered chart (lint), the unit tests and a real-PostGIS `sync` (test), the image build (configops-image), the e2e tests against GeoServer Cloud's REST service in Docker (e2e-rest), and the whole chart deployed on kind with `examples/smoke` applied, synced, drift-checked and drawn (kind-deploy).
+CI runs on every pull request and push to `main`: `helm lint` and schema checks of the rendered chart (lint), the unit tests and a real-PostGIS `sync` (test), the image build (configops-image), the e2e tests against GeoServer Cloud's REST service in Docker (e2e-rest) and against standard GeoServer with the same extensions (e2e-standard), and the whole chart deployed on kind with `examples/smoke` applied, synced, drift-checked and drawn (kind-deploy).
 
 Locally (with `helm`, `jq`, `curl` and `ogr2ogr`):
 
@@ -308,6 +310,12 @@ TEST_DB_HOST=localhost TEST_DB_PORT=55432 .venv/bin/pytest -m integration
 tests/e2e/up.sh                       # the real REST service; about 1 GB of RAM
 E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 \
   E2E_GWC_URL=http://localhost:59090/geoserver-cloud/gwc/rest .venv/bin/pytest -m e2e
+tests/e2e/up.sh down
+
+tests/e2e/up.sh standard              # standard GeoServer instead (downloads its extensions once)
+E2E_GEOSERVER_URL=http://localhost:59091/geoserver/rest E2E_SERVICES_URL=http://localhost:59091/geoserver \
+  E2E_GWC_URL=http://localhost:59091/geoserver/gwc/rest E2E_DB_PORT=55433 E2E_DB_HOST_IN_GEOSERVER=db \
+  E2E_DATA_DIR=tests/e2e/data E2E_LDAP_URL=ldap://ldap:389 E2E_REST_CONTAINER=gscloud-e2e-geoserver-1 .venv/bin/pytest -m e2e
 tests/e2e/up.sh down
 
 kind create cluster --name gscloud    # the whole chart; about 8 GB of RAM

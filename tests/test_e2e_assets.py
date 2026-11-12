@@ -158,17 +158,29 @@ def test_a_styles_image_is_drawn_and_drawn_again_when_it_changes(gs, project, ca
 
 def test_a_font_is_loaded(gs, project, capsys):
     """A font in styles/ goes to GeoServer's own styles folder and is in its list of fonts after apply."""
-    pod = os.environ.get("E2E_DATA_POD")
-    if not pod:
-        pytest.skip("E2E_DATA_POD not set: the font is one of the GeoServer image's, under a new name")
-    ns, name = pod.split("/", 1)
-    font = subprocess.run(["kubectl", "-n", ns, "exec", name, "--", "cat", "/usr/share/fonts/truetype/noto/NotoSansOgham-Regular.ttf"],
-                          capture_output=True, check=True).stdout
-    for encoding in ("ascii", "utf-16-be"):  # the family name, in the font's name table: same length, so nothing moves
-        font = font.replace("Noto Sans Ogham".encode(encoding), "Configops Ogham".encode(encoding))
+    pod, container = os.environ.get("E2E_DATA_POD"), os.environ.get("E2E_REST_CONTAINER")
+    if not pod and not container:
+        pytest.skip("E2E_DATA_POD or E2E_REST_CONTAINER not set: the font is one of the GeoServer image's, under a new name")
+    if pod:
+        ns, name = pod.split("/", 1)
+        run = ["kubectl", "-n", ns, "exec", name, "--"]
+    else:
+        run = ["docker", "exec", container]
+    # GeoServer Cloud's images have Noto fonts, standard GeoServer's DejaVu: either, its family renamed in place
+    # in the font's name table (the same length, so nothing moves)
+    for path, family, new in (("/usr/share/fonts/truetype/noto/NotoSansOgham-Regular.ttf", "Noto Sans Ogham", "Configops Ogham"),
+                              ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVu Sans", "Configops D")):
+        found = subprocess.run([*run, "cat", path], capture_output=True)
+        if found.returncode == 0:
+            font = found.stdout
+            for encoding in ("ascii", "utf-16-be"):
+                font = font.replace(family.encode(encoding), new.encode(encoding))
+            break
+    else:
+        pytest.fail("neither font is in GeoServer's image")
 
     def fonts():
-        return [name for name in gs.get("fonts")["fonts"] if name.startswith("Configops Ogham")]
+        return [name for name in gs.get("fonts")["fonts"] if name.startswith("Configops")]
 
     assert not fonts()
     (project / "styles" / "configops-ogham.ttf").write_bytes(font)

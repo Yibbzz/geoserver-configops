@@ -25,6 +25,7 @@ configops = ["schema/*.json", "security_defaults.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+norecursedirs = ["tests/e2e/data", "tests/e2e/gcs", "tests/e2e/standard-libs"]  # files GeoServer writes (owned by its user)
 pythonpath = ["."]
 markers = [
     "integration: needs a PostGIS database (TEST_DB_* env vars) and ogr2ogr",

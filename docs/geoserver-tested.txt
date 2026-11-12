@@ -459,6 +459,7 @@ StoreInfoImpl.enabled
 StoreInfoImpl.metadata.CogSettings.Key
 StoreInfoImpl.name
 StoreInfoImpl.type
+StoreInfoImpl.type=CSV
 StoreInfoImpl.workspace
 StringParameterFilter.values
 StyleInfoImpl.format

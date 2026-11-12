@@ -31,7 +31,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "docs" / "geoserver-fields.yaml"
-TESTED = ROOT / "docs" / "geoserver-tested.txt"
+TESTED = ROOT / "docs" / "geoserver-tested.txt"  # GeoServer Cloud's; standard GeoServer's beside it
+TESTED_FILES = {"cloud": TESTED, "standard": ROOT / "docs" / "geoserver-tested-standard.txt"}
+TARGETS = {"cloud": "GeoServer Cloud", "standard": "GeoServer"}
 README = ROOT / "README.md"
 SCHEMA = ROOT / "configops" / "schema" / "v1alpha1.json"
 
@@ -297,8 +299,9 @@ HEADER = """\
 # tests/geoserver_coverage.py writes the list; the statuses, `spec` and `note` are kept by hand.
 #   yes: configops sets it (spec: where, as a path in configops/schema/v1alpha1.json's $defs,
 #        or a project folder: styles/, templates/)
-#   no: possible through GeoServer Cloud's REST API, not built yet
-#   cant: GeoServer Cloud has no way to set it
+#   no: possible through GeoServer's REST API, not built yet
+#   cant: GeoServer has no way to set it (say why in `note`)
+#   cloud: / standard: the status on GeoServer Cloud or on standard GeoServer, where it differs (cloud: cant, with the note)
 #   none: not configuration (ids, timestamps, values worked out by GeoServer or configops)
 """
 
@@ -328,6 +331,11 @@ def refresh() -> dict:
 
 
 # --- checks and the number ---------------------------------------------------------
+
+def status_on(entry: dict, target: str) -> str:
+    """A field's status on GeoServer Cloud or standard GeoServer: `status`, unless the entry says otherwise for that target."""
+    return entry.get(target, entry.get("status"))
+
 
 def entries(manifest: dict):
     for page, classes in manifest["pages"].items():
@@ -399,68 +407,84 @@ def problems(manifest: dict) -> list[str]:
             out.append(f"{where}: spec {entry['spec']} isn't in the schema")
         elif status == "cant" and not entry.get("note"):
             out.append(f"{where} is cant but has no note saying why")
-    for field in sorted(tested() - yes_fields(manifest)):
-        out.append(f"{TESTED.name} has {field}, which isn't a yes field")
+        for target in TARGETS:
+            if target in entry and entry[target] not in STATUSES:
+                out.append(f"{where}: {target}: {entry[target]} isn't one of {', '.join(STATUSES)}")
+            elif entry.get(target) == "cant" and not entry.get("note"):
+                out.append(f"{where} is cant on {TARGETS[target]} but has no note saying why")
+    for target, path in TESTED_FILES.items():
+        for field in sorted(tested(target) - yes_fields(manifest, target)):
+            out.append(f"{path.name} has {field}, which isn't a yes field on {TARGETS[target]}")
     return out
 
 
 # --- tested: which `yes` fields the e2e tests have proved -----------------------------
 
-def tested() -> set[str]:
-    """'Class.field' lines in docs/geoserver-tested.txt: written only by the e2e tests."""
-    if not TESTED.exists():
+def tested(target: str = "cloud") -> set[str]:
+    """'Class.field' lines in the target's tested file (docs/geoserver-tested*.txt): written only by the e2e tests."""
+    path = TESTED_FILES[target]
+    if not path.exists():
         return set()
-    return {line.strip() for line in TESTED.read_text().splitlines() if line.strip() and not line.startswith("#")}
+    return {line.strip() for line in path.read_text().splitlines() if line.strip() and not line.startswith("#")}
 
 
-def save_tested(fields: set[str]) -> None:
-    TESTED.write_text("# Fields the e2e tests have proved (tests/test_e2e_coverage.py writes this file; don't edit it):\n"
+def save_tested(fields: set[str], target: str = "cloud") -> None:
+    TESTED_FILES[target].write_text("# Fields the e2e tests have proved (tests/test_e2e_coverage.py writes this file; don't edit it):\n"
                       "# configops changed the field in GeoServer and GeoServer then showed the new value,\n"
                       "# or the test the field names in docs/geoserver-fields.yaml passed.\n"
                       + "".join(f"{f}\n" for f in sorted(fields)))
 
 
-def yes_fields(manifest: dict) -> set[str]:
-    return {f"{cls}.{name}" for _, cls, name, e in entries(manifest) if e.get("status") == "yes"}
+def yes_fields(manifest: dict, target: str = "cloud") -> set[str]:
+    return {f"{cls}.{name}" for _, cls, name, e in entries(manifest) if status_on(e, target) == "yes"}
 
 
-def counts(manifest: dict, proven: set[str] | None = None) -> dict[str, dict[str, int]]:
-    """{page: {status: n, 'tested': n}} and the total under 'all'."""
-    proven = tested() if proven is None else proven
+def counts(manifest: dict, target: str = "cloud", proven: set[str] | None = None) -> dict[str, dict[str, int]]:
+    """{page: {status: n, 'tested': n}} on the target, and the total under 'all'."""
+    proven = tested(target) if proven is None else proven
     keys = (*STATUSES, "unsorted", "tested")
     out: dict[str, dict[str, int]] = {}
     for page, cls, name, entry in entries(manifest):
         c = out.setdefault(page, dict.fromkeys(keys, 0))
-        c[entry["status"]] += 1
-        c["tested"] += entry["status"] == "yes" and f"{cls}.{name}" in proven
+        status = status_on(entry, target)
+        c[status] += 1
+        c["tested"] += status == "yes" and f"{cls}.{name}" in proven
     out["all"] = {k: sum(c[k] for c in out.values()) for k in keys}
     return out
 
 
 def percent(c: dict[str, int]) -> int:
-    """Tested share of what can be set: tested / (yes + no). `cant` is reported apart."""
-    settable = c["yes"] + c["no"]
+    """Tested share of everything GeoServer can configure: tested / (yes + no + cant). What the target can't set counts against it."""
+    settable = c["yes"] + c["no"] + c["cant"]
     return int(100 * c["tested"] / settable) if settable else 100
 
 
 def badge(manifest: dict) -> str:
-    c = counts(manifest)["all"]
-    p = percent(c)
-    colour = "brightgreen" if p >= 90 else "green" if p >= 80 else "yellow" if p >= 60 else "orange"
-    return (f"![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-{p}%25-{colour}) "
-            f"Of the {c['yes'] + c['no']} settings GeoServer Cloud's REST API can set, configops sets {c['yes']}, "
-            f"and the e2e tests have proved {c['tested']} of those ({c['cant']} more GeoServer Cloud can't set; "
-            f"[field by field](docs/geoserver-fields.yaml)).")
+    parts, sentences = [], []
+    for target, title in TARGETS.items():
+        c = counts(manifest, target)["all"]
+        p = percent(c)
+        colour = "brightgreen" if p >= 90 else "green" if p >= 80 else "yellow" if p >= 60 else "orange"
+        parts.append(f"![{title} coverage](https://img.shields.io/badge/{title.replace(' ', '_')}-{p}%25-{colour})")
+        sentences.append(f"{c['tested']} on {'standard GeoServer' if target == 'standard' else title}"
+                         + (f" ({c['cant']} more it can't set)" if c["cant"] else ""))
+    total = counts(manifest, "cloud")["all"]
+    settable = total["yes"] + total["no"] + total["cant"]
+    return (" ".join(parts) + f" Of the {settable} settings GeoServer can configure, the e2e tests prove configops sets "
+            + " and ".join(sentences) + " ([field by field](docs/geoserver-fields.yaml)).")
 
 
-BADGE = re.compile(r"!\[GeoServer coverage\][^\n]*")
+BADGE = re.compile(r"!\[GeoServer[^\]]* coverage\][^\n]*")
 
 
 def report(manifest: dict, write: bool = True) -> str:
-    lines = [f"{'page':<14} {'tested':>6} {'yes':>4} {'no':>4} {'cant':>4} {'none':>4}  covered (tested)"]
-    for page, c in counts(manifest).items():
-        lines.append(f"{page:<14} {c['tested']:>6} {c['yes']:>4} {c['no']:>4} {c['cant']:>4} {c['none']:>4}  {percent(c)}%"
-                     + (f"  ({c['unsorted']} unsorted)" if c["unsorted"] else ""))
+    lines = []
+    for target, title in TARGETS.items():
+        lines.append(f"{title}:")
+        lines.append(f"{'page':<14} {'tested':>6} {'yes':>4} {'no':>4} {'cant':>4} {'none':>4}  covered (tested)")
+        for page, c in counts(manifest, target).items():
+            lines.append(f"{page:<14} {c['tested']:>6} {c['yes']:>4} {c['no']:>4} {c['cant']:>4} {c['none']:>4}  {percent(c)}%"
+                         + (f"  ({c['unsorted']} unsorted)" if c["unsorted"] else ""))
     if write:
         text = README.read_text()
         README.write_text(BADGE.sub(badge(manifest), text, count=1))
