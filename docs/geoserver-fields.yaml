@@ -1,0 +1,2384 @@
+# Every field of GeoServer's configuration, from its source, and whether configops sets it.
+# tests/geoserver_coverage.py writes the list; the statuses, `spec` and `note` are kept by hand.
+#   yes: configops sets it (spec: where, as a path in configops/schema/v1alpha1.json's $defs)
+#   no: possible through GeoServer Cloud's REST API, not built yet
+#   cant: GeoServer Cloud has no way to set it
+#   none: not configuration (ids, timestamps, values worked out by GeoServer or configops)
+versions:
+  geoserver: 3.0.2
+  geowebcache: 2.0.2
+pages:
+  Workspaces:
+    WorkspaceInfoImpl:
+      name:
+        status: 'yes'
+        spec: workspace.name
+      metadata: &id002
+        status: none
+        note: 'a map: the entries the web UI sets are listed as metadata.<key>'
+      isolated:
+        status: 'yes'
+        spec: workspace.isolated
+      dateCreated: &id001
+        status: none
+        note: kept by GeoServer
+      dateModified: *id001
+      modifiedBy: *id001
+    NamespaceInfoImpl:
+      prefix:
+        status: 'yes'
+        spec: workspace.name
+      uri:
+        status: 'yes'
+        spec: workspace.namespace
+      metadata: *id002
+      isolated:
+        status: 'yes'
+        spec: workspace.isolated
+  Stores:
+    StoreInfoImpl:
+      name:
+        status: 'yes'
+        spec: store.name
+      description:
+        status: 'yes'
+        spec: store.description
+      type:
+        status: 'yes'
+        spec: store.type
+      enabled:
+        status: 'yes'
+        spec: store.enabled
+      workspace:
+        status: 'yes'
+        spec: store.workspace
+      connectionParameters:
+        status: 'yes'
+        spec: store.connection, store.path, store.url
+      metadata: *id002
+      _default:
+        status: none
+        note: not shown in the web UI
+      dateCreated: *id001
+      dateModified: *id001
+      modifiedBy: *id001
+      disableOnConnFailure:
+        status: 'no'
+        note: the store page's 'Auto disable on connection failure'
+      metadata.CogSettings.Key:
+        status: 'yes'
+        spec: store.url
+        note: set for a cog store's range reader
+        extra: true
+      type=Oracle:
+        status: cant
+        note: GeoServer Cloud's images don't ship Oracle's JDBC driver
+        extra: true
+    DataStoreInfoImpl: {}
+    CoverageStoreInfoImpl:
+      url:
+        status: 'yes'
+        spec: store.url, store.path
+      format:
+        status: 'yes'
+        spec: store.type
+    WMSStoreInfoImpl:
+      capabilitiesURL:
+        status: 'yes'
+        spec: store.url
+      user:
+        status: 'yes'
+        spec: store.credentials
+      password:
+        status: 'yes'
+        spec: store.credentials
+      headerName:
+        status: 'no'
+      headerValue:
+        status: 'no'
+      authKey:
+        status: 'no'
+      maxConnections:
+        status: 'no'
+      readTimeout:
+        status: 'no'
+      connectTimeout:
+        status: 'no'
+      metadata.useConnectionPooling:
+        status: 'no'
+        note: 'cascaded store: use HTTP connection pooling'
+        extra: true
+    WMTSStoreInfoImpl:
+      capabilitiesURL:
+        status: 'yes'
+        spec: store.url
+      user:
+        status: 'yes'
+        spec: store.credentials
+      password:
+        status: 'yes'
+        spec: store.credentials
+      maxConnections:
+        status: 'no'
+      readTimeout:
+        status: 'no'
+      connectTimeout:
+        status: 'no'
+      headerName:
+        status: 'no'
+      headerValue:
+        status: 'no'
+      authKey:
+        status: 'no'
+      metadata.useConnectionPooling:
+        status: 'no'
+        note: 'cascaded store: use HTTP connection pooling'
+        extra: true
+  Layers:
+    ResourceInfoImpl:
+      name:
+        status: 'yes'
+        spec: layer.name
+      nativeName:
+        status: 'yes'
+        spec: layer.table, layer.resource, layer.sql
+      alias:
+        status: none
+        note: not shown in the web UI
+      namespace:
+        status: 'yes'
+        spec: layer.workspace
+      title:
+        status: 'yes'
+        spec: layer.title
+      description:
+        status: none
+        note: not shown in the web UI
+      abstract:
+        status: 'yes'
+        spec: layer.abstract
+      keywords:
+        status: 'yes'
+        spec: layer.keywords
+      metadataLinks:
+        status: 'yes'
+        spec: layer.metadataLinks
+      dataLinks:
+        status: 'yes'
+        spec: layer.dataLinks
+      nativeCRS:
+        status: none
+        note: read from the data
+      srs:
+        status: 'yes'
+        spec: layer.crs
+      nativeBoundingBox:
+        status: none
+        note: worked out from the data on every apply
+      latLonBoundingBox:
+        status: none
+        note: worked out from the data on every apply
+      projectionPolicy:
+        status: 'yes'
+        spec: layer.crs
+        note: forced when crs is set
+      enabled:
+        status: 'yes'
+        spec: layer.enabled
+      advertised:
+        status: 'yes'
+        spec: layer.advertised
+      metadata: *id002
+      store:
+        status: 'yes'
+        spec: layer.store, layer.dataset
+      serviceConfiguration:
+        status: 'no'
+        note: 'the layer''s ''Services'' settings: turning WMS, WFS and so on off for one layer'
+      disabledServices:
+        status: 'no'
+        note: 'the layer''s ''Services'' settings: turning WMS, WFS and so on off for one layer'
+      simpleConversionEnabled:
+        status: 'no'
+        note: 'app-schema layers: simple features conversion'
+      internationalTitle: &id003
+        status: 'no'
+        note: 'translations: internationalTitle and the like'
+      internationalAbstract: *id003
+      metadata.cachingEnabled:
+        status: 'yes'
+        spec: layer.httpCache
+        extra: true
+      metadata.cacheAgeMax:
+        status: 'yes'
+        spec: layer.httpCache.maxAge
+        extra: true
+      metadata.time:
+        status: 'yes'
+        spec: layer.dimensions.time
+        extra: true
+      metadata.elevation:
+        status: 'yes'
+        spec: layer.dimensions.elevation
+        extra: true
+      metadata.dim_<name>:
+        status: 'yes'
+        spec: layer.dimensions
+        note: custom dimensions
+        extra: true
+      metadata.JDBC_VIRTUAL_TABLE:
+        status: 'yes'
+        spec: layer.sql
+        extra: true
+      metadata.COVERAGE_VIEW:
+        status: 'no'
+        note: coverage views
+        extra: true
+      metadata.kml.regionateAttribute:
+        status: 'no'
+        note: KML regionating
+        extra: true
+      metadata.kml.regionateStrategy:
+        status: 'no'
+        note: KML regionating
+        extra: true
+      metadata.kml.regionateFeatureLimit:
+        status: 'no'
+        note: KML regionating
+        extra: true
+    FeatureTypeInfoImpl:
+      cqlFilter:
+        status: 'yes'
+        spec: layer.filter
+      maxFeatures:
+        status: 'yes'
+        spec: layer.wfs.maxFeatures
+      numDecimals:
+        status: 'yes'
+        spec: layer.wfs.decimals
+      padWithZeros:
+        status: 'no'
+        note: 'WFS: pad decimals with zeros'
+      forcedDecimal:
+        status: 'no'
+        note: 'WFS: no scientific notation'
+      responseSRS:
+        status: 'yes'
+        spec: layer.wfs.otherCRS
+      overridingServiceSRS:
+        status: 'yes'
+        spec: layer.wfs.otherCRS
+      skipNumberMatched:
+        status: 'yes'
+        spec: layer.wfs.skipNumberMatched
+      circularArcPresent:
+        status: 'no'
+        note: curved geometries
+      encodeMeasures:
+        status: 'no'
+        note: encode M values
+      linearizationTolerance:
+        status: 'no'
+        note: curved geometries
+      attributes:
+        status: 'yes'
+        spec: layer.attributes
+        note: XStream leaves it out; REST writes it
+        extra: true
+    CoverageInfoImpl:
+      nativeFormat:
+        status: none
+        note: set by GeoServer from the store
+      grid:
+        status: none
+        note: read from the data
+      supportedFormats:
+        status: 'yes'
+        spec: layer.wcs.formats
+      interpolationMethods:
+        status: 'yes'
+        spec: layer.wcs.interpolations
+      defaultInterpolationMethod:
+        status: 'yes'
+        spec: layer.wcs.defaultInterpolation
+      dimensions:
+        status: 'yes'
+        spec: layer.bands
+      requestSRS:
+        status: 'yes'
+        spec: layer.wcs.requestCRS
+      responseSRS:
+        status: 'yes'
+        spec: layer.wcs.responseCRS
+      parameters:
+        status: 'yes'
+        spec: layer.parameters
+      nativeCoverageName:
+        status: 'yes'
+        spec: layer.resource
+    WMSLayerInfoImpl:
+      forcedRemoteStyle:
+        status: 'no'
+        note: 'cascaded WMS layer: remote style'
+      preferredFormat:
+        status: 'no'
+        note: 'cascaded WMS layer: image format'
+      selectedRemoteFormats:
+        status: 'no'
+        note: 'cascaded WMS layer: formats'
+      selectedRemoteStyles:
+        status: 'no'
+        note: 'cascaded WMS layer: styles'
+      minScale:
+        status: 'no'
+        note: 'cascaded WMS layer: scale range'
+      maxScale:
+        status: 'no'
+        note: 'cascaded WMS layer: scale range'
+      metadataBBoxRespected:
+        status: 'no'
+        note: cascaded WMS layer
+      allAvailableRemoteStyles:
+        status: none
+        note: read from the remote server
+      vendorParameters:
+        status: 'no'
+        note: 'cascaded WMS layer: vendor parameters'
+    WMTSLayerInfoImpl: {}
+    LayerInfoImpl:
+      path:
+        status: 'yes'
+        spec: layer.wms.path
+      type:
+        status: none
+        note: set by GeoServer from the resource
+      defaultStyle:
+        status: 'yes'
+        spec: layer.style
+      styles:
+        status: 'yes'
+        spec: layer.styles
+      resource:
+        status: 'yes'
+        spec: layer.table, layer.resource, layer.sql
+      legend:
+        status: none
+        note: 'legacy: the web UI sets the legend on the style'
+      queryable:
+        status: 'yes'
+        spec: layer.queryable
+      opaque:
+        status: 'yes'
+        spec: layer.opaque
+      metadata: *id002
+      attribution:
+        status: 'yes'
+        spec: layer.attribution
+      authorityURLs:
+        status: 'no'
+        note: WMS authority URLs
+      identifiers:
+        status: 'no'
+        note: WMS identifiers
+      defaultWMSInterpolationMethod:
+        status: 'yes'
+        spec: layer.wms.interpolation
+      dateCreated: *id001
+      dateModified: *id001
+      modifiedBy: *id001
+      internationalTitle:
+        status: none
+        note: 'legacy: the web UI writes the resource''s'
+      internationalAbstract:
+        status: none
+        note: 'legacy: the web UI writes the resource''s'
+      metadata.buffer:
+        status: 'yes'
+        spec: layer.buffer
+        extra: true
+      name:
+        status: none
+        note: REST shows the resource name
+        extra: true
+    AttributeTypeInfoImpl:
+      name:
+        status: 'yes'
+        spec: layer.attributes
+      minOccurs:
+        status: 'no'
+        note: feature type customisation
+      maxOccurs:
+        status: 'no'
+        note: feature type customisation
+      nillable:
+        status: 'no'
+        note: feature type customisation
+      metadata: *id002
+      binding:
+        status: 'no'
+        note: feature type customisation
+      length:
+        status: none
+        note: read from the data
+      range:
+        status: 'no'
+        note: feature type customisation
+      options:
+        status: 'no'
+        note: feature type customisation
+      source:
+        status: 'no'
+        note: 'feature type customisation: an attribute worked out by a CQL expression'
+      description:
+        status: 'no'
+        note: feature type customisation
+    CoverageDimensionImpl:
+      id: &id004
+        status: none
+        note: an id GeoServer gives
+      name:
+        status: 'yes'
+        spec: layer.bands.name
+      description:
+        status: 'yes'
+        spec: layer.bands.description
+      range:
+        status: 'yes'
+        spec: layer.bands.range
+      nullValues:
+        status: 'yes'
+        spec: layer.bands.nullValues
+      unit:
+        status: 'yes'
+        spec: layer.bands.unit
+      dimensionType:
+        status: none
+        note: read from the data
+    DimensionInfoImpl:
+      enabled:
+        status: 'yes'
+        spec: layer.dimensions
+      attribute:
+        status: 'yes'
+        spec: layer.dimensions.time.attribute
+      endAttribute:
+        status: 'yes'
+        spec: layer.dimensions.time.endAttribute
+      presentation:
+        status: 'yes'
+        spec: layer.dimensions.time.presentation
+      resolution:
+        status: 'yes'
+        spec: layer.dimensions.time.resolution
+      units:
+        status: 'yes'
+        spec: layer.dimensions.time.units
+      unitSymbol:
+        status: 'yes'
+        spec: layer.dimensions.time.unitSymbol
+      defaultValue:
+        status: 'no'
+        note: dimension default value
+      nearestMatchEnabled:
+        status: 'yes'
+        spec: layer.dimensions.time.nearestMatch
+      rawNearestMatchEnabled:
+        status: 'no'
+        note: nearest match for WCS
+      acceptableInterval:
+        status: 'no'
+        note: nearest match acceptable interval
+      startValue:
+        status: 'no'
+        note: dimension range start
+      endValue:
+        status: 'no'
+        note: dimension range end
+      nearestFailBehavior:
+        status: 'no'
+        note: nearest match failure behaviour
+    DimensionDefaultValueSetting:
+      strategy:
+        status: 'no'
+        note: dimension default value
+      referenceValue:
+        status: 'no'
+        note: dimension default value
+    MetadataLinkInfoImpl:
+      id: *id004
+      type:
+        status: 'yes'
+        spec: layer.metadataLinks.type
+      about:
+        status: none
+        note: not shown in the web UI
+      metadataType:
+        status: 'yes'
+        spec: layer.metadataLinks.standard
+      content:
+        status: 'yes'
+        spec: layer.metadataLinks.url
+    DataLinkInfoImpl:
+      id: *id004
+      about:
+        status: none
+        note: not shown in the web UI
+      type:
+        status: 'yes'
+        spec: layer.dataLinks.type
+      content:
+        status: 'yes'
+        spec: layer.dataLinks.url
+    AttributionInfoImpl:
+      id: *id004
+      title:
+        status: 'yes'
+        spec: layer.attribution.title
+      href:
+        status: 'yes'
+        spec: layer.attribution.link
+      logoURL:
+        status: 'yes'
+        spec: layer.attribution.logo.url
+      logoWidth:
+        status: 'yes'
+        spec: layer.attribution.logo.width
+      logoHeight:
+        status: 'yes'
+        spec: layer.attribution.logo.height
+      logoType:
+        status: 'yes'
+        spec: layer.attribution.logo.type
+    AuthorityURL:
+      name:
+        status: 'no'
+        note: WMS authority URLs
+      href:
+        status: 'no'
+        note: WMS authority URLs
+    LayerIdentifier:
+      authority:
+        status: 'no'
+        note: WMS identifiers
+      identifier:
+        status: 'no'
+        note: WMS identifiers
+    Keyword:
+      value:
+        status: 'yes'
+        spec: layer.keywords
+      language:
+        status: 'no'
+        note: keyword language
+      vocabulary:
+        status: 'no'
+        note: keyword vocabulary
+    CoverageView:
+      coverageBands:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+      name:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+      envelopeCompositionType:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+      selectedResolution:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+      compositionType:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+      selectedResolutionIndex:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+      outputName:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+      definition:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+      fillMissingBands:
+        status: 'no'
+        note: 'coverage views: a layer made from bands of a store''s coverages'
+  Layer groups:
+    LayerGroupInfoImpl:
+      name:
+        status: 'yes'
+        spec: layerGroup.name
+      mode:
+        status: 'yes'
+        spec: layerGroup.mode
+      queryDisabled:
+        status: 'no'
+        note: 'group: ''Queryable'' off'
+      title:
+        status: 'yes'
+        spec: layerGroup.title
+      abstractTxt:
+        status: 'yes'
+        spec: layerGroup.abstract
+      enabled:
+        status: 'yes'
+        spec: layerGroup.enabled
+      advertised:
+        status: 'yes'
+        spec: layerGroup.advertised
+      workspace:
+        status: 'yes'
+        spec: layerGroup.workspace
+      path:
+        status: none
+        note: not shown in the web UI
+      rootLayer:
+        status: 'yes'
+        spec: layerGroup.rootLayer
+      rootLayerStyle:
+        status: 'yes'
+        spec: layerGroup.rootStyle
+      internationalTitle: *id003
+      internationalAbstract: *id003
+      layers:
+        status: 'yes'
+        spec: layerGroup.layers.layer
+      publishables:
+        status: 'yes'
+        spec: layerGroup.layers.layer
+      styles:
+        status: 'yes'
+        spec: layerGroup.layers.style
+      metadataLinks:
+        status: 'yes'
+        spec: layerGroup.metadataLinks
+      bounds:
+        status: none
+        note: worked out from the members
+      metadata: *id002
+      attribution:
+        status: 'no'
+        note: group attribution
+      authorityURLs:
+        status: 'no'
+        note: WMS authority URLs
+      identifiers:
+        status: 'no'
+        note: WMS identifiers
+      keywords:
+        status: 'yes'
+        spec: layerGroup.keywords
+      dateCreated: *id001
+      dateModified: *id001
+      modifiedBy: *id001
+      layerGroupStyles:
+        status: 'no'
+        note: 'group styles: other named sets of members and styles'
+    LayerGroupStyleImpl:
+      id: *id004
+      name:
+        status: 'no'
+        note: group styles
+      title:
+        status: 'no'
+        note: group styles
+      internationalTitle:
+        status: 'no'
+        note: group styles
+      abstractTxt:
+        status: 'no'
+        note: group styles
+      internationalAbstract:
+        status: 'no'
+        note: group styles
+      layers:
+        status: 'no'
+        note: group styles
+      styles:
+        status: 'no'
+        note: group styles
+  Styles:
+    StyleInfoImpl:
+      name:
+        status: 'yes'
+        spec: style
+      workspace:
+        status: 'yes'
+        spec: style.workspace
+      sldVersion:
+        status: 'yes'
+        spec: style.file
+        note: from the file
+      format:
+        status: 'yes'
+        spec: style.file
+        note: from the file's extension
+      languageVersion:
+        status: 'yes'
+        spec: style.file
+        note: from the file
+      filename:
+        status: none
+        note: named by GeoServer
+      legend:
+        status: 'yes'
+        spec: style.legend
+      metadata: *id002
+      dateCreated: *id001
+      dateModified: *id001
+      modifiedBy: *id001
+    LegendInfoImpl:
+      id: *id004
+      width:
+        status: 'yes'
+        spec: style.legend.width
+      height:
+        status: 'yes'
+        spec: style.legend.height
+      format:
+        status: 'yes'
+        spec: style.legend.format
+      onlineResource:
+        status: 'yes'
+        spec: style.legend.url
+  Services:
+    ServiceInfoImpl:
+      workspace:
+        status: 'yes'
+        spec: service_wms.workspace
+      enabled:
+        status: 'yes'
+        spec: service_wms.enabled
+      name:
+        status: none
+        note: the service's own name
+      title:
+        status: 'yes'
+        spec: service_wms.title
+      internationalTitle: *id003
+      maintainer:
+        status: 'yes'
+        spec: service_wms.maintainer
+      abstrct:
+        status: 'yes'
+        spec: service_wms.abstract
+      internationalAbstract: *id003
+      accessConstraints:
+        status: 'yes'
+        spec: service_wms.accessConstraints
+      fees:
+        status: 'yes'
+        spec: service_wms.fees
+      versions:
+        status: none
+        note: the versions GeoServer supports
+      disabledVersions:
+        status: 'no'
+        note: turning off service versions
+      keywords:
+        status: 'yes'
+        spec: service_wms.keywords
+      exceptionFormats:
+        status: none
+        note: not shown in the web UI
+      metadataLink:
+        status: 'no'
+        note: service metadata link
+      citeCompliant:
+        status: 'yes'
+        spec: service_wms.citeCompliant
+      onlineResource:
+        status: 'yes'
+        spec: service_wms.onlineResource
+      schemaBaseURL:
+        status: 'yes'
+        spec: service_wms.schemaBaseURL
+      verbose:
+        status: 'yes'
+        spec: service_wms.verbose
+      outputStrategy:
+        status: 'yes'
+        spec: service_wms.geoserver
+        note: passed through as GeoServer names it
+      metadata: *id002
+      defaultLocale:
+        status: 'yes'
+        spec: service_wms.geoserver
+        note: passed through as GeoServer names it
+    WMSInfoImpl:
+      srs:
+        status: 'yes'
+        spec: service_wms.srs
+      allowedURLsForAuthForwarding:
+        status: 'no'
+        note: URLs that get the user's credentials
+      bboxForEachCRS:
+        status: 'yes'
+        spec: service_wms.bboxForEachCRS
+      watermark:
+        status: 'yes'
+        spec: service_wms.watermark
+      interpolation:
+        status: 'yes'
+        spec: service_wms.interpolation
+      getFeatureInfoMimeTypeCheckingEnabled:
+        status: 'yes'
+        spec: service_wms.getFeatureInfoMimeTypeCheckingEnabled
+      getFeatureInfoMimeTypes:
+        status: 'no'
+        note: the allowed GetFeatureInfo formats
+      getMapMimeTypeCheckingEnabled:
+        status: 'yes'
+        spec: service_wms.getMapMimeTypeCheckingEnabled
+      getMapMimeTypes:
+        status: 'no'
+        note: the allowed GetMap formats
+      dynamicStylingDisabled:
+        status: 'yes'
+        spec: service_wms.dynamicStylingDisabled
+      featuresReprojectionDisabled:
+        status: 'yes'
+        spec: service_wms.featuresReprojectionDisabled
+      authorityURLs:
+        status: 'no'
+        note: WMS authority URLs
+      identifiers:
+        status: 'no'
+        note: WMS identifiers
+      maxBuffer:
+        status: 'yes'
+        spec: service_wms.maxBuffer
+      maxRequestMemory:
+        status: 'yes'
+        spec: service_wms.maxRequestMemory
+      maxRenderingTime:
+        status: 'yes'
+        spec: service_wms.maxRenderingTime
+      maxRenderingErrors:
+        status: 'yes'
+        spec: service_wms.maxRenderingErrors
+      rootLayerTitle:
+        status: 'yes'
+        spec: service_wms.geoserver
+        note: passed through as GeoServer names it
+      rootLayerAbstract:
+        status: 'yes'
+        spec: service_wms.geoserver
+        note: passed through as GeoServer names it
+      internationalRootLayerTitle: *id003
+      internationalRootLayerAbstract: *id003
+      maxRequestedDimensionValues:
+        status: 'yes'
+        spec: service_wms.maxRequestedDimensionValues
+      cacheConfiguration:
+        status: 'yes'
+        spec: service_wms.cacheConfiguration
+      remoteStyleMaxRequestTime:
+        status: 'yes'
+        spec: service_wms.remoteStyleMaxRequestTime
+      remoteStyleTimeout:
+        status: 'yes'
+        spec: service_wms.remoteStyleTimeout
+      defaultGroupStyleEnabled:
+        status: 'yes'
+        spec: service_wms.defaultGroupStyleEnabled
+      transformFeatureInfoDisabled:
+        status: 'yes'
+        spec: service_wms.transformFeatureInfoDisabled
+      autoEscapeTemplateValues:
+        status: 'yes'
+        spec: service_wms.autoEscapeTemplateValues
+      exceptionOnInvalidDimension:
+        status: 'yes'
+        spec: service_wms.geoserver
+        note: passed through as GeoServer names it
+      metadata.pngCompression:
+        status: 'no'
+        note: 'raster rendering: PNG compression'
+        extra: true
+      metadata.jpegCompression:
+        status: 'no'
+        note: 'raster rendering: JPEG compression'
+        extra: true
+      metadata.svgRenderer:
+        status: 'no'
+        note: SVG options
+        extra: true
+      metadata.svgAntiAlias:
+        status: 'no'
+        note: SVG options
+        extra: true
+      metadata.kmlReflectorMode:
+        status: 'no'
+        note: KML options
+        extra: true
+      metadata.kmlSuperoverlayMode:
+        status: 'no'
+        note: KML options
+        extra: true
+      metadata.kmlAttr:
+        status: 'no'
+        note: KML options
+        extra: true
+      metadata.kmlPlacemark:
+        status: 'no'
+        note: KML options
+        extra: true
+      metadata.kmlKmscore:
+        status: 'no'
+        note: KML options
+        extra: true
+      metadata.advancedProjectionHandling:
+        status: 'no'
+        note: advanced projection handling
+        extra: true
+      metadata.advancedProjectionDensification:
+        status: 'no'
+        note: advanced projection handling
+        extra: true
+      metadata.disableDatelineWrappingHeuristic:
+        status: 'no'
+        note: advanced projection handling
+        extra: true
+      metadata.mapWrapping:
+        status: 'no'
+        note: continuous map wrapping
+        extra: true
+      metadata.rootLayerInCapabilities:
+        status: 'no'
+        note: whether capabilities has a root layer
+        extra: true
+      metadata.MarkFactoryList:
+        status: 'no'
+        note: mark factory order
+        extra: true
+      metadata.scalehintMapunitsPixel:
+        status: 'no'
+        note: scale hints in map units per pixel
+        extra: true
+    WatermarkInfoImpl:
+      enabled:
+        status: 'yes'
+        spec: service_wms.watermark.enabled
+      position:
+        status: 'yes'
+        spec: service_wms.watermark.position
+      transparency:
+        status: 'yes'
+        spec: service_wms.watermark.transparency
+      url:
+        status: 'yes'
+        spec: service_wms.watermark.url
+    WFSInfoImpl:
+      gml:
+        status: 'no'
+        note: GML settings per WFS version
+      serviceLevel:
+        status: 'yes'
+        spec: service_wfs.serviceLevel
+      maxFeatures:
+        status: 'yes'
+        spec: service_wfs.maxFeatures
+      featureBounding:
+        status: 'yes'
+        spec: service_wfs.featureBounding
+      canonicalSchemaLocation:
+        status: 'yes'
+        spec: service_wfs.canonicalSchemaLocation
+      encodeFeatureMember:
+        status: 'yes'
+        spec: service_wfs.encodeFeatureMember
+      hitsIgnoreMaxFeatures:
+        status: 'yes'
+        spec: service_wfs.hitsIgnoreMaxFeatures
+      includeWFSRequestDumpFile:
+        status: 'yes'
+        spec: service_wfs.includeWFSRequestDumpFile
+      disableStoredQueriesManagement:
+        status: 'yes'
+        spec: service_wfs.disableStoredQueriesManagement
+      srs:
+        status: 'yes'
+        spec: service_wfs.srs
+      allowGlobalQueries:
+        status: 'yes'
+        spec: service_wfs.allowGlobalQueries
+      simpleConversionEnabled:
+        status: 'yes'
+        spec: service_wfs.simpleConversionEnabled
+      getFeatureOutputTypeCheckingEnabled:
+        status: 'yes'
+        spec: service_wfs.getFeatureOutputTypeCheckingEnabled
+      getFeatureOutputTypes:
+        status: 'no'
+        note: the allowed GetFeature formats
+      csvDateFormat:
+        status: 'yes'
+        spec: service_wfs.geoserver
+        note: passed through as GeoServer names it
+      metadata.SHAPE-ZIP_DEFAULT_PRJ_IS_ESRI:
+        status: 'no'
+        note: 'shapefile output: ESRI .prj'
+        extra: true
+      metadata.maxNumberOfFeaturesForPreview:
+        status: 'no'
+        note: 'layer preview: most features shown'
+        extra: true
+      metadata.ogcapiFeatures:
+        status: 'no'
+        note: 'OGC API Features settings: FeatureConformance'
+        extra: true
+    GMLInfoImpl:
+      srsNameStyle:
+        status: 'no'
+        note: GML settings per WFS version
+      overrideGMLAttributes:
+        status: 'no'
+        note: GML settings per WFS version
+      mimeTypeToForce:
+        status: 'no'
+        note: GML settings per WFS version
+    WCSInfoImpl:
+      srs:
+        status: 'yes'
+        spec: service_wcs.srs
+      gmlPrefixing:
+        status: 'yes'
+        spec: service_wcs.gmlPrefixing
+      latLon:
+        status: 'yes'
+        spec: service_wcs.latLon
+      maxInputMemory:
+        status: 'yes'
+        spec: service_wcs.maxInputMemory
+      maxOutputMemory:
+        status: 'yes'
+        spec: service_wcs.maxOutputMemory
+      defaultDeflateCompressionLevel:
+        status: 'yes'
+        spec: service_wcs.defaultDeflateCompressionLevel
+      subsamplingEnabled:
+        status: 'yes'
+        spec: service_wcs.subsamplingEnabled
+      overviewPolicy:
+        status: 'yes'
+        spec: service_wcs.overviewPolicy
+      maxRequestedDimensionValues:
+        status: 'yes'
+        spec: service_wcs.maxRequestedDimensionValues
+    WMTSInfoImpl: {}
+    FeatureConformance:
+      core:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      gml321:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      gmlSF0:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      gmlSF2:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      featuresFilter:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      crsByReference:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      filter:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      search:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      queryables:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      ids:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      sortBy:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+      propertySelection:
+        status: 'no'
+        note: 'OGC API Features conformance classes: the WFS settings metadata entry ogcapiFeatures (changing it changed /ogc/features/v1/conformance on the dev cluster)'
+  Settings:
+    GeoServerInfoImpl:
+      id: *id004
+      settings:
+        status: none
+        note: 'the settings object: SettingsInfoImpl'
+      jai:
+        status: none
+        note: ImageProcessingInfoImpl
+      coverageAccess:
+        status: none
+        note: CoverageAccessInfoImpl
+      metadata: *id002
+      updateSequence:
+        status: none
+        note: counted by GeoServer
+      adminUsername: &id005
+        status: none
+        note: 'an old copy: the settings object holds it'
+      adminPassword: *id005
+      featureTypeCacheSize:
+        status: 'yes'
+        spec: settings.global.featureTypeCacheSize
+      globalServices:
+        status: 'yes'
+        spec: settings.global.globalServices
+      useHeadersProxyURL:
+        status: 'yes'
+        spec: settings.useHeadersProxyURL
+      xmlPostRequestLogBufferSize:
+        status: 'yes'
+        spec: settings.global.xmlPostRequestLogBufferSize
+      trailingSlashMatch:
+        status: 'yes'
+        spec: settings.global.trailingSlashMatch
+      lockProviderName:
+        status: 'yes'
+        spec: settings.global.geoserver
+        note: passed through as GeoServer names it
+      webUIMode:
+        status: 'yes'
+        spec: settings.global.webUIMode
+      userDetailsDisplaySettingsInfo:
+        status: 'no'
+        note: how the web UI shows the logged-in user
+      allowStoredQueriesPerWorkspace:
+        status: 'yes'
+        spec: settings.global.allowStoredQueriesPerWorkspace
+      contact: *id005
+      charset: *id005
+      title: *id005
+      numDecimals: *id005
+      onlineResource: *id005
+      schemaBaseUrl: *id005
+      proxyBaseUrl: *id005
+      verbose: *id005
+      verboseExceptions: *id005
+      resourceErrorHandling:
+        status: 'yes'
+        spec: settings.global.resourceErrorHandling
+    SettingsInfoImpl:
+      id: *id004
+      workspace:
+        status: 'yes'
+        spec: settings.workspace
+      contact:
+        status: 'yes'
+        spec: settings.contact
+      charset:
+        status: 'yes'
+        spec: settings.charset
+      title:
+        status: 'yes'
+        spec: settings.geoserver
+        note: passed through as GeoServer names it
+      numDecimals:
+        status: 'yes'
+        spec: settings.numDecimals
+      onlineResource:
+        status: 'yes'
+        spec: settings.geoserver
+        note: passed through as GeoServer names it
+      schemaBaseUrl:
+        status: 'yes'
+        spec: settings.geoserver
+        note: passed through as GeoServer names it
+      proxyBaseUrl:
+        status: 'yes'
+        spec: settings.proxyBaseUrl
+      verbose:
+        status: 'yes'
+        spec: settings.verbose
+      verboseExceptions:
+        status: 'yes'
+        spec: settings.verboseExceptions
+      metadata: *id002
+      clientProperties:
+        status: none
+        note: not saved
+      localWorkspaceIncludesPrefix:
+        status: 'yes'
+        spec: settings.localWorkspaceIncludesPrefix
+      showCreatedTimeColumnsInAdminList:
+        status: 'yes'
+        spec: settings.showCreatedTimeColumnsInAdminList
+      showModifiedTimeColumnsInAdminList:
+        status: 'yes'
+        spec: settings.showModifiedTimeColumnsInAdminList
+      showModifiedUserAdminList:
+        status: 'yes'
+        spec: settings.showModifiedUserAdminList
+      defaultLocale:
+        status: 'yes'
+        spec: settings.geoserver
+        note: passed through as GeoServer names it
+      useHeadersProxyURL:
+        status: 'yes'
+        spec: settings.useHeadersProxyURL
+      metadata.logRequestsEnabled:
+        status: 'no'
+        note: request logging
+        extra: true
+      metadata.logHeadersEnabled:
+        status: 'no'
+        note: request logging
+        extra: true
+      metadata.logBodiesEnabled:
+        status: 'no'
+        note: request logging
+        extra: true
+      metadata.requestLogBufferSize:
+        status: 'no'
+        note: request logging
+        extra: true
+      metadata.corsConfigurationSettings:
+        status: 'no'
+        note: 'CORS settings: CORSConfiguration'
+        extra: true
+      metadata.root:
+        status: 'no'
+        note: 'REST: the root folder for file uploads'
+        extra: true
+      metadata.quietOnNotFound:
+        status: 'no'
+        note: 'REST: quiet on not found'
+        extra: true
+    ContactInfoImpl:
+      id: *id004
+      address:
+        status: 'yes'
+        spec: settings.contact.address
+      addressCity:
+        status: 'yes'
+        spec: settings.contact.addressCity
+      addressCountry:
+        status: 'yes'
+        spec: settings.contact.addressCountry
+      addressDeliveryPoint:
+        status: 'yes'
+        spec: settings.contact.addressDeliveryPoint
+      addressPostalCode:
+        status: 'yes'
+        spec: settings.contact.addressPostalCode
+      addressState:
+        status: 'yes'
+        spec: settings.contact.addressState
+      addressType:
+        status: 'yes'
+        spec: settings.contact.addressType
+      contactEmail:
+        status: 'yes'
+        spec: settings.contact.contactEmail
+      contactFacsimile:
+        status: 'yes'
+        spec: settings.contact.contactFacsimile
+      contactOrganization:
+        status: 'yes'
+        spec: settings.contact.contactOrganization
+      contactPerson:
+        status: 'yes'
+        spec: settings.contact.contactPerson
+      contactPosition:
+        status: 'yes'
+        spec: settings.contact.contactPosition
+      contactVoice:
+        status: 'yes'
+        spec: settings.contact.contactVoice
+      onlineResource:
+        status: 'yes'
+        spec: settings.contact.onlineResource
+      title:
+        status: none
+        note: not shown in the web UI
+      welcome:
+        status: 'yes'
+        spec: settings.contact.welcome
+      internationalAddress: *id003
+      internationalAddressCity: *id003
+      internationalAddressCountry: *id003
+      internationalAddressDeliveryPoint: *id003
+      internationalAddressPostalCode: *id003
+      internationalAddressState: *id003
+      internationalAddressType: *id003
+      internationalContactEmail: *id003
+      internationalContactFacsimile: *id003
+      internationalContactOrganization: *id003
+      internationalContactPerson: *id003
+      internationalContactPosition: *id003
+      internationalContactVoice: *id003
+      internationalOnlineResource: *id003
+      internationalWelcome: *id003
+      internationalTitle: *id003
+    ImageProcessingInfoImpl:
+      allowInterpolation:
+        status: 'yes'
+        spec: settings.global.jai.allowInterpolation
+      recycling:
+        status: 'yes'
+        spec: settings.global.jai.recycling
+      tilePriority:
+        status: 'yes'
+        spec: settings.global.jai.tilePriority
+      tileThreads:
+        status: 'yes'
+        spec: settings.global.jai.tileThreads
+      memoryCapacity:
+        status: 'yes'
+        spec: settings.global.jai.memoryCapacity
+      memoryThreshold:
+        status: 'yes'
+        spec: settings.global.jai.memoryThreshold
+      imageIOCache:
+        status: cant
+        note: GeoServer Cloud doesn't keep it
+      pngEncoderType:
+        status: 'yes'
+        spec: settings.global.jai.pngEncoderType
+    CoverageAccessInfoImpl:
+      maxPoolSize:
+        status: 'yes'
+        spec: settings.global.coverageAccess.maxPoolSize
+      corePoolSize:
+        status: 'yes'
+        spec: settings.global.coverageAccess.corePoolSize
+      keepAliveTime:
+        status: 'yes'
+        spec: settings.global.coverageAccess.keepAliveTime
+      queueType:
+        status: 'yes'
+        spec: settings.global.coverageAccess.queueType
+      imageIOCacheThreshold:
+        status: 'yes'
+        spec: settings.global.coverageAccess.imageIOCacheThreshold
+      granuleCacheMaxSizeMB:
+        status: 'yes'
+        spec: settings.global.coverageAccess.granuleCacheMaxSizeMB
+      granuleCacheThresholdKB:
+        status: 'yes'
+        spec: settings.global.coverageAccess.granuleCacheThresholdKB
+  Tile caching:
+    GWCConfig:
+      version:
+        status: none
+        note: the file's version
+      directWMSIntegrationEnabled:
+        status: 'yes'
+        spec: settings.global.tileCaching.directWMSIntegrationEnabled
+      requireTiledParameter:
+        status: 'yes'
+        spec: settings.global.tileCaching.requireTiledParameter
+      WMSCEnabled:
+        status: 'yes'
+        spec: settings.global.tileCaching.WMSCEnabled
+      TMSEnabled:
+        status: 'yes'
+        spec: settings.global.tileCaching.TMSEnabled
+      WMTSEnabled:
+        status: 'yes'
+        spec: settings.global.tileCaching.WMTSEnabled
+      securityEnabled:
+        status: 'yes'
+        spec: settings.global.tileCaching.securityEnabled
+      cacheLayersByDefault:
+        status: 'yes'
+        spec: settings.global.tileCaching.cacheLayersByDefault
+      cacheNonDefaultStyles:
+        status: 'yes'
+        spec: settings.global.tileCaching.cacheNonDefaultStyles
+      multiLayerCachingEnabled:
+        status: 'no'
+        note: 'caching defaults: cache requests for several layers'
+      metaTilingX:
+        status: 'yes'
+        spec: settings.global.tileCaching.metaTilingX
+      metaTilingY:
+        status: 'yes'
+        spec: settings.global.tileCaching.metaTilingY
+      metaTilingThreads:
+        status: 'no'
+        note: 'caching defaults: metatiling threads'
+      seederCorePoolSize:
+        status: 'no'
+        note: seeding threads
+      seederMaxPoolSize:
+        status: 'no'
+        note: seeding threads
+      gutter:
+        status: 'yes'
+        spec: settings.global.tileCaching.gutter
+      defaultCachingGridSetIds:
+        status: 'yes'
+        spec: settings.global.tileCaching.defaultCachingGridSetIds
+      defaultCoverageCacheFormats:
+        status: 'yes'
+        spec: settings.global.tileCaching.defaultCoverageCacheFormats
+      defaultVectorCacheFormats:
+        status: 'yes'
+        spec: settings.global.tileCaching.defaultVectorCacheFormats
+      defaultOtherCacheFormats:
+        status: 'yes'
+        spec: settings.global.tileCaching.defaultOtherCacheFormats
+      lockProviderName:
+        status: 'no'
+        note: 'caching defaults: lock provider'
+      cacheWarningSkips:
+        status: 'no'
+        note: 'caching defaults: warn when a tile is skipped'
+    GeoServerTileLayerInfoImpl:
+      id: *id004
+      enabled:
+        status: 'yes'
+        spec: cache
+      name:
+        status: none
+        note: the layer's name
+      blobStoreId:
+        status: 'yes'
+        spec: cache.blobStore
+      mimeFormats:
+        status: 'yes'
+        spec: cache.formats
+      formatModifiers:
+        status: 'no'
+        note: 'tile layer: format modifiers'
+      gridSubsets:
+        status: 'yes'
+        spec: cache.gridsets
+      metaWidthHeight:
+        status: 'yes'
+        spec: cache.metaTiles
+      expireCache:
+        status: 'yes'
+        spec: cache.expireCache
+      expireCacheList:
+        status: 'no'
+        note: 'tile layer: expiry by zoom level'
+      expireClients:
+        status: 'yes'
+        spec: cache.expireClients
+      parameterFilters:
+        status: 'yes'
+        spec: cache.parameterFilters
+      gutter:
+        status: 'yes'
+        spec: cache.gutter
+      autoCacheStyles:
+        status: none
+        note: not shown in the web UI
+      cacheWarningSkips:
+        status: 'no'
+        note: 'tile layer: warn when a tile is skipped'
+    StyleParameterFilter:
+      allowedStyles:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: 'type: styles, values'
+      availableStyles:
+        status: none
+        note: the layer's styles
+      defaultStyle:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: default
+    ParameterFilter:
+      key:
+        status: 'yes'
+        spec: cache.parameterFilters
+      defaultValue:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: default
+    CaseNormalizingParameterFilter:
+      normalize:
+        status: 'no'
+        note: 'parameter filters: case normalisation'
+    CaseNormalizer:
+      kase:
+        status: 'no'
+        note: 'parameter filters: case normalisation'
+      locale:
+        status: 'no'
+        note: 'parameter filters: case normalisation'
+    StringParameterFilter:
+      values:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: 'type: values'
+    RegexParameterFilter:
+      regex:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: 'type: regex'
+    FloatParameterFilter:
+      values:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: 'type: numbers'
+      threshold:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: threshold
+    IntegerParameterFilter:
+      values:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: 'type: integers'
+      threshold:
+        status: 'yes'
+        spec: cache.parameterFilters
+        note: threshold
+    ExpirationRule:
+      minZoom:
+        status: 'no'
+        note: 'tile layer: expiry by zoom level'
+      expiration:
+        status: 'no'
+        note: 'tile layer: expiry by zoom level'
+    XMLGridSet:
+      name:
+        status: 'yes'
+        spec: gridset.name
+      description:
+        status: 'no'
+        note: gridset description
+      srs:
+        status: 'yes'
+        spec: gridset.crs
+      extent:
+        status: 'yes'
+        spec: gridset.extent
+      alignTopLeft:
+        status: 'yes'
+        spec: gridset.alignTopLeft
+      resolutions:
+        status: 'yes'
+        spec: gridset.resolutions
+      scaleDenominators:
+        status: 'no'
+        note: gridset levels by scale instead of resolution
+      levels:
+        status: 'no'
+        note: gridset levels worked out from the extent
+      metersPerUnit:
+        status: 'yes'
+        spec: gridset.metersPerUnit
+      pixelSize:
+        status: 'no'
+        note: gridset pixel size
+      scaleNames:
+        status: 'no'
+        note: gridset level names
+      tileHeight:
+        status: 'yes'
+        spec: gridset.tileSize
+      tileWidth:
+        status: 'yes'
+        spec: gridset.tileSize
+      yCoordinateFirst:
+        status: 'no'
+        note: gridset axis order
+    XMLGridSubset:
+      gridSetName:
+        status: 'yes'
+        spec: cache.gridsets
+      extent:
+        status: 'no'
+        note: 'tile layer: gridset bounds'
+      zoomStart:
+        status: 'no'
+        note: 'tile layer: published zoom levels'
+      zoomStop:
+        status: 'no'
+        note: 'tile layer: published zoom levels'
+      minCachedLevel:
+        status: 'no'
+        note: 'tile layer: cached zoom levels'
+      maxCachedLevel:
+        status: 'no'
+        note: 'tile layer: cached zoom levels'
+    BlobStoreInfo:
+      name:
+        status: none
+        note: GeoWebCache writes it as id
+      enabled:
+        status: 'yes'
+        spec: blobStore.enabled
+      _default:
+        status: 'yes'
+        spec: blobStore.default
+      id:
+        status: 'yes'
+        spec: blobStore.name
+        note: the blob store's name, as GeoWebCache writes it
+        extra: true
+    FileBlobStoreInfo:
+      baseDirectory:
+        status: 'yes'
+        spec: blobStore.path
+      fileSystemBlockSize:
+        status: 'yes'
+        spec: blobStore.blockSize
+      pathGeneratorType:
+        status: 'no'
+        note: 'folder blob store: tile layout (default or TMS)'
+    S3BlobStoreInfo:
+      bucket:
+        status: 'yes'
+        spec: blobStore.bucket
+      prefix:
+        status: 'yes'
+        spec: blobStore.prefix
+      awsAccessKey:
+        status: 'yes'
+        spec: blobStore.credentials
+      awsSecretKey:
+        status: 'yes'
+        spec: blobStore.credentials
+      access:
+        status: 'yes'
+        spec: blobStore.access
+      maxConnections:
+        status: 'yes'
+        spec: blobStore.maxConnections
+      useHTTPS:
+        status: 'yes'
+        spec: blobStore.endpoint
+        note: from the endpoint's scheme
+      proxyDomain: &id006
+        status: 'no'
+        note: 'blob store: through a proxy'
+      proxyWorkstation: *id006
+      proxyHost: *id006
+      proxyPort: *id006
+      proxyUsername: *id006
+      proxyPassword: *id006
+      useGzip:
+        status: 'yes'
+        spec: blobStore.gzip
+      endpoint:
+        status: 'yes'
+        spec: blobStore.endpoint
+    AzureBlobStoreInfo:
+      container:
+        status: 'yes'
+        spec: blobStore.container
+      prefix:
+        status: 'yes'
+        spec: blobStore.prefix
+      accountName:
+        status: 'yes'
+        spec: blobStore.credentials
+      accountKey:
+        status: 'yes'
+        spec: blobStore.credentials
+      maxConnections:
+        status: 'yes'
+        spec: blobStore.maxConnections
+      useHTTPS:
+        status: 'yes'
+        spec: blobStore.endpoint
+        note: from the endpoint's scheme
+      proxyHost: *id006
+      proxyPort: *id006
+      proxyUsername: *id006
+      proxyPassword: *id006
+      serviceURL:
+        status: 'yes'
+        spec: blobStore.endpoint
+    GoogleCloudStorageBlobStoreInfo:
+      projectId:
+        status: 'yes'
+        spec: blobStore.project
+      quotaProjectId:
+        status: 'no'
+        note: 'Google Cloud blob store: quota project'
+      bucket:
+        status: 'yes'
+        spec: blobStore.bucket
+      prefix:
+        status: 'yes'
+        spec: blobStore.prefix
+      endpointUrl:
+        status: 'yes'
+        spec: blobStore.endpoint
+      apiKey:
+        status: 'yes'
+        spec: blobStore.credentials
+      useDefaultCredentialsChain:
+        status: 'yes'
+        spec: blobStore.defaultCredentials
+    DiskQuotaConfig:
+      enabled:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      cacheCleanUpFrequency:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      cacheCleanUpUnits:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      maxConcurrentCleanUps:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      globalExpirationPolicyName:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      globalQuota:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      layerQuotas:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      quotaStore:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+    LayerQuota:
+      layer:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      expirationPolicyName:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+      quota:
+        status: cant
+        note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+  Security:
+    SecurityManagerConfig:
+      roleServiceName:
+        status: 'yes'
+        spec: settings.global.security.roleService
+      authProviderNames:
+        status: 'yes'
+        spec: settings.global.security.authProviders
+      configPasswordEncrypterName:
+        status: 'yes'
+        spec: settings.global.security.passwordEncryption
+      encryptingUrlParams:
+        status: 'yes'
+        spec: settings.global.security.encryptUrlParams
+      filterChain:
+        status: 'yes'
+        spec: settings.global.security.filterChains
+      rememberMeService:
+        status: 'no'
+        note: remember-me settings
+      bruteForcePrevention:
+        status: 'yes'
+        spec: settings.global.security.bruteForcePrevention
+    BruteForcePreventionConfig:
+      enabled:
+        status: 'yes'
+        spec: settings.global.security.bruteForcePrevention.enabled
+      minDelaySeconds:
+        status: 'yes'
+        spec: settings.global.security.bruteForcePrevention.minDelaySeconds
+      maxDelaySeconds:
+        status: 'yes'
+        spec: settings.global.security.bruteForcePrevention.maxDelaySeconds
+      maxBlockedThreads:
+        status: 'yes'
+        spec: settings.global.security.bruteForcePrevention.maxBlockedThreads
+      whitelistedMasks:
+        status: 'yes'
+        spec: settings.global.security.bruteForcePrevention.whitelistedMasks
+    BaseSecurityNamedServiceConfig:
+      id: *id004
+      name:
+        status: 'yes'
+        spec: securityObject.name
+      className:
+        status: 'yes'
+        spec: securityObject.className
+    PasswordPolicyConfig:
+      uppercaseRequired:
+        status: 'yes'
+        spec: passwordPolicy.uppercase
+      lowercaseRequired:
+        status: 'yes'
+        spec: passwordPolicy.lowercase
+      digitRequired:
+        status: 'yes'
+        spec: passwordPolicy.digit
+      minLength:
+        status: 'yes'
+        spec: passwordPolicy.minLength
+      maxLength:
+        status: 'yes'
+        spec: passwordPolicy.maxLength
+    URLMasterPasswordProviderConfig:
+      url:
+        status: 'no'
+        note: master password providers
+      encrypting:
+        status: 'no'
+        note: master password providers
+    SecurityUserGroupServiceConfig: {}
+    SecurityRoleServiceConfig: {}
+    FileBasedSecurityServiceConfig:
+      fileName:
+        status: 'yes'
+        spec: securityObject.config
+      checkInterval:
+        status: 'yes'
+        spec: securityObject.config
+    XMLSecurityServiceConfig:
+      validating:
+        status: 'yes'
+        spec: securityObject.config
+    XMLUserGroupServiceConfig:
+      passwordEncoderName:
+        status: 'yes'
+        spec: securityObject.config
+      passwordPolicyName:
+        status: 'yes'
+        spec: securityObject.config
+    XMLRoleServiceConfig:
+      adminRoleName:
+        status: 'yes'
+        spec: securityObject.config
+      groupAdminRoleName:
+        status: 'yes'
+        spec: securityObject.config
+    JDBCSecurityServiceConfig:
+      propertyFileNameDDL:
+        status: 'yes'
+        spec: securityObject.config
+      propertyFileNameDML:
+        status: 'yes'
+        spec: securityObject.config
+      jndiName:
+        status: 'yes'
+        spec: securityObject.config
+      jndi:
+        status: 'yes'
+        spec: securityObject.config
+      driverClassName:
+        status: 'yes'
+        spec: securityObject.config
+      connectURL:
+        status: 'yes'
+        spec: securityObject.config
+      userName:
+        status: 'yes'
+        spec: securityObject.config
+      password:
+        status: 'yes'
+        spec: securityObject.config
+      creatingTables:
+        status: 'yes'
+        spec: securityObject.config
+    JDBCUserGroupServiceConfig:
+      passwordEncoderName:
+        status: 'yes'
+        spec: securityObject.config
+      passwordPolicyName:
+        status: 'yes'
+        spec: securityObject.config
+    JDBCRoleServiceConfig:
+      adminRoleName:
+        status: 'yes'
+        spec: securityObject.config
+      groupAdminRoleName:
+        status: 'yes'
+        spec: securityObject.config
+    JDBCConnectAuthProviderConfig:
+      driverClassName:
+        status: 'yes'
+        spec: securityObject.config
+      connectURL:
+        status: 'yes'
+        spec: securityObject.config
+      userGroupServiceName:
+        status: 'yes'
+        spec: securityObject.config
+    LDAPBaseSecurityServiceConfig:
+      serverURL:
+        status: 'yes'
+        spec: securityObject.config
+      groupSearchBase:
+        status: 'yes'
+        spec: securityObject.config
+      groupFilter:
+        status: 'yes'
+        spec: securityObject.config
+      groupNameAttribute:
+        status: 'yes'
+        spec: securityObject.config
+      allGroupsSearchFilter:
+        status: 'yes'
+        spec: securityObject.config
+      groupSearchFilter:
+        status: 'yes'
+        spec: securityObject.config
+      groupMembershipAttribute:
+        status: 'yes'
+        spec: securityObject.config
+      userSearchBase:
+        status: 'yes'
+        spec: securityObject.config
+      userFilter:
+        status: 'yes'
+        spec: securityObject.config
+      userNameAttribute:
+        status: 'yes'
+        spec: securityObject.config
+      allUsersSearchFilter:
+        status: 'yes'
+        spec: securityObject.config
+      useTLS:
+        status: 'yes'
+        spec: securityObject.config
+      groupMember2UserName:
+        status: 'yes'
+        spec: securityObject.config
+      useNestedParentGroups:
+        status: 'yes'
+        spec: securityObject.config
+      maxGroupSearchLevel:
+        status: 'yes'
+        spec: securityObject.config
+      nestedGroupSearchFilter:
+        status: 'yes'
+        spec: securityObject.config
+      bindBeforeGroupSearch:
+        status: 'yes'
+        spec: securityObject.config
+      adminGroup:
+        status: 'yes'
+        spec: securityObject.config
+      groupAdminGroup:
+        status: 'yes'
+        spec: securityObject.config
+      rolePrefix:
+        status: 'yes'
+        spec: securityObject.config
+      convertToUpperCase:
+        status: 'yes'
+        spec: securityObject.config
+      user:
+        status: 'yes'
+        spec: securityObject.config
+      password:
+        status: 'yes'
+        spec: securityObject.config
+    LDAPSecurityServiceConfig:
+      userDnPattern:
+        status: 'yes'
+        spec: securityObject.config
+      userGroupServiceName:
+        status: 'yes'
+        spec: securityObject.config
+      userFormat:
+        status: 'yes'
+        spec: securityObject.config
+    LDAPUserGroupServiceConfig:
+      passwordEncoderName:
+        status: 'yes'
+        spec: securityObject.config
+      passwordPolicyName:
+        status: 'yes'
+        spec: securityObject.config
+      populatedAttributes:
+        status: 'yes'
+        spec: securityObject.config
+    LDAPRoleServiceConfig: {}
+    UsernamePasswordAuthenticationProviderConfig:
+      userGroupServiceName:
+        status: 'yes'
+        spec: securityObject.config
+    SecurityFilterConfig: {}
+    SecurityAuthFilterConfig: {}
+    BasicAuthenticationFilterConfig:
+      useRememberMe:
+        status: 'yes'
+        spec: securityObject.config
+    DigestAuthenticationFilterConfig:
+      userGroupServiceName:
+        status: 'yes'
+        spec: securityObject.config
+      nonceValiditySeconds:
+        status: 'yes'
+        spec: securityObject.config
+    UsernamePasswordAuthenticationFilterConfig:
+      passwordParameterName:
+        status: 'yes'
+        spec: securityObject.config
+      usernameParameterName:
+        status: 'yes'
+        spec: securityObject.config
+    RememberMeAuthenticationFilterConfig: {}
+    PreAuthenticatedUserNameFilterConfig:
+      roleSource:
+        status: 'yes'
+        spec: securityObject.config
+      rolesHeaderAttribute:
+        status: 'yes'
+        spec: securityObject.config
+      userGroupServiceName:
+        status: 'yes'
+        spec: securityObject.config
+      roleConverterName:
+        status: 'yes'
+        spec: securityObject.config
+      roleServiceName:
+        status: 'yes'
+        spec: securityObject.config
+    RequestHeaderAuthenticationFilterConfig:
+      principalHeaderAttribute:
+        status: 'yes'
+        spec: securityObject.config
+    CredentialsFromRequestHeaderFilterConfig:
+      userNameHeaderName:
+        status: 'yes'
+        spec: securityObject.config
+      passwordHeaderName:
+        status: 'yes'
+        spec: securityObject.config
+      userNameRegex:
+        status: 'yes'
+        spec: securityObject.config
+      passwordRegex:
+        status: 'yes'
+        spec: securityObject.config
+      parseAsUriComponents:
+        status: 'yes'
+        spec: securityObject.config
+    RoleFilterConfig:
+      httpResponseHeaderAttrForIncludedRoles:
+        status: 'yes'
+        spec: securityObject.config
+      roleConverterName:
+        status: 'yes'
+        spec: securityObject.config
+    SSLFilterConfig:
+      sslPort:
+        status: 'yes'
+        spec: securityObject.config
+    ExceptionTranslationFilterConfig:
+      authenticationFilterName:
+        status: 'yes'
+        spec: securityObject.config
+      accessDeniedErrorPage:
+        status: 'yes'
+        spec: securityObject.config
+    SecurityInterceptorFilterConfig:
+      allowIfAllAbstainDecisions:
+        status: 'yes'
+        spec: securityObject.config
+      securityMetadataSource:
+        status: 'yes'
+        spec: securityObject.config
+    SecurityContextPersistenceFilterConfig:
+      allowSessionCreation:
+        status: 'yes'
+        spec: securityObject.config
+    LogoutFilterConfig:
+      redirectURL:
+        status: 'yes'
+        spec: securityObject.config
+      formLogoutChain:
+        status: 'yes'
+        spec: securityObject.config
+    AnonymousAuthenticationFilterConfig: {}
+    AuthenticationKeyFilterConfig:
+      authKeyMapperName:
+        status: 'yes'
+        spec: securityObject.config
+      authKeyParamName:
+        status: 'yes'
+        spec: securityObject.config
+      userGroupServiceName:
+        status: 'yes'
+        spec: securityObject.config
+      mapperParameters:
+        status: 'yes'
+        spec: securityObject.config
+      allowMapperKeysAutoSync:
+        status: 'yes'
+        spec: securityObject.config
+      allowChallengeAnonymousSessions:
+        status: 'yes'
+        spec: securityObject.config
+    GeoServerRestRoleServiceConfig:
+      adminGroup:
+        status: 'yes'
+        spec: securityObject.config
+      groupAdminGroup:
+        status: 'yes'
+        spec: securityObject.config
+      baseUrl:
+        status: 'yes'
+        spec: securityObject.config
+      rolesRESTEndpoint:
+        status: 'yes'
+        spec: securityObject.config
+      adminRoleRESTEndpoint:
+        status: 'yes'
+        spec: securityObject.config
+      usersRESTEndpoint:
+        status: 'yes'
+        spec: securityObject.config
+      rolesJSONPath:
+        status: 'yes'
+        spec: securityObject.config
+      adminRoleJSONPath:
+        status: 'yes'
+        spec: securityObject.config
+      usersJSONPath:
+        status: 'yes'
+        spec: securityObject.config
+      cacheConcurrencyLevel:
+        status: 'yes'
+        spec: securityObject.config
+      cacheMaximumSize:
+        status: 'yes'
+        spec: securityObject.config
+      cacheExpirationTime:
+        status: 'yes'
+        spec: securityObject.config
+      authApiKey:
+        status: 'yes'
+        spec: securityObject.config
+    CORSConfiguration:
+      enabled:
+        status: 'no'
+        note: CORS settings (global settings page)
+      allowedOriginPatterns:
+        status: 'no'
+        note: CORS settings (global settings page)
+      allowedMethods:
+        status: 'no'
+        note: CORS settings (global settings page)
+      allowedHeaders:
+        status: 'no'
+        note: CORS settings (global settings page)
+      maxAge:
+        status: 'no'
+        note: CORS settings (global settings page)
+      supportsCredentials:
+        status: 'no'
+        note: CORS settings (global settings page)
+    CSPConfiguration:
+      enabled:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      reportOnly:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      allowOverride:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      injectProxyBase:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      remoteResources:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      formAction:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      frameAncestors:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      policies:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+    CSPPolicy:
+      name:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      description:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      enabled:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      rules:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+    CSPRule:
+      name:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      description:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      enabled:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      filter:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+      directives:
+        status: 'no'
+        note: Content Security Policy (security/csp.xml)
+    AbstractURLCheck:
+      name:
+        status: 'no'
+        note: URL checks (/rest/urlchecks)
+      description:
+        status: 'no'
+        note: URL checks (/rest/urlchecks)
+      enabled:
+        status: 'no'
+        note: URL checks (/rest/urlchecks)
+    RegexURLCheck:
+      regex:
+        status: 'no'
+        note: URL checks (/rest/urlchecks)
+    UserGroupRoleEntries:
+      user.name:
+        status: 'yes'
+        spec: user.name
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      user.password:
+        status: 'yes'
+        spec: user.password
+        extra: true
+        test: test_e2e_security.py::test_a_new_password_is_applied
+      user.enabled:
+        status: 'yes'
+        spec: user.enabled
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      user.properties:
+        status: 'no'
+        note: user attributes
+        extra: true
+      user.groups:
+        status: 'yes'
+        spec: user.groups
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      user.roles:
+        status: 'yes'
+        spec: user.roles
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      group.name:
+        status: 'yes'
+        spec: group.name
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      group.enabled:
+        status: 'no'
+        note: turning a group off
+        extra: true
+      group.roles:
+        status: 'yes'
+        spec: group.roles
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      role.name:
+        status: 'yes'
+        spec: role.name
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      role.parent:
+        status: 'no'
+        note: role inheritance
+        extra: true
+      role.properties:
+        status: 'no'
+        note: role parameters
+        extra: true
+      accessRule.layer:
+        status: 'yes'
+        spec: accessRule.layer
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      accessRule.service:
+        status: 'yes'
+        spec: accessRule.service
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      accessRule.rest:
+        status: 'yes'
+        spec: accessRule.rest
+        extra: true
+        test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
+      catalogMode:
+        status: 'yes'
+        spec: settings.global.catalogMode
+        extra: true
+  Files:
+    ResourceFiles:
+      templates:
+        status: 'no'
+        note: FreeMarker templates (GetFeatureInfo and others), per layer, store, workspace or global
+        extra: true
+      styleGraphics:
+        status: 'no'
+        note: icons and images a style points to
+        extra: true
+      fonts:
+        status: 'no'
+        note: fonts for labels
+        extra: true
+      masterPassword:
+        status: 'yes'
+        spec: settings.global.masterPassword
+        extra: true
+parents:
+  AnonymousAuthenticationFilterConfig: SecurityFilterConfig
+  AuthenticationKeyFilterConfig: SecurityFilterConfig
+  AzureBlobStoreInfo: BlobStoreInfo
+  BasicAuthenticationFilterConfig: SecurityFilterConfig
+  CaseNormalizingParameterFilter: ParameterFilter
+  CoverageInfoImpl: ResourceInfoImpl
+  CoverageStoreInfoImpl: StoreInfoImpl
+  CredentialsFromRequestHeaderFilterConfig: SecurityFilterConfig
+  DataStoreInfoImpl: StoreInfoImpl
+  DigestAuthenticationFilterConfig: SecurityFilterConfig
+  ExceptionTranslationFilterConfig: SecurityFilterConfig
+  FeatureConformance: ConformanceInfo
+  FeatureTypeInfoImpl: ResourceInfoImpl
+  FileBasedSecurityServiceConfig: BaseSecurityNamedServiceConfig
+  FileBlobStoreInfo: BlobStoreInfo
+  FloatParameterFilter: ParameterFilter
+  GeoServerRestRoleServiceConfig: BaseSecurityNamedServiceConfig
+  GoogleCloudStorageBlobStoreInfo: BlobStoreInfo
+  IntegerParameterFilter: ParameterFilter
+  JDBCConnectAuthProviderConfig: BaseSecurityNamedServiceConfig
+  JDBCRoleServiceConfig: JDBCSecurityServiceConfig
+  JDBCSecurityServiceConfig: BaseSecurityNamedServiceConfig
+  JDBCUserGroupServiceConfig: JDBCSecurityServiceConfig
+  LDAPBaseSecurityServiceConfig: BaseSecurityNamedServiceConfig
+  LDAPRoleServiceConfig: LDAPBaseSecurityServiceConfig
+  LDAPSecurityServiceConfig: LDAPBaseSecurityServiceConfig
+  LDAPUserGroupServiceConfig: LDAPBaseSecurityServiceConfig
+  LogoutFilterConfig: SecurityFilterConfig
+  PasswordPolicyConfig: BaseSecurityNamedServiceConfig
+  PreAuthenticatedUserNameFilterConfig: SecurityFilterConfig
+  RegexParameterFilter: CaseNormalizingParameterFilter
+  RegexURLCheck: AbstractURLCheck
+  RememberMeAuthenticationFilterConfig: SecurityFilterConfig
+  RequestHeaderAuthenticationFilterConfig: PreAuthenticatedUserNameFilterConfig
+  RoleFilterConfig: SecurityFilterConfig
+  S3BlobStoreInfo: BlobStoreInfo
+  SSLFilterConfig: SecurityFilterConfig
+  SecurityContextPersistenceFilterConfig: SecurityFilterConfig
+  SecurityFilterConfig: BaseSecurityNamedServiceConfig
+  SecurityInterceptorFilterConfig: SecurityFilterConfig
+  StringParameterFilter: CaseNormalizingParameterFilter
+  StyleParameterFilter: ParameterFilter
+  URLMasterPasswordProviderConfig: MasterPasswordProviderConfig
+  UsernamePasswordAuthenticationFilterConfig: SecurityFilterConfig
+  UsernamePasswordAuthenticationProviderConfig: BaseSecurityNamedServiceConfig
+  WCSInfoImpl: ServiceInfoImpl
+  WFSInfoImpl: ServiceInfoImpl
+  WMSInfoImpl: ServiceInfoImpl
+  WMSLayerInfoImpl: ResourceInfoImpl
+  WMSStoreInfoImpl: StoreInfoImpl
+  WMTSInfoImpl: ServiceInfoImpl
+  WMTSLayerInfoImpl: ResourceInfoImpl
+  WMTSStoreInfoImpl: StoreInfoImpl
+  XMLRoleServiceConfig: XMLSecurityServiceConfig
+  XMLSecurityServiceConfig: FileBasedSecurityServiceConfig
+  XMLUserGroupServiceConfig: XMLSecurityServiceConfig
