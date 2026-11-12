@@ -75,10 +75,8 @@ spec:
   table: { schema: e2e_details, name: readings }
   keywords: [e2e, rivers]
   filter: "kind = 'river'"
-<<<<<<< HEAD
   internationalTitle: { cy: Darlleniadau afonydd, fr: Relevés des rivières }
   internationalAbstract: { cy: Dyfnder afonydd }
-=======
   attributes:
     - id
     - kind
@@ -86,7 +84,6 @@ spec:
     - ended
     - { name: depth, description: Depth in metres, nillable: false, minOccurs: 1, maxOccurs: 2 }
     - { name: kind_upper, source: "strToUpperCase(kind)", binding: java.lang.String }
->>>>>>> origin/main
   wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326], padWithZeros: true, forcedDecimal: true, encodeMeasures: true }
   circularArcs: true
   linearizationTolerance: 0.5

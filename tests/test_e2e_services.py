@@ -218,7 +218,6 @@ def test_layer_services_identifiers_and_a_group_that_isnt_queryable(gs, project,
     assert "wms_only" not in wfs
 
 
-<<<<<<< HEAD
 WELSH = """---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -241,7 +240,8 @@ def test_capabilities_in_another_language(gs, project, capsys):
         return requests.get(f"{SERVICES}/{WS}/wms", params=params, timeout=60).text
     assert "Darlleniadau afonydd" in eventually(lambda: caps("cy"), lambda c: "Darlleniadau afonydd" in c)
     assert "River readings" in caps() and "Darlleniadau afonydd" not in caps()
-=======
+
+
 COMPUTED = """---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -265,7 +265,6 @@ def test_a_computed_attribute_in_wfs(gs, project, capsys):
     found = eventually(features, lambda f: bool(f))
     assert sorted(f["properties"]["kind_upper"] for f in found) == ["RIVER", "SEA"], found
     assert "depth" not in found[0]["properties"]  # narrowed to the attributes named
->>>>>>> origin/main
 
 
 # --- a raster on the data volume
