@@ -64,6 +64,7 @@ def names_of(items) -> list[str]:
 
 
 # Tile cache options the files may set, beyond gridsets and formats: spec name -> GeoWebCache's
+TILE_EXTRAS = ("levels", "expireByZoom", "warningSkips")  # read from the tile layer's XML
 CACHE_OPTIONS = {"metaTiles": "metaWidthHeight", "gutter": "gutter", "expireCache": "expireCache", "expireClients": "expireClients",
                  "blobStore": "blobStoreId"}
 
@@ -91,6 +92,13 @@ def wanted_cache(setting) -> dict | bool:
         setting = {}
     out = {"gridsets": sorted(setting.get("gridsets", DEFAULT_GRIDSETS)), "formats": sorted(setting.get("formats", DEFAULT_FORMATS))}
     out.update({k: setting[k] for k in CACHE_OPTIONS if k in setting})
+    if "levels" in setting:
+        out["levels"] = {g: {k: [float(x) for x in v] if k == "bounds" else [int(x) for x in v] for k, v in lv.items()}
+                         for g, lv in setting["levels"].items()}
+    if "expireByZoom" in setting:
+        out["expireByZoom"] = {int(z): int(s) for z, s in setting["expireByZoom"].items()}
+    if "warningSkips" in setting:
+        out["warningSkips"] = sorted(setting["warningSkips"])
     if "parameterFilters" in setting:
         out["parameterFilters"] = wanted_filters(setting["parameterFilters"])
     return out
@@ -122,7 +130,15 @@ def compared_filters(live: dict, wanted: dict) -> dict:
 def cache_name(gs: GeoServer, name: str, wanted: dict | bool) -> dict | bool:
     """The live cache of `name`, in the form `wanted` is compared in."""
     filters = gs.parameter_filters(name) if isinstance(wanted, dict) and "parameterFilters" in wanted else None
-    return live_cache(gs.tile_layer(name), wanted, filters)
+    out = live_cache(gs.tile_layer(name), wanted, filters)
+    if isinstance(out, dict) and isinstance(wanted, dict) and any(k in wanted for k in TILE_EXTRAS):
+        extras = gs.tile_layer_extras(name)
+        for key in TILE_EXTRAS:
+            if key in wanted:
+                live = extras.get(key, {} if key != "warningSkips" else [])
+                out[key] = {g: {k: v for k, v in live.get(g, {}).items() if k in wanted[key].get(g, {})} for g in wanted[key]} \
+                    if key == "levels" else live
+    return out
 
 
 def set_cache(gs: GeoServer, name: str, wanted: dict | bool, seed: dict | None = None) -> None:
@@ -131,6 +147,7 @@ def set_cache(gs: GeoServer, name: str, wanted: dict | bool, seed: dict | None =
         options = {k: wanted[k] for k in CACHE_OPTIONS if k in wanted}
         if "parameterFilters" in wanted:
             options["parameterFilters"] = wanted["parameterFilters"]
+        options.update({k: wanted[k] for k in TILE_EXTRAS if k in wanted})
         gs.put_tile_layer(name, wanted["gridsets"], wanted["formats"], options)
         if seed:
             seed_cache(gs, name, wanted, seed)

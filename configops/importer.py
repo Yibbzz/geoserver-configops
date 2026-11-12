@@ -118,7 +118,12 @@ class Importer:
 
     def cache(self, name: str):
         tile_layer = self.gs.tile_layer(name)
-        return cache_setting(tile_layer, self.gs.parameter_filters(name) if tile_layer else None)
+        setting = cache_setting(tile_layer, self.gs.parameter_filters(name) if tile_layer else None)
+        extras = self.gs.tile_layer_extras(name) if tile_layer else {}
+        if setting and extras:
+            setting = {"gridsets": sorted(DEFAULT_GRIDSETS), "formats": sorted(DEFAULT_FORMATS)} if setting is True else setting
+            setting.update(extras)
+        return setting
 
     def style(self, ref: str | None) -> str | None:
         """A live style reference as the files write it, or None if it can't be."""
