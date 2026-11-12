@@ -3231,6 +3231,21 @@
         "name": {
           "type": "string",
           "minLength": 1
+        },
+        "parent": {
+          "type": "string",
+          "description": "The role this one inherits from: whatever the parent may do, this role may too"
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Role parameters, e.g. for a role service that uses them"
         }
       }
     },
@@ -3249,6 +3264,10 @@
             "minLength": 1
           },
           "description": "GeoServer role names"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Default: true. A group turned off gives its members none of its roles"
         }
       }
     },
@@ -3297,6 +3316,17 @@
             "minLength": 1
           },
           "description": "GeoServer role names"
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "User attributes"
         }
       }
     },
