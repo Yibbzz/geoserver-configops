@@ -17,7 +17,8 @@ from .geoserver import GeoServerError, MissingCredentials
 
 
 def wanted(spec: dict) -> dict:
-    return {"crs": spec["crs"], "extent": [float(v) for v in spec["extent"]], "resolutions": [float(r) for r in spec["resolutions"]],
+    levels = {"scales": [float(s) for s in spec["scales"]]} if "scales" in spec else {"resolutions": [float(r) for r in spec["resolutions"]]}
+    return {"crs": spec["crs"], "extent": [float(v) for v in spec["extent"]], **levels,
             "tileSize": spec.get("tileSize", 256), "alignTopLeft": spec.get("alignTopLeft", False),
             "metersPerUnit": float(spec.get("metersPerUnit", 1)),
             **{k: spec[k] for k in ("description", "levelNames", "yAxisFirst") if k in spec},
@@ -27,7 +28,8 @@ def wanted(spec: dict) -> dict:
 def live(gridset: dict) -> dict:
     tile = gridset.get("tileWidth")
     return {"crs": f"EPSG:{(gridset.get('srs') or {}).get('number')}", "extent": [float(v) for v in (gridset.get("extent") or {}).get("coords", [])],
-            "resolutions": [float(r) for r in gridset.get("resolutions") or []], "tileSize": tile,
+            "resolutions": [float(r) for r in gridset.get("resolutions") or []],
+            "scales": [float(s) for s in gridset.get("scaleDenominators") or []], "tileSize": tile,
             "alignTopLeft": gridset.get("alignTopLeft", False), "metersPerUnit": float(gridset.get("metersPerUnit") or 1),
             "description": gridset.get("description") or None, "pixelSize": float(gridset.get("pixelSize") or 2.8e-4),
             "levelNames": level_names(gridset.get("scaleNames")),
@@ -53,13 +55,14 @@ def plan(planner) -> None:
         want = wanted(r.spec)
 
         def run(name=name, want=want):
-            gs.put_gridset(name, int(want["crs"].split(":", 1)[1]), want["extent"], want["resolutions"], want["tileSize"],
+            gs.put_gridset(name, int(want["crs"].split(":", 1)[1]), want["extent"], want.get("resolutions"), want["tileSize"],
                            want["alignTopLeft"], want["metersPerUnit"],
                            {g: want[k] for k, g in (("description", "description"), ("levelNames", "scaleNames"),
-                                                     ("pixelSize", "pixelSize"), ("yAxisFirst", "yCoordinateFirst")) if k in want})
+                                                     ("pixelSize", "pixelSize"), ("yAxisFirst", "yCoordinateFirst"),
+                                                     ("scales", "scaleDenominators")) if k in want})
         current = gs.gridset(name)
         if current is None:
-            planner.add("+", "gridset", name, note=f"{want['crs']}, {len(want['resolutions'])} levels", run=run)
+            planner.add("+", "gridset", name, note=f"{want['crs']}, {len(want.get('resolutions') or want['scales'])} levels", run=run)
             continue
         have = live(current)
         changed = [(k, have[k], v) for k, v in want.items() if have[k] != v]

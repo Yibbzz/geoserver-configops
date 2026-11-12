@@ -168,7 +168,31 @@ def seed_cache(gs: GeoServer, name: str, cache: dict, seed: dict) -> None:
 
 
 ATTRIBUTE_FIELDS = {"source": "source", "description": "description", "nillable": "nillable", "minOccurs": "minOccurs",
-                    "maxOccurs": "maxOccurs", "binding": "binding"}  # spec -> GeoServer
+                    "maxOccurs": "maxOccurs", "binding": "binding", "range": "range", "options": "options"}  # spec -> GeoServer
+
+
+def attribute_value(key: str, value):
+    """A spec attribute field as GeoServer takes it."""
+    if key == "description":
+        return to_international(value)
+    if key == "range":
+        return {"min": value[0], "max": value[1]}
+    if key == "options":
+        return {"string": [str(v) for v in value]}
+    return value
+
+
+def attribute_live(key: str, attribute: dict):
+    """A live attribute field in the spec's form."""
+    value = attribute.get(ATTRIBUTE_FIELDS[key])
+    if key == "description":
+        return from_international(value)
+    if key == "range":
+        return [float(value["min"]), float(value["max"])] if isinstance(value, dict) and "min" in value else None
+    if key == "options":
+        items = (value or {}).get("string") if isinstance(value, dict) else None
+        return [str(v) for v in (items if isinstance(items, list) else [items] if items is not None else [])]
+    return value
 
 
 def to_international(text: str) -> dict:
@@ -191,7 +215,18 @@ def from_international(value) -> str | None:
 
 def wanted_attributes(attributes: list) -> list:
     """A layer's attributes as compared: a column's name, or {name, and the fields the file sets}."""
-    return [a if isinstance(a, str) else (a["name"] if set(a) == {"name"} else dict(a)) for a in attributes]
+    out = []
+    for a in attributes:
+        if isinstance(a, str) or set(a) == {"name"}:
+            out.append(a if isinstance(a, str) else a["name"])
+            continue
+        a = dict(a)
+        if "range" in a:
+            a["range"] = [float(v) for v in a["range"]]
+        if "options" in a:
+            a["options"] = [str(v) for v in a["options"]]
+        out.append(a)
+    return out
 
 
 def live_attributes(ft: dict, wanted: list) -> list:
@@ -205,8 +240,7 @@ def live_attributes(ft: dict, wanted: list) -> list:
         if w is None or set(w) == {"name"}:
             out.append(a["name"])
         else:
-            out.append({"name": a["name"], **{k: from_international(a.get("description")) if k == "description" else a.get(ATTRIBUTE_FIELDS[k])
-                                              for k in w if k != "name"}})
+            out.append({"name": a["name"], **{k: attribute_live(k, a) for k in w if k != "name"}})
     return out
 
 
@@ -502,7 +536,7 @@ class Planner:
                 kept.append(every[entry]) if entry in every else None
                 continue
             base = dict(every.get(entry["name"]) or {"name": entry["name"], "nillable": True, "minOccurs": 0, "maxOccurs": 1})
-            base.update({ATTRIBUTE_FIELDS[k]: to_international(v) if k == "description" else v for k, v in entry.items() if k != "name"})
+            base.update({ATTRIBUTE_FIELDS[k]: attribute_value(k, v) for k, v in entry.items() if k != "name"})
             kept.append(base)
         self.gs.request("PUT", path, {"featureType": {"attributes": {"attribute": kept}}})
 

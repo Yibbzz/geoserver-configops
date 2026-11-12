@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 from .geoserver import GeoServerError
 
 FOLDERS = {"PasswordPolicy": "pwpolicy", "AuthFilter": "filter", "AuthProvider": "auth",
-           "UserGroupService": "usergroup", "RoleService": "role"}
+           "UserGroupService": "usergroup", "RoleService": "role", "MasterPasswordProvider": "masterpw"}
 KINDS = tuple(FOLDERS)
 POLICY = {"uppercase": "uppercaseRequired", "lowercase": "lowercaseRequired", "digit": "digitRequired",
           "minLength": "minLength", "maxLength": "maxLength"}
@@ -187,6 +187,8 @@ def live_security(xml: str) -> dict:
     out["filterChains"] = [chain_of(e) for e in root.findall("filterChain/filters")]
     brute = root.find("bruteForcePrevention")
     out["bruteForcePrevention"] = to_value(brute) if brute is not None else {}
+    remember = root.find("rememberMeService")
+    out["rememberMe"] = to_value(remember) if remember is not None else {}
     return out
 
 
@@ -199,7 +201,7 @@ def compare_security(xml: str, wanted: dict) -> list[tuple[str, object, object]]
             here = [{k: c.get(k) for k in want} for c, want in zip(here, value)] + here[len(value):]
             if here != value:
                 out.append((key, [c["name"] for c in live["filterChains"]], [c["name"] for c in value]))
-        elif key == "bruteForcePrevention":
+        elif key in ("bruteForcePrevention", "rememberMe"):
             if not same(here, value):
                 out.append((key, here, value))
         elif here != value:
@@ -216,6 +218,8 @@ def set_security(xml: str, wanted: dict) -> str:
         set_value(root, "authProviderNames", wanted["authProviders"])
     if "bruteForcePrevention" in wanted:
         set_value(root, "bruteForcePrevention", wanted["bruteForcePrevention"])
+    if "rememberMe" in wanted:
+        set_value(root, "rememberMeService", wanted["rememberMe"])
     if "filterChains" in wanted:
         chains = root.find("filterChain")
         live = {e.get("name"): e for e in chains.findall("filters")} if chains is not None else {}

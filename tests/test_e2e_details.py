@@ -79,10 +79,10 @@ spec:
   internationalAbstract: { cy: Dyfnder afonydd }
   attributes:
     - id
-    - kind
+    - { name: kind, options: [river, sea] }
     - observed
     - ended
-    - { name: depth, description: Depth in metres, nillable: false, minOccurs: 1, maxOccurs: 2 }
+    - { name: depth, description: Depth in metres, nillable: false, minOccurs: 1, maxOccurs: 2, range: [0, 100] }
     - { name: kind_upper, source: "strToUpperCase(kind)", binding: java.lang.String }
   wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326], padWithZeros: true, forcedDecimal: true, encodeMeasures: true, simpleConversion: true }
   circularArcs: true
@@ -159,6 +159,11 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert dims["time"]["endAttribute"] == "ended" and dims["time"]["nearestMatchEnabled"] is True
     assert str(dims["time"]["resolution"]) == "86400000" and dims["elevation"]["unitSymbol"] == "m"
     assert ft["metadataLinks"]["metadataLink"]["content"] == "https://example.org/readings.xml"
+    attrs = {x["name"]: x for x in ft["attributes"]["attribute"]}
+    assert (attrs["depth"]["nillable"], attrs["depth"]["minOccurs"], attrs["depth"]["maxOccurs"]) == (False, 1, 2)
+    assert "Depth in metres" in str(attrs["depth"]["description"]) and attrs["kind_upper"]["source"] == "strToUpperCase(kind)"
+    assert attrs["kind_upper"]["binding"] == "java.lang.String" and attrs["kind_upper"]["maxOccurs"] == 1
+    assert attrs["depth"]["range"] == {"min": 0, "max": 100} and attrs["kind"]["options"] == {"string": ["river", "sea"]}
     assert ft["simpleConversionEnabled"] is True
     assert (ft["padWithZeros"], ft["forcedDecimal"], ft["encodeMeasures"], ft["circularArcPresent"], ft["linearizationTolerance"]) == (
         True, True, True, True, 0.5)

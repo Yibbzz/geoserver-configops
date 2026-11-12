@@ -43,6 +43,7 @@ def gs():
     yield gs
     gs.delete_workspace(WS)
     gs.gwc_request("DELETE", f"gridsets/{GRIDSET}")
+    gs.gwc_request("DELETE", "gridsets/e2e-by-scale")
     sql("DROP SCHEMA IF EXISTS e2e_tiles CASCADE")
 
 
@@ -84,6 +85,11 @@ spec:
   yAxisFirst: true
 ---
 apiVersion: configops/v1alpha1
+kind: Gridset
+metadata: {{ name: e2e-by-scale }}
+spec: {{ crs: EPSG:27700, extent: [0, 0, 700000, 1300000], scales: [5000000, 1000000, 250000] }}
+---
+apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: points }}
 spec:
@@ -119,6 +125,7 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert code == 0, out
     code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+    assert gs.gridset("e2e-by-scale")["scaleDenominators"] == [5000000, 1000000, 250000]
     gridset = gs.gridset(GRIDSET)
     assert gridset["resolutions"][-1] == 14 and gridset["description"] == "British National Grid for the e2e tests"
     assert gridset["yCoordinateFirst"] is True and float(gridset["pixelSize"]) == 0.0003 and "bng6" in str(gridset["scaleNames"])
@@ -176,6 +183,8 @@ spec:
       metaTilingThreads: 2
       seederCorePoolSize: 4
       seederMaxPoolSize: 8
+      cacheWarningSkips: [Default, Nearest]
+      lockProviderName: nioLock               # only written to the file: GeoServer reads it when it restarts, and this test puts it back
 """)
         code, out = configops(capsys, "plan", "-C", str(project))
         assert code == 2 and "global.tileCaching.cacheLayersByDefault" in out, out
@@ -185,6 +194,7 @@ spec:
         assert "<cacheLayersByDefault>false</cacheLayersByDefault>" in text and "<metaTilingY>3</metaTilingY>" in text
         assert "<securityEnabled>true</securityEnabled>" in text and "<string>image/png8</string>" in text
         assert "<multiLayerCachingEnabled>true</multiLayerCachingEnabled>" in text and "<seederMaxPoolSize>8</seederMaxPoolSize>" in text
+        assert "<warning>Nearest</warning>" in text and "<lockProviderName>nioLock</lockProviderName>" in text
         code, out = configops(capsys, "plan", "-C", str(project))
         assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     finally:
