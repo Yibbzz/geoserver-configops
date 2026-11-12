@@ -40,7 +40,7 @@ DEFAULTS = {  # what import leaves out; a file that spells them out means the sa
     "LayerGroup": {"mode": "single", "enabled": True, "advertised": True, "cache": False},
     "Store": {"enabled": True},
     "User": {"enabled": True, "groups": [], "roles": []},
-    "Group": {"roles": []},
+    "Group": {"roles": [], "enabled": True},
     "BlobStore": {"enabled": True, "default": False},
     "Workspace": {"isolated": False, "default": False},
     "URLCheck": {"enabled": True, "description": ""},

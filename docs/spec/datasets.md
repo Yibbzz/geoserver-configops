@@ -709,18 +709,22 @@ spec:
 | Kind | Field | Default | Meaning |
 | --- | --- | --- | --- |
 | `Role` | `name` | `metadata.name` upper-cased, dashes as underscores | The role's name in GeoServer |
+| | `parent` | none | A role this one inherits from: whatever the parent may do, this role may too |
+| | `properties` | none | Role parameters, `{ name: value }` |
 | `Group` | `name` | `metadata.name` | The group's name in GeoServer |
 | | `roles` | none | Roles every member has |
+| | `enabled` | `true` | A group turned off gives its members none of its roles |
 | `User` | `name` | `metadata.name` | The user name, for names `metadata.name` can't hold (`alice@example.org`) |
 | | `password` | required | `{ secret, key }`: the Secret and key holding it. In the chart, add the Secret to `configops.secrets` |
 | | `groups`, `roles` | none | Groups the user is in, and roles of their own |
 | | `enabled` | `true` | A disabled user can't log in |
+| | `properties` | none | User attributes, `{ name: value }` |
 | `AccessRule` | `roles` | required | Roles allowed, or `["*"]` for everyone |
 | | `layer` | | `{ workspace, layer, access }`: who may `read`, `write` or `admin` a layer. `*` (the default for `workspace` and `layer`) means all |
 | | `service` | | `{ service, operation }`: who may use an operation, e.g. `{ service: wfs, operation: Transaction }`. `*` means all |
 | | `rest` | | `{ path, methods }`: who may call the REST API on an Ant path, e.g. `{ path: /rest/workspaces/uk/**, methods: [GET] }` (`methods` default `[GET]`) |
 
-An `AccessRule` has exactly one of `layer`, `service` or `rest`. Roles are named as GeoServer shows them, and GeoServer's own `ADMIN` and `GROUP_ADMIN` can be used without defining them. How GeoServer hides what someone may not see is the global `Settings`' `catalogMode` (`hide`, `mixed` or `challenge`).
+A role's parent and properties, a user's properties and a group turned off aren't in GeoServer's REST API: `apply` writes them into the default services' files (`security/role/default/roles.xml`, `security/usergroup/default/users.xml`) and has GeoServer read its security files again. An `AccessRule` has exactly one of `layer`, `service` or `rest`. Roles are named as GeoServer shows them, and GeoServer's own `ADMIN` and `GROUP_ADMIN` can be used without defining them. How GeoServer hides what someone may not see is the global `Settings`' `catalogMode` (`hide`, `mixed` or `challenge`).
 
 **What's managed.** A project manages security only when it has at least one of these resources. Then users, groups, roles and rules the files don't name show as unmanaged, and `apply --prune` removes them. GeoServer's own are never touched unless a file names them: the `admin` user, the `ADMIN` and `GROUP_ADMIN` roles, and the default rules (everyone reads every layer, admins write, admins use the REST API). To change a default rule, write a rule with the same `layer`, `service` or `rest`. The `admin` user can't be a `User`: configops logs in as it, so change its password in GeoServer and the `geoserver-admin` Secret together.
 

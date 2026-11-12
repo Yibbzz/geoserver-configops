@@ -160,7 +160,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 
 | Page | Status | Notes |
 | --- | --- | --- |
-| Users, groups, roles | Yes | `User`, `Group`, `Role`, in GeoServer's default user/group and role services; passwords from Secrets |
+| Users, groups, roles | Yes | `User`, `Group`, `Role`, in GeoServer's default user/group and role services; passwords from Secrets; a role's parent and properties, a user's properties, a group turned off |
 | Data rules | Yes | `AccessRule` `layer:` |
 | Service rules | Yes | `AccessRule` `service:` |
 | REST rules | Yes | `AccessRule` `rest:`, kept in order |
