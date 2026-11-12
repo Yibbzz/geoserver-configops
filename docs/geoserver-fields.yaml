@@ -220,10 +220,12 @@ pages:
       simpleConversionEnabled:
         status: 'yes'
         spec: layer.wfs.simpleConversion
-      internationalTitle: &id003
-        status: 'no'
-        note: 'translations: internationalTitle and the like'
-      internationalAbstract: *id003
+      internationalTitle:
+        status: 'yes'
+        spec: layer.internationalTitle
+      internationalAbstract:
+        status: 'yes'
+        spec: layer.internationalAbstract
       metadata.cachingEnabled:
         status: 'yes'
         spec: layer.httpCache
@@ -667,8 +669,12 @@ pages:
       rootLayerStyle:
         status: 'yes'
         spec: layerGroup.rootStyle
-      internationalTitle: *id003
-      internationalAbstract: *id003
+      internationalTitle:
+        status: 'yes'
+        spec: layerGroup.internationalTitle
+      internationalAbstract:
+        status: 'yes'
+        spec: layerGroup.internationalAbstract
       layers:
         status: none
         note: 'the old name: GeoServer shows and keeps publishables'
@@ -787,14 +793,18 @@ pages:
       title:
         status: 'yes'
         spec: service_wms.title
-      internationalTitle: *id003
+      internationalTitle:
+        status: 'yes'
+        spec: service_wms.internationalTitle
       maintainer:
         status: 'yes'
         spec: service_wms.maintainer
       abstrct:
         status: 'yes'
         spec: service_wms.abstract
-      internationalAbstract: *id003
+      internationalAbstract:
+        status: 'yes'
+        spec: service_wms.internationalAbstract
       accessConstraints:
         status: 'yes'
         spec: service_wms.accessConstraints
@@ -897,8 +907,12 @@ pages:
         status: 'yes'
         spec: service_wms.geoserver
         note: passed through as GeoServer names it
-      internationalRootLayerTitle: *id003
-      internationalRootLayerAbstract: *id003
+      internationalRootLayerTitle:
+        status: 'yes'
+        spec: service_wms.internationalRootLayerTitle
+      internationalRootLayerAbstract:
+        status: 'yes'
+        spec: service_wms.internationalRootLayerAbstract
       maxRequestedDimensionValues:
         status: 'yes'
         spec: service_wms.maxRequestedDimensionValues
@@ -1339,22 +1353,54 @@ pages:
       welcome:
         status: 'yes'
         spec: settings.contact.welcome
-      internationalAddress: *id003
-      internationalAddressCity: *id003
-      internationalAddressCountry: *id003
-      internationalAddressDeliveryPoint: *id003
-      internationalAddressPostalCode: *id003
-      internationalAddressState: *id003
-      internationalAddressType: *id003
-      internationalContactEmail: *id003
-      internationalContactFacsimile: *id003
-      internationalContactOrganization: *id003
-      internationalContactPerson: *id003
-      internationalContactPosition: *id003
-      internationalContactVoice: *id003
-      internationalOnlineResource: *id003
-      internationalWelcome: *id003
-      internationalTitle: *id003
+      internationalAddress:
+        status: 'yes'
+        spec: settings.contact.internationalAddress
+      internationalAddressCity:
+        status: 'yes'
+        spec: settings.contact.internationalAddressCity
+      internationalAddressCountry:
+        status: 'yes'
+        spec: settings.contact.internationalAddressCountry
+      internationalAddressDeliveryPoint:
+        status: 'yes'
+        spec: settings.contact.internationalAddressDeliveryPoint
+      internationalAddressPostalCode:
+        status: 'yes'
+        spec: settings.contact.internationalAddressPostalCode
+      internationalAddressState:
+        status: 'yes'
+        spec: settings.contact.internationalAddressState
+      internationalAddressType:
+        status: 'yes'
+        spec: settings.contact.internationalAddressType
+      internationalContactEmail:
+        status: 'yes'
+        spec: settings.contact.internationalContactEmail
+      internationalContactFacsimile:
+        status: 'yes'
+        spec: settings.contact.internationalContactFacsimile
+      internationalContactOrganization:
+        status: 'yes'
+        spec: settings.contact.internationalContactOrganization
+      internationalContactPerson:
+        status: 'yes'
+        spec: settings.contact.internationalContactPerson
+      internationalContactPosition:
+        status: 'yes'
+        spec: settings.contact.internationalContactPosition
+      internationalContactVoice:
+        status: 'yes'
+        spec: settings.contact.internationalContactVoice
+      internationalOnlineResource:
+        status: 'yes'
+        spec: settings.contact.internationalOnlineResource
+      internationalWelcome:
+        status: 'yes'
+        spec: settings.contact.internationalWelcome
+      internationalTitle:
+        status: 'yes'
+        spec: settings.contact.internationalTitle
     ImageProcessingInfoImpl:
       allowInterpolation:
         status: 'yes'

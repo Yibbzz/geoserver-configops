@@ -55,6 +55,8 @@ def restore(live: dict, saved: dict) -> dict:
             out[key] = ""
         elif isinstance(value, dict) and "string" in value:
             out[key] = {"string": []}
+        elif key.startswith("international"):
+            out[key] = {"cy": ""}  # GeoServer can't drop a language map; a new one replaces it whole: leave a blank one
         elif key == "metadataLink":
             out[key] = {k: "" for k in value}  # GeoServer keeps the element once there is one: blank it
         elif key == "metadata":
@@ -72,7 +74,9 @@ def example(props: dict) -> dict:
             # the master password needs a real Secret; tile caching defaults are a file GeoServer reads when it starts
             # (test_e2e_tiles.py); security: test_e2e_auth.py; request logging and URL checks: test_e2e_url_checks.py
             continue
-        if name in VALUES:
+        if prop.get("$ref") == "#/$defs/translations":
+            out[name] = {"cy": f"e2e {name} cy"}
+        elif name in VALUES:
             out[name] = VALUES[name]
         elif "enum" in prop:
             out[name] = prop["enum"][-1]

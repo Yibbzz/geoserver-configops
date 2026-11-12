@@ -58,6 +58,11 @@ DEFAULT_RULE_ROLES = {"*.*.r": ["*"], "*.*.w": ["ADMIN", "GROUP_ADMIN"], "wfs.Cr
                       "wfs.DropStoredQuery": ["ADMIN", "GROUP_ADMIN"], "/**:GET,HEAD": ["ADMIN"], "/**:POST,DELETE,PUT": ["ADMIN"]}
 
 
+def no_attributes(value):
+    """A language map without GeoServer's "@class": {"@class": "...", "cy": "..."} -> {"cy": "..."}."""
+    return {k: v for k, v in value.items() if not k.startswith("@") and v not in (None, "")} if isinstance(value, dict) else value
+
+
 def differing(live: dict, props: dict, defaults: dict) -> dict:
     """The schema's fields (`props`) whose live value is set and isn't the default, in the spec's form."""
     out = {}
@@ -69,7 +74,9 @@ def differing(live: dict, props: dict, defaults: dict) -> dict:
             from .keywords import to_entries
 
             value = to_entries(value)
-        if value in (None, "", []):
+        if prop.get("$ref") == "#/$defs/translations":
+            value = no_attributes(value)
+        if value in (None, "", [], {}):
             continue
         if prop.get("type") == "object" and isinstance(value, dict):
             known = prop.get("properties")  # none: any key (gml's versions)
@@ -90,8 +97,8 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
 
     live = (gs.get("settings") or {}).get("global") or {}
     spec = {}
-    contact = {k: v for k, v in ((gs.get("settings/contact") or {}).get("contact") or {}).items()
-               if k in props["contact"]["properties"] and v not in (None, "")}
+    contact = {k: no_attributes(v) for k, v in ((gs.get("settings/contact") or {}).get("contact") or {}).items()
+               if k in props["contact"]["properties"] and no_attributes(v) not in (None, "", {})}
     if contact:
         spec["contact"] = contact
     spec.update(differing(live.get("settings") or {}, props, DEFAULTS["settings"]))
@@ -121,7 +128,8 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
         if "workspace" not in own:
             continue  # no settings of its own
         spec = {"workspace": ws}
-        contact = {k: v for k, v in (own.get("contact") or {}).items() if k in props["contact"]["properties"] and v not in (None, "")}
+        contact = {k: no_attributes(v) for k, v in (own.get("contact") or {}).items()
+                   if k in props["contact"]["properties"] and no_attributes(v) not in (None, "", {})}
         if contact:
             spec["contact"] = contact
         spec.update(differing(own, props, DEFAULTS["settings"]))

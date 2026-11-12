@@ -14,6 +14,7 @@ from __future__ import annotations
 
 PRESENTATIONS = {"list": "LIST", "continuous": "CONTINUOUS_INTERVAL", "interval": "DISCRETE_INTERVAL"}
 WCS = {"requestCRS": "requestSRS", "responseCRS": "responseSRS", "formats": "supportedFormats", "interpolations": "interpolationMethods"}
+TRANSLATED = ("internationalTitle", "internationalAbstract")  # {language: text}, on a resource or a group
 BAND_FIELDS = ("name", "description", "unit", "nullValues", "range")
 DIMENSION_FIELDS = {"acceptableInterval": "acceptableInterval", "nearestFailBehavior": "nearestFailBehavior",
                     "rawNearestMatch": "rawNearestMatchEnabled", "start": "startValue", "end": "endValue"}  # spec -> GeoServer
@@ -97,6 +98,9 @@ def wanted_resource(spec: dict) -> dict[str, object]:
     out: dict[str, object] = {}
     if "filter" in spec:
         out["filter"] = spec["filter"]
+    for key in TRANSLATED:
+        if key in spec:
+            out[key] = {str(k): str(v) for k, v in spec[key].items()}
     wfs = spec.get("wfs") or {}
     for key in ("maxFeatures", "decimals", "skipNumberMatched", "padWithZeros", "forcedDecimal", "encodeMeasures", "simpleConversion"):
         if key in wfs:
@@ -159,7 +163,10 @@ def live_resource(resource: dict, wanted: dict[str, object]) -> dict[str, object
     meta = entries(resource)
     out: dict[str, object] = {}
     for key in wanted:
-        if key == "filter":
+        if key in TRANSLATED:
+            live = resource.get(key)
+            out[key] = {k: v for k, v in live.items() if v} if isinstance(live, dict) else {}
+        elif key == "filter":
             out[key] = resource.get("cqlFilter")
         elif key == "wfs.maxFeatures":
             out[key] = resource.get("maxFeatures")
@@ -209,7 +216,9 @@ def patch_resource(resource: dict, wanted: dict[str, object]) -> dict:
     out: dict = {}
     updates: dict[str, dict] = {}
     for key, value in wanted.items():
-        if key == "filter":
+        if key in TRANSLATED:
+            out[key] = value
+        elif key == "filter":
             out["cqlFilter"] = value
         elif key == "wfs.maxFeatures":
             out["maxFeatures"] = value
@@ -339,6 +348,10 @@ def to_spec(resource: dict, layer: dict) -> dict:
     out: dict = {}
     if resource.get("cqlFilter"):
         out["filter"] = resource["cqlFilter"]
+    for key in TRANSLATED:
+        texts = {k: v for k, v in (resource.get(key) or {}).items() if v} if isinstance(resource.get(key), dict) else {}
+        if texts:
+            out[key] = texts
     wfs: dict = {}
     if resource.get("maxFeatures"):
         wfs["maxFeatures"] = resource["maxFeatures"]

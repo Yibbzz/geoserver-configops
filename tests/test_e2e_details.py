@@ -75,6 +75,8 @@ spec:
   table: { schema: e2e_details, name: readings }
   keywords: [e2e, rivers, { keyword: afonydd, language: cy, vocabulary: GEMET }]
   filter: "kind = 'river'"
+  internationalTitle: { cy: Darlleniadau afonydd, fr: Relevés des rivières }
+  internationalAbstract: { cy: Dyfnder afonydd }
   attributes:
     - id
     - kind
@@ -119,6 +121,8 @@ spec:
   abstract: Readings by kind
   keywords: [e2e, readings, { keyword: darlleniadau, language: cy }]
   queryable: false
+  internationalTitle: { cy: Darlleniadau }
+  internationalAbstract: { cy: Darlleniadau fesul math }
   attribution: { title: Readings group, link: "https://example.org/group" }
   authorityURLs: [ { name: e2e, href: "https://example.org/authority" } ]
   identifiers: [ { authority: e2e, identifier: readings-group } ]
@@ -162,6 +166,7 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert dims["time"]["defaultValue"]["strategy"] == "MAXIMUM" and dims["time"]["acceptableInterval"] == "PT12H"
     assert str(dims["elevation"]["defaultValue"]["referenceValue"]) == "5" and str(dims["elevation"]["endValue"]) == "100"
     assert layer["identifiers"]["Identifier"]["identifier"] == "river-readings"
+    assert ft["internationalTitle"]["cy"] == "Darlleniadau afonydd" and group["internationalTitle"] == {"cy": "Darlleniadau"}
     assert group["queryDisabled"] is True and group["attribution"]["href"] == "https://example.org/group"
     assert group["authorityURLs"]["AuthorityURL"]["href"] == "https://example.org/authority"
 

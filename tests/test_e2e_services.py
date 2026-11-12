@@ -218,6 +218,30 @@ def test_layer_services_identifiers_and_a_group_that_isnt_queryable(gs, project,
     assert "wms_only" not in wfs
 
 
+WELSH = """---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: welsh }
+spec:
+  table: { schema: e2e_services, name: readings }
+  title: River readings
+  internationalTitle: { cy: Darlleniadau afonydd }
+"""
+
+
+def test_capabilities_in_another_language(gs, project, capsys):
+    (project / "project.yaml").write_text(HEAD + VECTOR + WELSH)
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+
+    def caps(language=None):
+        params = {"service": "WMS", "request": "GetCapabilities", "version": "1.3.0"}
+        if language:
+            params["AcceptLanguages"] = language
+        return requests.get(f"{SERVICES}/{WS}/wms", params=params, timeout=60).text
+    assert "Darlleniadau afonydd" in eventually(lambda: caps("cy"), lambda c: "Darlleniadau afonydd" in c)
+    assert "River readings" in caps() and "Darlleniadau afonydd" not in caps()
+
+
 COMPUTED = """---
 apiVersion: configops/v1alpha1
 kind: Layer
