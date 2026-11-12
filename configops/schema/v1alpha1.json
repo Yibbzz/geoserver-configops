@@ -1785,6 +1785,12 @@
               "description": "Extra request parameters"
             }
           }
+        },
+        "internationalTitle": {
+          "$ref": "#/$defs/translations"
+        },
+        "internationalAbstract": {
+          "$ref": "#/$defs/translations"
         }
       },
       "if": {
@@ -2019,6 +2025,12 @@
         "queryable": {
           "type": "boolean",
           "description": "Whether GetFeatureInfo answers for the group. Default: true"
+        },
+        "internationalTitle": {
+          "$ref": "#/$defs/translations"
+        },
+        "internationalAbstract": {
+          "$ref": "#/$defs/translations"
         }
       }
     },
@@ -2122,6 +2134,54 @@
             },
             "welcome": {
               "type": "string"
+            },
+            "internationalAddress": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalAddressCity": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalAddressCountry": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalAddressDeliveryPoint": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalAddressPostalCode": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalAddressState": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalAddressType": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalContactEmail": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalContactFacsimile": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalContactOrganization": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalContactPerson": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalContactPosition": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalContactVoice": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalOnlineResource": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalWelcome": {
+              "$ref": "#/$defs/translations"
+            },
+            "internationalTitle": {
+              "$ref": "#/$defs/translations"
             }
           }
         },
@@ -2863,6 +2923,18 @@
               "type": "boolean"
             }
           }
+        },
+        "internationalTitle": {
+          "$ref": "#/$defs/translations"
+        },
+        "internationalAbstract": {
+          "$ref": "#/$defs/translations"
+        },
+        "internationalRootLayerTitle": {
+          "$ref": "#/$defs/translations"
+        },
+        "internationalRootLayerAbstract": {
+          "$ref": "#/$defs/translations"
         }
       }
     },
@@ -3083,6 +3155,12 @@
               }
             }
           }
+        },
+        "internationalTitle": {
+          "$ref": "#/$defs/translations"
+        },
+        "internationalAbstract": {
+          "$ref": "#/$defs/translations"
         }
       }
     },
@@ -3197,6 +3275,12 @@
               "description": "e.g. ISO19115:2003"
             }
           }
+        },
+        "internationalTitle": {
+          "$ref": "#/$defs/translations"
+        },
+        "internationalAbstract": {
+          "$ref": "#/$defs/translations"
         }
       }
     },
@@ -3276,6 +3360,12 @@
               "description": "e.g. ISO19115:2003"
             }
           }
+        },
+        "internationalTitle": {
+          "$ref": "#/$defs/translations"
+        },
+        "internationalAbstract": {
+          "$ref": "#/$defs/translations"
         }
       }
     },
@@ -4153,6 +4243,16 @@
           "minLength": 1,
           "description": "A Java regular expression the whole URL must match"
         }
+      }
+    },
+    "translations": {
+      "type": "object",
+      "description": "Text per language, by language code: { cy: Mapiau, fr: Cartes }",
+      "propertyNames": {
+        "pattern": "^[a-z]{2,3}([_-][A-Za-z0-9]{2,8})*$"
+      },
+      "additionalProperties": {
+        "type": "string"
       }
     }
   }
