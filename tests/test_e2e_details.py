@@ -37,7 +37,7 @@ def gs():
     gs = GeoServer(URL.removesuffix("/rest"), "admin", PASSWORD)
     gs.delete_workspace(WS)
     sql("CREATE EXTENSION IF NOT EXISTS postgis; DROP SCHEMA IF EXISTS e2e_details CASCADE; CREATE SCHEMA e2e_details;"
-        "CREATE TABLE e2e_details.readings (id serial PRIMARY KEY, kind text, observed timestamp, geom geometry(Point, 27700));"
+        "CREATE TABLE e2e_details.readings (id serial PRIMARY KEY, kind text, observed timestamp, ended timestamp, depth int, geom geometry(Point, 27700));"
         "INSERT INTO e2e_details.readings (kind, observed, geom) VALUES "
         "('river', '2026-01-01', ST_SetSRID(ST_MakePoint(1, 1), 27700)), ('sea', '2026-02-01', ST_SetSRID(ST_MakePoint(2, 2), 27700))")
     yield gs
@@ -73,11 +73,14 @@ kind: Layer
 metadata: { name: river-readings }
 spec:
   table: { schema: e2e_details, name: readings }
+  keywords: [e2e, rivers]
   filter: "kind = 'river'"
   wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326] }
   metadataLinks: [ { url: "https://example.org/readings.xml", type: text/xml, standard: ISO19115:2003 } ]
   httpCache: { maxAge: 300 }
-  dimensions: { time: { attribute: observed, presentation: list } }
+  dimensions:
+    time: { attribute: observed, endAttribute: ended, presentation: interval, resolution: "86400000", units: ISO8601, nearestMatch: true }
+    elevation: { attribute: depth, presentation: list, units: EPSG:5030, unitSymbol: m }
   opaque: true
   buffer: 6
   attribution: { title: Readings, link: "https://example.org", logo: { url: "https://example.org/logo.png", width: 16, height: 16, type: image/png } }
@@ -95,7 +98,7 @@ spec:
 apiVersion: configops/v1alpha1
 kind: LayerGroup
 metadata: { name: readings-eo }
-spec: { mode: eo, rootLayer: river-readings, layers: [kinds] }
+spec: { mode: eo, rootLayer: river-readings, layers: [kinds], abstract: Readings by kind, keywords: [e2e, readings] }
 """)
     return tmp_path
 
@@ -113,14 +116,22 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     ft = gs.featuretype(WS, "e2e_details", "river_readings")["featureType"]
     assert ft["cqlFilter"] == "kind = 'river'" and ft["maxFeatures"] == 100
+    assert ft["store"]["name"] == f"{WS}:e2e_details" and ft["namespace"]["name"] == WS and ft["nativeName"] == "readings"
+    assert ft["keywords"]["string"] == ["e2e", "rivers"]
     assert gs.layer(WS, "river_readings")["layer"]["attribution"]["logoURL"] == "https://example.org/logo.png"
     layer = gs.layer(WS, "river_readings")["layer"]
+    assert layer["resource"]["name"] == f"{WS}:river_readings"
     assert layer["path"] == "/water/rivers" and layer["defaultWMSInterpolationMethod"] == "Bicubic"
     assert ft["dataLinks"]["org.geoserver.catalog.impl.DataLinkInfoImpl"]["content"] == "https://example.org/readings.csv"
     kinds = gs.featuretype(WS, "e2e_details", "kinds")["featureType"]
     assert kinds["metadata"]["entry"]["@key"] == "dim_kind"
     group = gs.layergroup("readings_eo", WS)["layerGroup"]
     assert group["mode"] == "EO" and group["rootLayer"]["name"] == f"{WS}:river_readings"
+    assert group["abstractTxt"] == "Readings by kind" and "readings" in str(group["keywords"])
+    dims = {e["@key"]: e.get("dimensionInfo") for e in ft["metadata"]["entry"] if "dimensionInfo" in e}
+    assert dims["time"]["endAttribute"] == "ended" and dims["time"]["nearestMatchEnabled"] is True
+    assert str(dims["time"]["resolution"]) == "86400000" and dims["elevation"]["unitSymbol"] == "m"
+    assert ft["metadataLinks"]["metadataLink"]["content"] == "https://example.org/readings.xml"
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):

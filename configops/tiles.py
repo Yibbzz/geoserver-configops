@@ -57,7 +57,7 @@ def plan(planner) -> None:
 DATA = "/data"
 # spec name -> GeoWebCache's, for each cloud type; what the files don't set is left out
 FIELDS = {
-    "s3": {"bucket": "bucket", "prefix": "prefix", "endpoint": "endpoint", "region": "awsRegion", "access": "access",
+    "s3": {"bucket": "bucket", "prefix": "prefix", "endpoint": "endpoint", "access": "access",
            "maxConnections": "maxConnections", "gzip": "useGzip"},
     "azure": {"container": "container", "prefix": "prefix", "endpoint": "serviceURL", "maxConnections": "maxConnections"},
     "gcs": {"bucket": "bucket", "prefix": "prefix", "project": "projectId", "endpoint": "endpointUrl",
@@ -91,8 +91,8 @@ def wanted_blob_store(r, root) -> tuple[str, dict]:
             raise MissingCredentials(f"blob store {r.name}: secret {ref} needs keys {' and '.join(KEYS[kind])}")
     values = {k: spec[k] for k in FIELDS[kind] if spec.get(k) not in ("", None)}
     if kind == "s3":
-        values = {"prefix": "", "endpoint": "", "region": "", "maxConnections": 50, "gzip": True, **values,
-                  "access": spec.get("access", "private").upper().replace("-", "_")}
+        values = {"prefix": "", "endpoint": "", "maxConnections": 50, "gzip": True, **values,
+                  "access": spec.get("access", "private").upper()}
     fields.update({k: v for k, v in values.items() if v not in ("", None)})
     fields.update(keys)
     for k, tag in FIELDS[kind].items():

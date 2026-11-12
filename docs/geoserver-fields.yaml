@@ -33,8 +33,8 @@ pages:
         spec: workspace.namespace
       metadata: *id002
       isolated:
-        status: 'yes'
-        spec: workspace.isolated
+        status: none
+        note: GeoServer copies it from the workspace's isolated
   Stores:
     StoreInfoImpl:
       name:
@@ -80,8 +80,8 @@ pages:
         status: 'yes'
         spec: store.url, store.path
       format:
-        status: 'yes'
-        spec: store.type
+        status: none
+        note: 'REST doesn''t show it: type holds the store''s format'
     WMSStoreInfoImpl:
       capabilitiesURL:
         status: 'yes'
@@ -92,6 +92,8 @@ pages:
       password:
         status: 'yes'
         spec: store.credentials
+        test: test_e2e_stores.py::test_apply_then_nothing_to_do
+        note: comes back encrypted, so a test checks it
       headerName:
         status: 'no'
       headerValue:
@@ -118,6 +120,8 @@ pages:
       password:
         status: 'yes'
         spec: store.credentials
+        test: test_e2e_stores.py::test_apply_then_nothing_to_do
+        note: comes back encrypted, so a test checks it
       maxConnections:
         status: 'no'
       readTimeout:
@@ -148,6 +152,7 @@ pages:
       namespace:
         status: 'yes'
         spec: layer.workspace
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       title:
         status: 'yes'
         spec: layer.title
@@ -192,6 +197,7 @@ pages:
       store:
         status: 'yes'
         spec: layer.store, layer.dataset
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       serviceConfiguration:
         status: 'no'
         note: 'the layer''s ''Services'' settings: turning WMS, WFS and so on off for one layer'
@@ -285,6 +291,7 @@ pages:
         spec: layer.attributes
         note: XStream leaves it out; REST writes it
         extra: true
+        test: test_e2e_layer_data.py::test_apply_then_nothing_to_do
     CoverageInfoImpl:
       nativeFormat:
         status: none
@@ -298,6 +305,7 @@ pages:
       interpolationMethods:
         status: 'yes'
         spec: layer.wcs.interpolations
+        test: test_e2e_services.py::test_raster_interpolation_wcs_formats_and_bands
       defaultInterpolationMethod:
         status: 'yes'
         spec: layer.wcs.defaultInterpolation
@@ -361,6 +369,7 @@ pages:
       resource:
         status: 'yes'
         spec: layer.table, layer.resource, layer.sql
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       legend:
         status: none
         note: 'legacy: the web UI sets the legend on the style'
@@ -404,6 +413,7 @@ pages:
       name:
         status: 'yes'
         spec: layer.attributes
+        test: test_e2e_layer_data.py::test_apply_then_nothing_to_do
       minOccurs:
         status: 'no'
         note: feature type customisation
@@ -567,6 +577,7 @@ pages:
       value:
         status: 'yes'
         spec: layer.keywords
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       language:
         status: 'no'
         note: keyword language
@@ -639,8 +650,8 @@ pages:
       internationalTitle: *id003
       internationalAbstract: *id003
       layers:
-        status: 'yes'
-        spec: layerGroup.layers.layer
+        status: none
+        note: 'the old name: GeoServer shows and keeps publishables'
       publishables:
         status: 'yes'
         spec: layerGroup.layers.layer
@@ -700,21 +711,24 @@ pages:
       name:
         status: 'yes'
         spec: style
+        test: test_e2e_layer_data.py::test_apply_then_nothing_to_do
       workspace:
         status: 'yes'
         spec: style.workspace
+        test: test_e2e_layer_data.py::test_apply_then_nothing_to_do
       sldVersion:
-        status: 'yes'
-        spec: style.file
-        note: from the file
+        status: none
+        note: 'an old copy: REST shows languageVersion'
       format:
         status: 'yes'
         spec: style.file
         note: from the file's extension
+        test: test_e2e_layer_data.py::test_apply_then_nothing_to_do
       languageVersion:
         status: 'yes'
         spec: style.file
         note: from the file
+        test: test_e2e_layer_data.py::test_apply_then_nothing_to_do
       filename:
         status: none
         note: named by GeoServer
@@ -1129,8 +1143,8 @@ pages:
         status: 'yes'
         spec: settings.global.globalServices
       useHeadersProxyURL:
-        status: 'yes'
-        spec: settings.useHeadersProxyURL
+        status: none
+        note: 'an old copy: the settings object holds it'
       xmlPostRequestLogBufferSize:
         status: 'yes'
         spec: settings.global.xmlPostRequestLogBufferSize
@@ -1482,9 +1496,8 @@ pages:
         status: none
         note: the layer's styles
       defaultStyle:
-        status: 'yes'
-        spec: cache.parameterFilters
-        note: default
+        status: none
+        note: the layer's default style, copied by GeoServer; the filter's own default is defaultValue
     ParameterFilter:
       key:
         status: 'yes'
@@ -2307,6 +2320,7 @@ pages:
         status: 'yes'
         spec: settings.global.catalogMode
         extra: true
+        test: test_e2e_settings.py::test_every_field_is_applied_then_nothing_to_do
   Files:
     ResourceFiles:
       templates:
@@ -2325,6 +2339,7 @@ pages:
         status: 'yes'
         spec: settings.global.masterPassword
         extra: true
+        test: test_e2e_settings.py::test_master_password_is_changed_and_back
 parents:
   AnonymousAuthenticationFilterConfig: SecurityFilterConfig
   AuthenticationKeyFilterConfig: SecurityFilterConfig

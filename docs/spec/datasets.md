@@ -520,9 +520,8 @@ spec:
   type: s3
   bucket: tiles
   prefix: gscloud
-  endpoint: https://s3.eu-west-2.amazonaws.com   # any S3-compatible service; http:// turns HTTPS off
-  region: eu-west-2
-  access: private                          # or public-read
+  endpoint: https://s3.eu-west-2.amazonaws.com   # the region's address, or any S3-compatible service; http:// turns HTTPS off
+  access: private                          # or public: GeoWebCache makes the tiles readable by anyone
   credentials: { secret: tiles-s3 }        # keys accessKey and secretKey; add the Secret to configops.secrets
 ```
 

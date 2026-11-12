@@ -184,8 +184,8 @@ metadata: { name: dem }
 spec:
   store: dem
   wms: { interpolation: INTERPOLATION }
-  wcs: { formats: [GeoTIFF], requestCRS: [EPSG:27700] }
-  bands: [ { name: HEIGHT, description: Height above sea level, unit: m, nullValues: [-9999] } ]
+  wcs: { formats: [GeoTIFF], requestCRS: [EPSG:27700], interpolations: [nearest neighbor] }
+  bands: [ { name: HEIGHT, description: Height above sea level, unit: m, nullValues: [-9999], range: [0, 1000] } ]
 """
 
 
@@ -229,6 +229,11 @@ def test_raster_interpolation_wcs_formats_and_bands(gs, raster, env, capsys):
         "service": "WCS", "version": "2.0.1", "request": "DescribeCoverage", "coverageId": f"{WS}__dem"}).text,
         lambda t: 'name="HEIGHT"' in t)
     assert 'name="HEIGHT"' in describe and 'code="m"' in describe and "-9999" in describe
+    coverage = gs.request("GET", f"workspaces/{WS}/coverages/dem.json").json()["coverage"]
+    assert coverage["interpolationMethods"]["string"] in ("nearest neighbor", ["nearest neighbor"])
+    band = coverage["dimensions"]["coverageDimension"]
+    band = band[0] if isinstance(band, list) else band
+    assert (float(band["range"]["min"]), float(band["range"]["max"])) == (0.0, 1000.0)
     png = requests.get(f"{SERVICES}/{WS}/wcs", timeout=60, params={
         "service": "WCS", "version": "2.0.1", "request": "GetCoverage", "coverageId": f"{WS}__dem", "format": "image/png"})
     assert "ExceptionReport" in png.text[:2000] or png.status_code >= 400  # only GeoTIFF is allowed

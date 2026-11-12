@@ -119,7 +119,9 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     ft = gs.featuretype(WS, "e2e_layer_data", "sites")["featureType"]
     assert [a["name"] for a in ft["attributes"]["attribute"]] == ["geom", "name", "kind"]
     assert ft["srs"] == "EPSG:27700" and ft["projectionPolicy"] == "FORCE_DECLARED"
-    assert gs.style("dots", WS)["style"]["legend"]["onlineResource"] == "https://example.org/dots.png"
+    style = gs.style("dots", WS)["style"]
+    assert style["legend"]["onlineResource"] == "https://example.org/dots.png"
+    assert (style["name"], style["workspace"]["name"], style["format"], style["languageVersion"]["version"]) == ("dots", WS, "sld", "1.0.0")
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):

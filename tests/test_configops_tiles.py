@@ -52,3 +52,12 @@ def test_caching_defaults_change_only_the_fields_set():
     assert [k for k, _, _ in compare_gwc(xml, wanted)] == ["cacheLayersByDefault", "defaultCachingGridSetIds", "WMTSEnabled"]
     new = set_gwc(xml, wanted)
     assert compare_gwc(new, wanted) == [] and "<gutter>0</gutter>" in new
+
+
+def test_an_integers_filter_keeps_a_whole_threshold():
+    """GeoWebCache refuses "2.0" as an integers filter's threshold."""
+    from configops.plan import wanted_filters
+
+    wanted = wanted_filters({"BUFFER": {"type": "integers", "values": [0, 8], "threshold": 2}})
+    assert wanted["BUFFER"]["threshold"] == 2 and isinstance(wanted["BUFFER"]["threshold"], int)
+    assert "<threshold>2</threshold>" in filter_xml("BUFFER", wanted["BUFFER"])

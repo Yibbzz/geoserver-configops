@@ -95,3 +95,13 @@ def test_wms_path_and_interpolation_on_the_layer():
     wanted = details.wanted_layer({"wms": {"path": "/a/b", "interpolation": "bicubic"}})
     assert details.patch_layer({}, wanted) == {"path": "/a/b", "defaultWMSInterpolationMethod": "Bicubic"}
     assert details.to_spec({}, {"path": "/a/b", "defaultWMSInterpolationMethod": "Bicubic"})["wms"] == {"path": "/a/b", "interpolation": "bicubic"}
+
+
+def test_a_dimension_resolution_compares_as_text():
+    """GeoServer gives a resolution back as a number; the files have it as text."""
+    from configops.details import live_resource, wanted_resource
+
+    wanted = wanted_resource({"dimensions": {"time": {"attribute": "t", "presentation": "interval", "resolution": "86400000"}}})
+    live = {"metadata": {"entry": [{"@key": "time", "dimensionInfo": {
+        "enabled": True, "attribute": "t", "presentation": "DISCRETE_INTERVAL", "resolution": 86400000}}]}}
+    assert live_resource(live, wanted) == wanted

@@ -94,7 +94,8 @@ spec:
       CQL_FILTER: {{ type: values, values: [INCLUDE, "id = 1"], default: INCLUDE }}
       TIME: {{ type: regex, regex: "[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}" }}
       ELEVATION: {{ type: numbers, values: [0, 10.5], default: 0, threshold: 0.01 }}
-      STYLES: {{ type: styles, values: [point] }}
+      STYLES: {{ type: styles, values: [point], default: point }}
+      BUFFER: {{ type: integers, values: [0, 8, 16], default: 0, threshold: 2 }}
 """)
     return tmp_path
 
@@ -116,6 +117,8 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     filters = gs.parameter_filters(f"{WS}:points")
     assert filters["CQL_FILTER"]["values"] == ["INCLUDE", "id = 1"] and filters["ELEVATION"]["values"] == [0.0, 10.5]
     assert filters["TIME"]["regex"] == "[0-9]{4}-[0-9]{2}-[0-9]{2}" and filters["STYLES"]["values"] == ["point"]
+    assert filters["STYLES"].get("default") == "point"
+    assert filters["BUFFER"]["values"] == [0, 8, 16] and float(filters["BUFFER"]["threshold"]) == 2
 
 
 def test_a_changed_filter_is_drift(gs, project, capsys):
@@ -139,14 +142,30 @@ kind: Settings
 metadata: { name: global }
 spec:
   global:
-    tileCaching: { cacheLayersByDefault: false, metaTilingX: 2, defaultCachingGridSetIds: [EPSG:900913], WMTSEnabled: true }
+    tileCaching:                       # each one different from GeoWebCache's default
+      cacheLayersByDefault: false
+      metaTilingX: 2
+      metaTilingY: 3
+      gutter: 5
+      defaultCachingGridSetIds: [EPSG:900913]
+      WMTSEnabled: true
+      directWMSIntegrationEnabled: true
+      requireTiledParameter: false
+      WMSCEnabled: false
+      TMSEnabled: false
+      securityEnabled: true
+      cacheNonDefaultStyles: false
+      defaultCoverageCacheFormats: [image/png]
+      defaultVectorCacheFormats: [image/png8]
+      defaultOtherCacheFormats: [image/gif]
 """)
         code, out = configops(capsys, "plan", "-C", str(project))
         assert code == 2 and "global.tileCaching.cacheLayersByDefault" in out, out
         code, out = configops(capsys, "apply", "-C", str(project))
         assert code == 0 and "rollout restart" in out, out
         text = gs.request("GET", "resource/gwc-gs.xml").text
-        assert "<cacheLayersByDefault>false</cacheLayersByDefault>" in text and "<metaTilingY>4</metaTilingY>" in text
+        assert "<cacheLayersByDefault>false</cacheLayersByDefault>" in text and "<metaTilingY>3</metaTilingY>" in text
+        assert "<securityEnabled>true</securityEnabled>" in text and "<string>image/png8</string>" in text
         code, out = configops(capsys, "plan", "-C", str(project))
         assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     finally:

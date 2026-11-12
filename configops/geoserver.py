@@ -294,7 +294,7 @@ class GeoServer:
 
     def upsert_layergroup(self, name: str, layers: list[tuple[str, str, str | None]], ws: str | None = None,
                           title: str | None = None, abstract: str | None = None, mode: str = "single",
-                          root: tuple[str, str | None] | None = None) -> str:
+                          root: tuple[str, str | None] | None = None, keywords: list[str] | None = None) -> str:
         """`layers`: (kind "layer" or "layerGroup", qualified name, style or None), first drawn at the bottom."""
         base = f"workspaces/{q(ws)}/layergroups" if ws else "layergroups"
         group: dict = {
@@ -304,6 +304,8 @@ class GeoServer:
         }
         if abstract is not None:
             group["abstractTxt"] = abstract
+        if keywords is not None:
+            group["keywords"] = {"string": keywords}
         if root:  # an EO group's root layer (qualified name) and its style
             group["rootLayer"] = {"name": root[0]}
             group["rootLayerStyle"] = {"name": root[1]} if root[1] else None
@@ -409,7 +411,8 @@ class GeoServer:
             if f.findtext("defaultValue"):
                 entry["default"] = f.findtext("defaultValue")
             if f.findtext("threshold") is not None:
-                entry["threshold"] = float(f.findtext("threshold"))
+                threshold = float(f.findtext("threshold"))
+                entry["threshold"] = int(threshold) if kind == "integers" else threshold
             out[f.findtext("key")] = entry
         return out
 

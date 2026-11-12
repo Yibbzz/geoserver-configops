@@ -508,7 +508,7 @@ NESTED = {
     "integerParameterFilter": ["IntegerParameterFilter", "ParameterFilter"],
 }
 # Keys a document adds that aren't fields: links, and how lists and maps are wrapped.
-WRAPPERS = {"href", "@key", "$", "@class", "entry", "string", "@name", "link", "@rel", "@type", "@xmlns:atom"}
+WRAPPERS = {"@key", "$", "@class", "entry", "string", "@name", "link", "@rel", "@type", "@xmlns:atom"}
 
 
 def classes(manifest: dict) -> dict[str, dict]:
@@ -596,7 +596,7 @@ def norm(value) -> str:
 def leaves(value) -> frozenset[str]:
     """Every value under a field, without the shape: lists and wrappers differ between JSON and XML."""
     if isinstance(value, dict):
-        return frozenset().union(*(leaves(v) for k, v in value.items() if k not in ("href", "@class")))
+        return frozenset().union(*(leaves(v) for k, v in value.items() if k != "@class" and not is_link(v)))
     if isinstance(value, list):
         return frozenset().union(*(leaves(v) for v in value))
     if value is None or value == "":
@@ -605,7 +605,8 @@ def leaves(value) -> frozenset[str]:
 
 
 def is_link(value) -> bool:
-    return isinstance(value, str) and value.startswith("http") and value.endswith((".json", ".xml"))
+    """A link GeoServer adds to a listing or another object: into its own REST API."""
+    return isinstance(value, str) and value.startswith("http") and "/rest/" in value and value.endswith((".json", ".xml"))
 
 
 def walk(known: dict, obj: dict, owners: list[str]) -> tuple[dict[str, frozenset], set[str]]:
@@ -763,7 +764,8 @@ class Evidence:
             want = self.pending.get(key)
             if want is None:
                 continue
-            if want <= found:
+            encrypted = sum(v.startswith(("crypt1:", "crypt2:")) for v in found)  # passwords come back encrypted
+            if len(want - found) <= encrypted:
                 self.proved.add(field)
                 del self.pending[key]
             else:
