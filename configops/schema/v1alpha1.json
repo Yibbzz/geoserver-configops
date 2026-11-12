@@ -1694,6 +1694,58 @@
               }
             }
           }
+        },
+        "remote": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "A cascaded WMS layer's options",
+          "properties": {
+            "style": {
+              "type": "string",
+              "description": "The remote style to draw with"
+            },
+            "styles": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The remote styles offered"
+            },
+            "format": {
+              "type": "string",
+              "description": "The image format to ask the remote server for"
+            },
+            "formats": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The remote formats offered"
+            },
+            "minScale": {
+              "type": "number",
+              "minimum": 0
+            },
+            "maxScale": {
+              "type": "number",
+              "minimum": 0
+            },
+            "respectBounds": {
+              "type": "boolean",
+              "description": "Ask only within the layer's bounds"
+            },
+            "vendorParameters": {
+              "type": "object",
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              },
+              "description": "Extra request parameters"
+            }
+          }
         }
       },
       "if": {
@@ -3415,6 +3467,87 @@
         },
         "dataset": {
           "$ref": "#/$defs/resourceName"
+        },
+        "disableOnConnectionFailure": {
+          "type": "boolean",
+          "description": "GeoServer turns the store off when it can't connect"
+        },
+        "maxConnections": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "wms, wmts: connections to the remote server at once"
+        },
+        "readTimeout": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "wms, wmts: seconds"
+        },
+        "connectTimeout": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "wms, wmts: seconds"
+        },
+        "connectionPooling": {
+          "type": "boolean",
+          "description": "wms, wmts: reuse HTTP connections. Default: true"
+        },
+        "header": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ],
+          "description": "wms, wmts: an HTTP header sent with every request, its value as text or from a Secret",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "secret": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            }
+          }
+        },
+        "authKey": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value"
+              ],
+              "properties": {
+                "value": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "secret",
+                "key"
+              ],
+              "properties": {
+                "secret": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                }
+              }
+            }
+          ],
+          "description": "wms, wmts: an authentication key sent with every request, as text or from a Secret"
         }
       }
     },

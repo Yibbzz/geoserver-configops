@@ -60,6 +60,11 @@ def env(monkeypatch):
         monkeypatch.setenv(f"CONFIGOPS_{key}", value)
     monkeypatch.setenv("CONFIGOPS_EOXLOGIN_USERNAME", "e2e-user")
     monkeypatch.setenv("CONFIGOPS_EOXLOGIN_PASSWORD", "e2e-secret")
+    monkeypatch.setenv("CONFIGOPS_EOXKEY_VALUE", "e2e-key")
+    monkeypatch.setenv("CONFIGOPS_EOX_WMS_HEADER_VALUE", "yes")  # the Secrets import names for them
+    monkeypatch.setenv("CONFIGOPS_EOX_WMS_AUTHKEY_VALUE", "e2e-key")
+    monkeypatch.setenv("CONFIGOPS_EOX_WMTS_HEADER_VALUE", "e2e-key")
+    monkeypatch.setenv("CONFIGOPS_EOX_WMTS_AUTHKEY_VALUE", "e2e-wmts-key")
     for secret in ("EOX_WMS_LOGIN_CREDENTIALS", "EOX_WMTS_LOGIN_CREDENTIALS"):  # the Secrets import names
         monkeypatch.setenv(f"CONFIGOPS_{secret}_USERNAME", "e2e-user")
         monkeypatch.setenv(f"CONFIGOPS_{secret}_PASSWORD", "e2e-secret")
@@ -88,12 +93,29 @@ spec: {{ type: cog, url: "{COG}", description: Sentinel-2 true colour }}
 apiVersion: configops/v1alpha1
 kind: Store
 metadata: {{ name: eox-wms }}
-spec: {{ type: wms, url: "https://tiles.maps.eox.at/wms?service=WMS&request=GetCapabilities" }}
+spec:
+  type: wms
+  url: "https://tiles.maps.eox.at/wms?service=WMS&request=GetCapabilities"
+  maxConnections: 4
+  readTimeout: 45
+  connectTimeout: 15
+  connectionPooling: false
+  disableOnConnectionFailure: true
+  header: {{ name: X-Configops-E2e, value: "yes" }}
+  authKey: {{ secret: eoxkey, key: value }}
 ---
 apiVersion: configops/v1alpha1
 kind: Store
 metadata: {{ name: eox-wmts }}
-spec: {{ type: wmts, url: "https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml" }}
+spec:
+  type: wmts
+  url: "https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml"
+  maxConnections: 3
+  readTimeout: 40
+  connectTimeout: 12
+  connectionPooling: false
+  header: {{ name: X-Configops-E2e, secret: eoxkey, key: value }}
+  authKey: e2e-wmts-key
 ---
 apiVersion: configops/v1alpha1
 kind: Store
@@ -121,7 +143,11 @@ spec: {{ store: sentinel-2, title: Sentinel-2 }}
 apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: cloudless-wms }}
-spec: {{ store: eox-wms, resource: s2cloudless-2024 }}
+spec:
+  store: eox-wms
+  resource: s2cloudless-2024
+  remote: {{ style: default, styles: [default], format: image/jpeg, formats: [image/jpeg, image/png], minScale: 1000, maxScale: 50000000,
+            respectBounds: true, vendorParameters: {{ tiled: true }} }}
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -153,6 +179,14 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     for kind, key, name in (("wmsstores", "wmsStore", "eox_wms_login"), ("wmtsstores", "wmtsStore", "eox_wmts_login")):
         store = gs.get(f"workspaces/{WS}/{kind}/{name}")[key]
         assert store["user"] == "e2e-user" and store["password"].startswith("crypt1:"), store  # kept, and encrypted
+    store = gs.get(f"workspaces/{WS}/wmsstores/eox_wms")["wmsStore"]
+    assert (store["maxConnections"], store["readTimeout"], store["connectTimeout"], store["disableOnConnFailure"]) == (4, 45, 15, True)
+    assert (store["headerName"], store["headerValue"], store["authKey"]) == ("X-Configops-E2e", "yes", "e2e-key")
+    store = gs.get(f"workspaces/{WS}/wmtsstores/eox_wmts")["wmtsStore"]
+    assert (store["maxConnections"], store["headerValue"], store["authKey"]) == (3, "e2e-key", "e2e-wmts-key")
+    item = gs.get(f"workspaces/{WS}/wmsstores/eox_wms/wmslayers/cloudless_wms")["wmsLayer"]
+    assert (item["forcedRemoteStyle"], item["preferredFormat"], item["minScale"], item["metadataBBoxRespected"]) == ("default", "image/jpeg", 1000, True)
+    assert item["vendorParameters"]["entry"] == {"@key": "tiled", "$": "true"}
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from . import assets, details, secrets
+from . import assets, details, secrets, stores
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import default_table, load
 from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, SOURCE_ATTRIBUTION, PlanError, as_list, names_of
@@ -194,6 +194,17 @@ class Importer:
                     secret = f"{resource_name(name)[0]}-credentials"
                     self.secrets.append(secret)
                     spec["credentials"] = {"secret": secret}
+                for field, default in (("maxConnections", 6), ("readTimeout", 60), ("connectTimeout", 30)):
+                    if store.get(field) not in (None, default):
+                        spec[field] = store[field]
+                if not stores.live_store(store, spec["type"])["connectionPooling"]:
+                    spec["connectionPooling"] = False
+                for field, kind_name in (("headerValue", "header"), ("authKey", "authKey")):
+                    if store.get(field):  # may be a key or token: from a Secret, as logins are
+                        secret = f"{resource_name(name)[0]}-{kind_name.lower()}"
+                        self.secrets.append(secret)
+                        ref = {"secret": secret, "key": "value"}
+                        spec[kind_name] = {"name": store.get("headerName") or "", **ref} if kind_name == "header" else ref
                 self.store_resource(store, name, spec)
         return found
 
@@ -207,6 +218,8 @@ class Importer:
             spec["description"] = live["description"]
         if live.get("enabled") is False:
             spec["enabled"] = False
+        if live.get("disableOnConnFailure"):
+            spec["disableOnConnectionFailure"] = True
         self.store_resources[gs_name] = resource("Store", name, spec)
 
     def store_of_layer(self, gs_name: str, href: str) -> tuple[str | None, dict]:
@@ -282,6 +295,11 @@ class Importer:
         if cache:
             spec["cache"] = cache
         spec.update(details.to_spec(item, layer))
+        if "forcedRemoteStyle" in item:  # a cascaded WMS layer
+            remote = {k: v for k, v in stores.live_remote(item).items()
+                      if v not in (None, "", [], {}, False) and not (k == "format" and v == "image/png")}
+            if remote:
+                spec["remote"] = remote
         return resource("Layer", name, spec)
 
     def layers(self, stores: dict[str, dict]) -> list[dict]:
