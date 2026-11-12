@@ -38,7 +38,8 @@
         "AuthProvider",
         "UserGroupService",
         "RoleService",
-        "URLCheck"
+        "URLCheck",
+        "MasterPasswordProvider"
       ]
     },
     "metadata": {
@@ -665,6 +666,22 @@
         "properties": {
           "spec": {
             "$ref": "#/$defs/urlCheck"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "MasterPasswordProvider"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/securityObject"
           }
         }
       }
@@ -1539,6 +1556,25 @@
                   "binding": {
                     "type": "string",
                     "description": "Its Java class, e.g. java.lang.String"
+                  },
+                  "range": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[min, max]: the values allowed (WFS-T, the web UI's editing)"
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "number"
+                      ]
+                    },
+                    "description": "The values allowed, as a list to pick from"
                   }
                 }
               }
@@ -2469,6 +2505,20 @@
                 "seederMaxPoolSize": {
                   "type": "integer",
                   "minimum": 1
+                },
+                "cacheWarningSkips": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "Default",
+                      "Nearest",
+                      "FullRange"
+                    ]
+                  }
+                },
+                "lockProviderName": {
+                  "type": "string",
+                  "description": "GeoServer Cloud needs its clustering lock provider: change it only if you know why"
                 }
               }
             },
@@ -2679,6 +2729,20 @@
                       }
                     }
                   }
+                },
+                "rememberMe": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Remember-me logins (security/config.xml rememberMeService)",
+                  "properties": {
+                    "className": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string",
+                      "description": "The key remember-me cookies are signed with"
+                    }
+                  }
                 }
               }
             },
@@ -2706,12 +2770,49 @@
             "urlChecks": {
               "type": "boolean",
               "description": "Whether GeoServer checks external URLs against the URLChecks. Default: true"
+            },
+            "userDetailsDisplaySettingsInfo": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "How the web UI shows the logged-in user and the user list",
+              "properties": {
+                "loggedInUserDisplayMode": {
+                  "enum": [
+                    "USERNAME",
+                    "PREFERRED_USERNAME",
+                    "FULL_NAME",
+                    "FALLBACK"
+                  ]
+                },
+                "showProfileColumnsInUserList": {
+                  "type": "boolean"
+                },
+                "emailDisplayMode": {
+                  "enum": [
+                    "HIDDEN",
+                    "DOMAIN_ONLY",
+                    "MASKED",
+                    "FULL"
+                  ]
+                },
+                "revealEmailAtClick": {
+                  "type": "boolean"
+                }
+              }
             }
           }
         },
         "geoserver": {
           "type": "object",
           "description": "any other field, as GeoServer's REST API names it"
+        },
+        "restUploadRoot": {
+          "type": "string",
+          "description": "The folder REST file uploads go to (the web UI's REST root folder)"
+        },
+        "restQuietOnNotFound": {
+          "type": "boolean",
+          "description": "REST answers 404 without logging a stack trace"
         }
       }
     },
@@ -3857,8 +3958,7 @@
       "type": "object",
       "required": [
         "crs",
-        "extent",
-        "resolutions"
+        "extent"
       ],
       "additionalProperties": false,
       "properties": {
@@ -3917,8 +4017,29 @@
         "yAxisFirst": {
           "type": "boolean",
           "description": "The CRS lists y before x (latitude first)"
+        },
+        "scales": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 1,
+          "description": "scale denominators, biggest first: instead of resolutions"
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "resolutions"
+          ]
+        },
+        {
+          "required": [
+            "scales"
+          ]
+        }
+      ]
     },
     "blobStore": {
       "type": "object",

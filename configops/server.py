@@ -201,6 +201,7 @@ def plan_settings(planner, gs, r: Resource) -> None:
 
         auth.plan_settings(planner, security_settings)
     master = top_spec.pop("masterPassword", None)
+    rest_options = {REST_OPTIONS[k]: spec.pop(k) for k in list(spec) if k in REST_OPTIONS}
     logging = top_spec.pop("requestLogging", None)
     url_checks = top_spec.pop("urlChecks", None)
     top = to_geoserver(top_spec)
@@ -218,6 +219,9 @@ def plan_settings(planner, gs, r: Resource) -> None:
     live_contact = live_settings.get("contact") or {}
     changed = [("contact." + f, a, b) for f, a, b in compare(live_contact, contact)]
     changed += compare(live_settings, settings)
+    live_rest = settings_metadata(live_settings)
+    changed += [(next(k for k, v in REST_OPTIONS.items() if v == key), live_rest.get(key), value)
+                for key, value in rest_options.items() if live_rest.get(key) != value]
     changed += [("global." + f, a, b) for f, a, b in compare(live, top)]
     wanted_meta = logging_entries(logging) if logging else {}
     live_meta = metadata(live)
@@ -263,8 +267,12 @@ def plan_settings(planner, gs, r: Resource) -> None:
         current = (gs.get(path) or {}).get(key) or {}
         if ws:
             body = merge(current, {**settings, "contact": contact, "workspace": {"name": ws}})
+            if rest_options:
+                body["metadata"] = with_settings_metadata(current, rest_options)
         else:
             body = merge(current, {**top, "settings": merge(current.get("settings") or {}, settings)})
+            if rest_options:
+                body["settings"]["metadata"] = with_settings_metadata(current.get("settings") or {}, rest_options)
             body["settings"]["contact"] = merge(body["settings"].get("contact") or {}, contact)
             body.pop("updateSequence", None)  # GeoServer's own counter
             if wanted_meta:
@@ -301,6 +309,39 @@ def plan_settings(planner, gs, r: Resource) -> None:
         planner.add("~", "settings", target, changed, run=run)
     else:
         planner.add("+", "settings", target, note="this workspace's own settings", run=run)
+
+
+# --- REST options in the settings' metadata, an XStream map: {"map": {"entry": [{"string": [key, text]}, {"string": key, "boolean": b}]}}
+
+REST_OPTIONS = {"restUploadRoot": "root", "restQuietOnNotFound": "quietOnNotFound"}  # spec name -> GeoServer's key
+
+
+def settings_metadata(settings: dict) -> dict:
+    """The settings' metadata entries with plain values (text or booleans), by key."""
+    entries = ((settings.get("metadata") or {}).get("map") or {}).get("entry") or []
+    out = {}
+    for e in entries if isinstance(entries, list) else [entries]:
+        if not isinstance(e, dict):
+            continue
+        s = e.get("string")
+        if isinstance(s, list) and len(s) == 2:
+            out[s[0]] = s[1]
+        elif isinstance(s, str) and "boolean" in e:
+            out[s] = e["boolean"] in (True, "true")
+    return out
+
+
+def with_settings_metadata(settings: dict, values: dict) -> dict:
+    """The settings' metadata with these entries set, the others (COG settings...) kept."""
+    entries = ((settings.get("metadata") or {}).get("map") or {}).get("entry") or []
+    entries = entries if isinstance(entries, list) else [entries]
+    def key_of(e):
+        s = e.get("string") if isinstance(e, dict) else None
+        return s[0] if isinstance(s, list) else s
+    kept = [e for e in entries if key_of(e) not in values]
+    for key, value in values.items():
+        kept.append({"string": key, "boolean": value} if isinstance(value, bool) else {"string": [key, str(value)]})
+    return {"map": {"entry": kept}}
 
 
 # --- request logging: entries in the global settings' metadata, which GeoServer reads on every request
@@ -342,8 +383,8 @@ def gwc_values(xml: str) -> dict:
     """gwc-gs.xml's settings: text, or a list for the ones that hold <string>s."""
     out = {}
     for e in ET.fromstring(xml):
-        items = e.findall("string")
-        out[e.tag] = [i.text or "" for i in items] if items or e.tag.startswith("default") else (e.text or "")
+        items = e.findall("string") + e.findall("warning")
+        out[e.tag] = [i.text or "" for i in items] if items or e.tag.startswith("default") or e.tag == "cacheWarningSkips" else (e.text or "")
     return out
 
 
@@ -369,7 +410,7 @@ def set_gwc(xml: str, wanted: dict) -> str:
         if isinstance(value, list):
             e.text = None
             for v in value:
-                ET.SubElement(e, "string").text = v
+                ET.SubElement(e, "warning" if key == "cacheWarningSkips" else "string").text = v
         else:
             e.text = gwc_text(value)
     return ET.tostring(root, encoding="unicode")

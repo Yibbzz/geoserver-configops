@@ -123,6 +123,7 @@ CLASSES: dict[str, list[tuple[str, str]]] = {
         ("geoserver", "security/config/BruteForcePreventionConfig"),
         ("geoserver", "security/config/BaseSecurityNamedServiceConfig"),
         ("geoserver", "security/config/PasswordPolicyConfig"),
+        ("geoserver", "security/password/MasterPasswordProviderConfig"),
         ("geoserver", "security/password/URLMasterPasswordProviderConfig"),
         ("geoserver", "security/config/SecurityUserGroupServiceConfig"),
         ("geoserver", "security/config/SecurityRoleServiceConfig"),

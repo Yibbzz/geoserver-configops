@@ -87,6 +87,14 @@ def attribute_entry(a: dict):
     description = from_international(a.get("description"))
     if description:
         entry["description"] = description
+    from .plan import attribute_live
+
+    value_range = attribute_live("range", a)
+    if value_range and all(abs(v) != float("inf") for v in value_range):
+        entry["range"] = value_range
+    options = attribute_live("options", a)
+    if options:
+        entry["options"] = options
     if len(entry) > 1:
         entry.update({k: a[k] for k, v in ATTRIBUTE_DEFAULTS.items() if a.get(k) is not None and a[k] != v})
     return entry if len(entry) > 1 else name
@@ -488,7 +496,8 @@ class Importer:
                 continue
             meta = resource_name(name)[0]
             spec = {"name": name} if meta != name else {}  # gridsets are named as written, dashes and all
-            spec.update({"crs": f"EPSG:{g['srs']['number']}", "extent": g["extent"]["coords"], "resolutions": g["resolutions"]})
+            levels = {"scales": g["scaleDenominators"]} if g.get("scaleDenominators") else {"resolutions": g["resolutions"]}
+            spec.update({"crs": f"EPSG:{g['srs']['number']}", "extent": g["extent"]["coords"], **levels})
             if g.get("tileWidth", 256) != 256:
                 spec["tileSize"] = g["tileWidth"]
             if g.get("alignTopLeft"):
@@ -500,7 +509,7 @@ class Importer:
             extra = live_gridset(g)
             if extra["description"]:
                 spec["description"] = extra["description"]
-            if extra["levelNames"] and extra["levelNames"] != [f"{name}:{i}" for i in range(len(g["resolutions"]))]:
+            if extra["levelNames"] and extra["levelNames"] != [f"{name}:{i}" for i in range(len(g.get("resolutions") or g.get("scaleDenominators") or []))]:
                 spec["levelNames"] = extra["levelNames"]
             if extra["pixelSize"] != 2.8e-4:
                 spec["pixelSize"] = extra["pixelSize"]

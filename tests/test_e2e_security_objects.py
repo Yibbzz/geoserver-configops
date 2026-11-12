@@ -85,9 +85,11 @@ OTHERS = [
       "usersJSONPath": "$.e2eUsers", "adminGroup": "E2E_ADMIN", "groupAdminGroup": "E2E_GROUP_ADMIN",
       "cacheConcurrencyLevel": 2, "cacheMaximumSize": 77, "cacheExpirationTime": 12345, "authApiKey": "e2e-api-key"}),
     ("RoleService", "e2e-ldap-roles-all", LDAP + "LDAPRoleServiceConfig", LDAP + "LDAPRoleService", LDAP_SEARCH),
+    ("MasterPasswordProvider", "e2e-url-provider", "org.geoserver.security.password.URLMasterPasswordProviderConfig",
+     "org.geoserver.security.password.URLMasterPasswordProvider", {"url": "file:e2e-passwd", "encrypting": False, "readOnly": True, "loginEnabled": True}),
 ]
 FOLDERS = {"AuthFilter": "filter", "AuthProvider": "auth", "UserGroupService": "usergroup", "RoleService": "role",
-           "PasswordPolicy": "pwpolicy"}
+           "PasswordPolicy": "pwpolicy", "MasterPasswordProvider": "masterpw"}
 MADE = [f"filter/{n}" for n in FILTERS] + [f"{FOLDERS[k]}/{n}" for k, n, *_ in OTHERS] + ["pwpolicy/e2e-objects-policy"]
 
 
@@ -119,6 +121,8 @@ def project(tmp_path, monkeypatch):
              for name, (cls, impl, config) in FILTERS.items()]
     docs += [{"kind": kind, "metadata": {"name": name}, "spec": {"class": cls, "className": impl, "config": config}}
              for kind, name, cls, impl, config in OTHERS]
+    docs.append({"kind": "Settings", "metadata": {"name": "global"}, "spec": {"global": {"security": {
+        "rememberMe": {"className": "org.geoserver.security.rememberme.GeoServerTokenBasedRememberMeServices", "key": "e2e-remember-key"}}}}})
     (tmp_path / "project.yaml").write_text(yaml.safe_dump_all([{"apiVersion": "configops/v1alpha1", **d} for d in docs], sort_keys=False))
     return tmp_path
 
@@ -150,5 +154,6 @@ def test_every_object_and_field_is_kept(gs, project, capsys):
         fields = stored(gs, f"{FOLDERS[kind]}/{name}")
         for key, value in config.items():
             assert fields[key].text == (str(value).lower() if isinstance(value, bool) else str(value)), (name, key)
+    assert "<key>e2e-remember-key</key>" in gs.request("GET", SECURITY_FILE).text
     policy = stored(gs, "pwpolicy/e2e-objects-policy")
     assert (policy["uppercaseRequired"].text, policy["lowercaseRequired"].text, policy["maxLength"].text) == ("true", "true", "40")
