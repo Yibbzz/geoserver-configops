@@ -35,7 +35,7 @@ SAVED = ["settings", "settings/contact", "services/wms/settings", "services/wfs/
 VALUES = {
     "charset": "UTF-8", "schemaBaseURL": "https://schemas.example.org", "onlineResource": "https://maps.example.org",
     "proxyBaseUrl": "https://maps.example.org/geoserver-cloud", "srs": ["EPSG:27700", "EPSG:4326"],
-    "keywords": ["e2e", "maps"], "enabled": True, "disabledVersions": ["1.0.0"], "getMapMimeTypes": ["image/png", "image/jpeg"],
+    "keywords": ["e2e", "maps", {"keyword": "mapiau", "language": "cy", "vocabulary": "e2e"}], "enabled": True, "disabledVersions": ["1.0.0"], "getMapMimeTypes": ["image/png", "image/jpeg"],
     "getFeatureInfoMimeTypes": ["text/html", "application/json"], "getFeatureOutputTypes": ["application/json", "GML2"],
     "allowedURLsForAuthForwarding": ["https://styles.example.org"], "authorityURLs": [{"name": "e2e", "href": "https://example.org/authority"}],
     "identifiers": [{"authority": "e2e", "identifier": "e2e-root"}], "MarkFactoryList": "WKTMarkFactory,WellKnownMarkFactory",
@@ -196,6 +196,7 @@ def test_drift_is_shown_and_put_back(gs, project, capsys):
     assert configops(capsys, "plan", "-C", str(project))[0] == 0
 
 
+@pytest.mark.last(order=1)  # GeoServer Cloud's keystore race can leave REST refusing every login: nothing else after it
 def test_master_password_is_changed_and_back(gs, project, capsys, monkeypatch):
     """The master password from a Secret: apply sets it (twice, from a value it set itself), plan then has
     nothing to do. The old one is put back: by configops, or by GeoServer's API if configops can't.

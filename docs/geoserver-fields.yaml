@@ -218,8 +218,8 @@ pages:
         status: 'yes'
         spec: layer.disabledServices
       simpleConversionEnabled:
-        status: 'no'
-        note: 'app-schema layers: simple features conversion'
+        status: 'yes'
+        spec: layer.wfs.simpleConversion
       internationalTitle:
         status: 'yes'
         spec: layer.internationalTitle
@@ -599,11 +599,13 @@ pages:
         spec: layer.keywords
         test: test_e2e_details.py::test_apply_then_nothing_to_do
       language:
-        status: 'no'
-        note: keyword language
+        status: 'yes'
+        spec: layer.keywords.language
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       vocabulary:
-        status: 'no'
-        note: keyword vocabulary
+        status: 'yes'
+        spec: layer.keywords.vocabulary
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
     CoverageView:
       coverageBands:
         status: 'no'

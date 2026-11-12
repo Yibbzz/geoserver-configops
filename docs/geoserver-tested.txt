@@ -252,7 +252,9 @@ JDBCSecurityServiceConfig.propertyFileNameDML
 JDBCSecurityServiceConfig.userName
 JDBCUserGroupServiceConfig.passwordEncoderName
 JDBCUserGroupServiceConfig.passwordPolicyName
+Keyword.language
 Keyword.value
+Keyword.vocabulary
 LDAPBaseSecurityServiceConfig.adminGroup
 LDAPBaseSecurityServiceConfig.allGroupsSearchFilter
 LDAPBaseSecurityServiceConfig.allUsersSearchFilter
@@ -367,6 +369,7 @@ ResourceInfoImpl.namespace
 ResourceInfoImpl.nativeName
 ResourceInfoImpl.projectionPolicy
 ResourceInfoImpl.serviceConfiguration
+ResourceInfoImpl.simpleConversionEnabled
 ResourceInfoImpl.srs
 ResourceInfoImpl.store
 ResourceInfoImpl.title

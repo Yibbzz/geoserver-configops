@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from . import secrets
+from . import keywords, secrets
 from .geoserver import MissingCredentials, q
 from .loader import Resource
 from .validate import geoserver_name
@@ -335,7 +335,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         if "abstract" in spec:
             item["abstract"] = spec["abstract"]
         if "keywords" in spec:
-            item["keywords"] = {"string": spec["keywords"]}
+            item["keywords"] = {"string": keywords.to_strings(spec["keywords"])}
         resource = native or available(gs, store_ws, store)[0]
         item[fam["native"]] = resource
         if fam["native"] != "nativeName":
@@ -359,8 +359,8 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
     changed = [(k, current[k], v) for k, v in wanted_item + wanted_layer if current[k] != v]
     live_keywords = (live_item.get("keywords") or {}).get("string")
     live_keywords = live_keywords if isinstance(live_keywords, list) else ([live_keywords] if live_keywords else [])
-    if "keywords" in spec and live_keywords != spec["keywords"]:
-        changed.append(("keywords", live_keywords, spec["keywords"]))
+    if "keywords" in spec and live_keywords != keywords.to_strings(spec["keywords"]):
+        changed.append(("keywords", live_keywords, keywords.to_strings(spec["keywords"])))
     if live_store_name != geoserver_name(store):
         changed.append(("store", live_store_name, geoserver_name(store)))
     if changed:

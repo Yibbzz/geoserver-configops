@@ -73,7 +73,7 @@ kind: Layer
 metadata: { name: river-readings }
 spec:
   table: { schema: e2e_details, name: readings }
-  keywords: [e2e, rivers]
+  keywords: [e2e, rivers, { keyword: afonydd, language: cy, vocabulary: GEMET }]
   filter: "kind = 'river'"
   internationalTitle: { cy: Darlleniadau afonydd, fr: Relevés des rivières }
   internationalAbstract: { cy: Dyfnder afonydd }
@@ -84,7 +84,7 @@ spec:
     - ended
     - { name: depth, description: Depth in metres, nillable: false, minOccurs: 1, maxOccurs: 2 }
     - { name: kind_upper, source: "strToUpperCase(kind)", binding: java.lang.String }
-  wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326], padWithZeros: true, forcedDecimal: true, encodeMeasures: true }
+  wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326], padWithZeros: true, forcedDecimal: true, encodeMeasures: true, simpleConversion: true }
   circularArcs: true
   linearizationTolerance: 0.5
   disabledServices: [wcs, wps]
@@ -119,7 +119,7 @@ spec:
   rootLayer: river-readings
   layers: [kinds]
   abstract: Readings by kind
-  keywords: [e2e, readings]
+  keywords: [e2e, readings, { keyword: darlleniadau, language: cy }]
   queryable: false
   internationalTitle: { cy: Darlleniadau }
   internationalAbstract: { cy: Darlleniadau fesul math }
@@ -144,7 +144,7 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     ft = gs.featuretype(WS, "e2e_details", "river_readings")["featureType"]
     assert ft["cqlFilter"] == "kind = 'river'" and ft["maxFeatures"] == 100
     assert ft["store"]["name"] == f"{WS}:e2e_details" and ft["namespace"]["name"] == WS and ft["nativeName"] == "readings"
-    assert ft["keywords"]["string"] == ["e2e", "rivers"]
+    assert ft["keywords"]["string"] == ["e2e", "rivers", "afonydd\\@language=cy\\;\\@vocabulary=GEMET\\;"]
     assert gs.layer(WS, "river_readings")["layer"]["attribution"]["logoURL"] == "https://example.org/logo.png"
     layer = gs.layer(WS, "river_readings")["layer"]
     assert layer["resource"]["name"] == f"{WS}:river_readings"
@@ -159,6 +159,7 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert dims["time"]["endAttribute"] == "ended" and dims["time"]["nearestMatchEnabled"] is True
     assert str(dims["time"]["resolution"]) == "86400000" and dims["elevation"]["unitSymbol"] == "m"
     assert ft["metadataLinks"]["metadataLink"]["content"] == "https://example.org/readings.xml"
+    assert ft["simpleConversionEnabled"] is True
     assert (ft["padWithZeros"], ft["forcedDecimal"], ft["encodeMeasures"], ft["circularArcPresent"], ft["linearizationTolerance"]) == (
         True, True, True, True, 0.5)
     assert ft["serviceConfiguration"] is True and sorted(ft["disabledServices"]["string"]) == ["WCS", "WPS"]

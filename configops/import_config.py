@@ -70,6 +70,10 @@ def differing(live: dict, props: dict, defaults: dict) -> dict:
         if name in ("geoserver", "workspace", "global", "contact", "catalogMode", "masterPassword", "tileCaching", "service", "security"):
             continue
         value = unwrap(live.get("abstrct" if name == "abstract" else name))
+        if name == "keywords" and isinstance(value, list):
+            from .keywords import to_entries
+
+            value = to_entries(value)
         if prop.get("$ref") == "#/$defs/translations":
             value = no_attributes(value)
         if value in (None, "", [], {}):
