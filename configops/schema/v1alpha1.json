@@ -2247,6 +2247,22 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "multiLayerCachingEnabled": {
+                  "type": "boolean",
+                  "description": "Cache requests for several layers at once"
+                },
+                "metaTilingThreads": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "seederCorePoolSize": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "seederMaxPoolSize": {
+                  "type": "integer",
+                  "minimum": 1
                 }
               }
             },
@@ -3790,6 +3806,17 @@
                   "threshold": {
                     "type": "number",
                     "minimum": 0
+                  },
+                  "case": {
+                    "enum": [
+                      "upper",
+                      "lower"
+                    ],
+                    "description": "string and regex filters: change the value's case before matching"
+                  },
+                  "locale": {
+                    "type": "string",
+                    "description": "The locale for case, e.g. en"
                   }
                 }
               },
@@ -3844,6 +3871,67 @@
                 }
               },
               "description": "draw these tiles ahead of time: after apply changes the cache, and after each load"
+            },
+            "levels": {
+              "type": "object",
+              "description": "Per gridset (one of gridsets): the zoom levels published and cached, and the bounds",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "published": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[first, last] zoom level offered"
+                  },
+                  "cached": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[first, last] zoom level kept; others are drawn each time"
+                  },
+                  "bounds": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "description": "[minx, miny, maxx, maxy] in the gridset's CRS"
+                  }
+                }
+              }
+            },
+            "expireByZoom": {
+              "type": "object",
+              "description": "From a zoom level on, how many seconds a cached tile lasts: { 0: 86400, 12: 3600 }",
+              "propertyNames": {
+                "pattern": "^[0-9]+$"
+              },
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "warningSkips": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "Default",
+                  "Nearest",
+                  "FullRange"
+                ]
+              },
+              "description": "Requests not cached because of a dimension value: say so in a response header"
             }
           }
         }

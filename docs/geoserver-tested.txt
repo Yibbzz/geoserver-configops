@@ -37,6 +37,9 @@ BruteForcePreventionConfig.maxBlockedThreads
 BruteForcePreventionConfig.maxDelaySeconds
 BruteForcePreventionConfig.minDelaySeconds
 BruteForcePreventionConfig.whitelistedMasks
+CaseNormalizer.kase
+CaseNormalizer.locale
+CaseNormalizingParameterFilter.normalize
 ContactInfoImpl.address
 ContactInfoImpl.addressCity
 ContactInfoImpl.addressCountry
@@ -100,6 +103,8 @@ DimensionInfoImpl.unitSymbol
 DimensionInfoImpl.units
 ExceptionTranslationFilterConfig.accessDeniedErrorPage
 ExceptionTranslationFilterConfig.authenticationFilterName
+ExpirationRule.expiration
+ExpirationRule.minZoom
 FeatureConformance.core
 FeatureConformance.crsByReference
 FeatureConformance.featuresFilter
@@ -144,10 +149,14 @@ GWCConfig.defaultOtherCacheFormats
 GWCConfig.defaultVectorCacheFormats
 GWCConfig.directWMSIntegrationEnabled
 GWCConfig.gutter
+GWCConfig.metaTilingThreads
 GWCConfig.metaTilingX
 GWCConfig.metaTilingY
+GWCConfig.multiLayerCachingEnabled
 GWCConfig.requireTiledParameter
 GWCConfig.securityEnabled
+GWCConfig.seederCorePoolSize
+GWCConfig.seederMaxPoolSize
 GeoServerInfoImpl.allowStoredQueriesPerWorkspace
 GeoServerInfoImpl.featureTypeCacheSize
 GeoServerInfoImpl.globalServices
@@ -174,8 +183,10 @@ GeoServerRestRoleServiceConfig.rolesRESTEndpoint
 GeoServerRestRoleServiceConfig.usersJSONPath
 GeoServerRestRoleServiceConfig.usersRESTEndpoint
 GeoServerTileLayerInfoImpl.blobStoreId
+GeoServerTileLayerInfoImpl.cacheWarningSkips
 GeoServerTileLayerInfoImpl.enabled
 GeoServerTileLayerInfoImpl.expireCache
+GeoServerTileLayerInfoImpl.expireCacheList
 GeoServerTileLayerInfoImpl.expireClients
 GeoServerTileLayerInfoImpl.gridSubsets
 GeoServerTileLayerInfoImpl.gutter
@@ -522,7 +533,12 @@ XMLGridSet.resolutions
 XMLGridSet.srs
 XMLGridSet.tileHeight
 XMLGridSet.tileWidth
+XMLGridSubset.extent
 XMLGridSubset.gridSetName
+XMLGridSubset.maxCachedLevel
+XMLGridSubset.minCachedLevel
+XMLGridSubset.zoomStart
+XMLGridSubset.zoomStop
 XMLRoleServiceConfig.adminRoleName
 XMLRoleServiceConfig.groupAdminRoleName
 XMLSecurityServiceConfig.validating
