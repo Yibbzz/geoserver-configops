@@ -37,6 +37,7 @@ def gs():
     for s, body in saved.items():
         before = body[s]
         gs.request("PUT", f"services/{s}/settings", {s: restore(gs.get(f"services/{s}/settings")[s], before)})
+    gs.delete_workspace("configops_options")  # apply makes the project's workspace
 
 
 @pytest.fixture

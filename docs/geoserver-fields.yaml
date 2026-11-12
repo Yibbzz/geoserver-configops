@@ -709,31 +709,31 @@ pages:
       dateModified: *id001
       modifiedBy: *id001
       layerGroupStyles:
-        status: 'no'
-        note: 'group styles: other named sets of members and styles'
+        status: cant
+        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
     LayerGroupStyleImpl:
       id: *id003
       name:
-        status: 'no'
-        note: group styles
+        status: cant
+        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
       title:
-        status: 'no'
-        note: group styles
+        status: cant
+        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
       internationalTitle:
-        status: 'no'
-        note: group styles
+        status: cant
+        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
       abstractTxt:
-        status: 'no'
-        note: group styles
+        status: cant
+        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
       internationalAbstract:
-        status: 'no'
-        note: group styles
+        status: cant
+        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
       layers:
-        status: 'no'
-        note: group styles
+        status: cant
+        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
       styles:
-        status: 'no'
-        note: group styles
+        status: cant
+        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
   Styles:
     StyleInfoImpl:
       name:
