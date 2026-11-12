@@ -75,9 +75,6 @@ spec:
   table: { schema: e2e_details, name: readings }
   keywords: [e2e, rivers, { keyword: afonydd, language: cy, vocabulary: GEMET }]
   filter: "kind = 'river'"
-<<<<<<< HEAD
-  wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326], padWithZeros: true, forcedDecimal: true, encodeMeasures: true, simpleConversion: true }
-=======
   attributes:
     - id
     - kind
@@ -85,8 +82,7 @@ spec:
     - ended
     - { name: depth, description: Depth in metres, nillable: false, minOccurs: 1, maxOccurs: 2 }
     - { name: kind_upper, source: "strToUpperCase(kind)", binding: java.lang.String }
-  wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326], padWithZeros: true, forcedDecimal: true, encodeMeasures: true }
->>>>>>> origin/main
+  wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326], padWithZeros: true, forcedDecimal: true, encodeMeasures: true, simpleConversion: true }
   circularArcs: true
   linearizationTolerance: 0.5
   disabledServices: [wcs, wps]
