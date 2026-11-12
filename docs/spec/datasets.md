@@ -266,10 +266,14 @@ spec:
 | `cache` | no | `false` | `true`, or `{ gridsets, formats, metaTiles: [w, h], gutter, expireCache, expireClients }`: the gridsets (GeoWebCache's own, or a `Gridset`), image formats, tiles drawn at once, pixels drawn around each tile, how long (seconds) the cache and clients keep a tile, and `blobStore`: the `BlobStore` the tiles go in. `parameterFilters` and `seed`: see below. Only the options set are compared |
 | `attribution` | no | from the dataset's source, where known | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026"; or `{ title, link, logo: { url, width, height, type } }` |
 | `filter` | no | none | A CQL filter: only these features are published, e.g. `"flood_zone = 'FZ3'"` |
-| `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …] }`: this layer's WFS settings |
+| `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …], padWithZeros, forcedDecimal, encodeMeasures }`: this layer's WFS settings (`padWithZeros` writes decimals up to `decimals`, `forcedDecimal` never writes scientific notation, `encodeMeasures` writes M values) |
+| `disabledServices` | no | none | Services this layer isn't published in: `wms`, `wfs`, `wcs`, `wmts`, `wps` |
+| `circularArcs`, `linearizationTolerance` | no | `false`, none | The geometries have curves; how closely they're turned into lines, in the layer's units |
+| `kml` | no | none | KML regionating: `{ regionateAttribute, regionateStrategy: best_guess \| external-sorting \| geometry \| native-sorting \| random, regionateFeatureLimit }` |
+| `authorityURLs`, `identifiers` | no | none | `[{ name, href }]` and `[{ authority, identifier }]`, shown in WMS capabilities |
 | `metadataLinks` | no | none | `[{ url, type, standard }]`: links to metadata records, shown in capabilities. `type` defaults to `text/html`, `standard` to `ISO19115:2003` |
 | `httpCache` | no | none | `{ maxAge }`: a `Cache-Control: max-age` (seconds) on this layer's maps |
-| `dimensions` | no | none | `{ time: {…}, elevation: {…}, <any other name>: {…} }`, each `{ attribute, endAttribute, presentation: list \| continuous \| interval, resolution, units, unitSymbol, nearestMatch }`. Another name is a custom dimension, which clients ask for as `DIM_<name>` |
+| `dimensions` | no | none | `{ time: {…}, elevation: {…}, <any other name>: {…} }`, each `{ attribute, endAttribute, presentation: list \| continuous \| interval, resolution, units, unitSymbol, nearestMatch, acceptableInterval, nearestFailBehavior: IGNORE \| EXCEPTION, rawNearestMatch, start, end, default: { strategy: MINIMUM \| MAXIMUM \| NEAREST \| FIXED \| BUILTIN, value } }` (`acceptableInterval`: how far a nearest match may be, e.g. `PT1H`; `rawNearestMatch`: nearest match in WCS too; `start`, `end`: the values to offer; `default`: the value a request that names none gets, `value` for `NEAREST` and `FIXED`). Another name is a custom dimension, which clients ask for as `DIM_<name>` |
 | `opaque` | no | `false` | Tells clients nothing shows through the layer |
 | `buffer` | no | none | Rendering buffer in pixels, for symbols that spill over tile edges |
 | `wms` | no | none | `{ path, interpolation }`: where the layer sits in the WMS capabilities tree (`/base/roads`), and `nearest`, `bilinear` or `bicubic` resampling |
@@ -496,6 +500,8 @@ spec:
 | `cache` | no | `false` | Tile caching for the group as a whole, in the same form as a Layer's |
 | `enabled`, `advertised` | no | `true` | An unadvertised group works but isn't listed in capabilities |
 | `metadataLinks` | no | none | As on a Layer |
+| `attribution`, `authorityURLs`, `identifiers` | no | none | As on a Layer |
+| `queryable` | no | `true` | Whether GetFeatureInfo answers for the group |
 | `rootLayer`, `rootStyle` | `eo` only | the root layer's own style | The layer drawn for the group as a whole |
 
 | `mode` | GeoServer mode | Clients see |
