@@ -3632,6 +3632,25 @@
         "metersPerUnit": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "description": {
+          "type": "string"
+        },
+        "levelNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A name for each level, in order (as WMTS shows them). Default: <name>:<level>"
+        },
+        "pixelSize": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Metres per pixel, for scale denominators. Default: 0.00028"
+        },
+        "yAxisFirst": {
+          "type": "boolean",
+          "description": "The CRS lists y before x (latitude first)"
         }
       }
     },
@@ -3712,6 +3731,55 @@
         "defaultCredentials": {
           "type": "boolean",
           "description": "gcs: log in as the pod's own Google identity (workload identity) instead of an API key"
+        },
+        "layout": {
+          "enum": [
+            "default",
+            "tms"
+          ],
+          "description": "file: how tiles are laid out in folders"
+        },
+        "quotaProject": {
+          "type": "string",
+          "description": "gcs: the project billed for requests"
+        },
+        "proxy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host"
+          ],
+          "description": "s3, azure: reach the store through an HTTP proxy",
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "domain": {
+              "type": "string",
+              "description": "s3: NTLM domain"
+            },
+            "workstation": {
+              "type": "string",
+              "description": "s3: NTLM workstation"
+            },
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "secret"
+              ],
+              "properties": {
+                "secret": {
+                  "type": "string",
+                  "description": "A Secret with keys username and password"
+                }
+              }
+            }
+          }
         }
       }
     },

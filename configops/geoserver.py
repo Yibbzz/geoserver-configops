@@ -442,13 +442,18 @@ class GeoServer:
         raise GeoServerError("GET", f"gwc/gridsets/{name}", r.status_code, r.text)
 
     def put_gridset(self, name: str, epsg: int, extent: list[float], resolutions: list[float], tile_size: int,
-                    align_top_left: bool, meters_per_unit: float) -> None:
+                    align_top_left: bool, meters_per_unit: float, extra: dict | None = None) -> None:
+        """`extra`: description, scaleNames, pixelSize, yCoordinateFirst."""
+        extra = extra or {}
         doubles = lambda values: "".join(f"<double>{v}</double>" for v in values)
-        xml = (f"<gridSet><name>{escape(name)}</name><srs><number>{epsg}</number></srs>"
+        description = f"<description>{escape(extra['description'])}</description>" if extra.get("description") else ""
+        names = "".join(f"<string>{escape(n)}</string>" for n in extra.get("scaleNames") or [])
+        xml = (f"<gridSet><name>{escape(name)}</name>{description}<srs><number>{epsg}</number></srs>"
                f"<extent><coords>{doubles(extent)}</coords></extent><alignTopLeft>{str(align_top_left).lower()}</alignTopLeft>"
                f"<resolutions>{doubles(resolutions)}</resolutions><metersPerUnit>{meters_per_unit}</metersPerUnit>"
-               f"<pixelSize>2.8E-4</pixelSize><tileHeight>{tile_size}</tileHeight><tileWidth>{tile_size}</tileWidth>"
-               "<yCoordinateFirst>false</yCoordinateFirst></gridSet>")
+               f"<pixelSize>{extra.get('pixelSize', 2.8e-4)}</pixelSize>" + (f"<scaleNames>{names}</scaleNames>" if names else "") +
+               f"<tileHeight>{tile_size}</tileHeight><tileWidth>{tile_size}</tileWidth>"
+               f"<yCoordinateFirst>{str(extra.get('yCoordinateFirst', False)).lower()}</yCoordinateFirst></gridSet>")
         r = self.gwc_request("PUT", f"gridsets/{q(name)}.xml", xml)
         if r.status_code not in (200, 201):
             raise GeoServerError("PUT", f"gwc/gridsets/{name}", r.status_code, r.text)

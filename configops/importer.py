@@ -486,6 +486,8 @@ class Importer:
                     self.notes.append(f"blob store {name}: {live['path']} isn't on the shared data volume; left out")
                     continue
                 spec.update({"type": "file", "path": path})
+                if live.get("layout") == "tms":
+                    spec["layout"] = "tms"
             elif live["type"] in KEYS:
                 kind = live["type"]
                 spec["type"] = kind
@@ -496,6 +498,12 @@ class Importer:
                         spec["access"] = live["access"].lower().replace("_", "-")
                 if kind == "gcs" and not live.get("defaultCredentials"):
                     spec.pop("defaultCredentials", None)
+                proxy = {k[6:]: v for k, v in live.items() if k.startswith("proxy.") and k not in ("proxy.username", "proxy.password")}
+                if "proxy.username" in live:
+                    proxy["credentials"] = {"secret": f"{meta}-proxy"}
+                    self.notes.append(f"blob store {name}: put its proxy login in Secret {meta}-proxy (keys: username, password)")
+                if proxy:
+                    spec["proxy"] = proxy
                 if any(k in live for k in KEYS[kind]):
                     secret = f"{meta}-credentials"
                     spec["credentials"] = {"secret": secret}
