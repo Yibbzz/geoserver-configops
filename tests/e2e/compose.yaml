@@ -52,6 +52,7 @@ services:
       SPRING_RABBITMQ_PASSWORD: guest
       JAVA_OPTS: -DALLOW_ENV_PARAMETRIZATION=true -XX:MaxRAMPercentage=50
       GEOSERVER_EXTENSION_APPSCHEMA_ENABLED: "true"  # as values-app-schema.yaml turns it on
+      GEOTOOLS_HTTPCLIENT_PROXY_ENABLED: "false"  # as the chart sets it: the proxy client can't do without connection pooling
     # data: the shared data volume, as the chart mounts it; test_e2e_file_stores.py writes its files there
     volumes: ["./jndi.yml:/etc/geoserver/jndi.yml:ro", "./data:/data"]
     ports: ["${E2E_REST_PORT:-59090}:8080"]

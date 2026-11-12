@@ -278,6 +278,7 @@ spec:
 | `buffer` | no | none | Rendering buffer in pixels, for symbols that spill over tile edges |
 | `wms` | no | none | `{ path, interpolation }`: where the layer sits in the WMS capabilities tree (`/base/roads`), and `nearest`, `bilinear` or `bicubic` resampling |
 | `dataLinks` | no | none | `[{ url, type }]`: links to the data itself. `type` defaults to `text/html` |
+| `remote` | no | none | A cascaded WMS layer's options: `{ style, styles, format, formats, minScale, maxScale, respectBounds, vendorParameters }`: the remote style to draw with and the ones offered, the image format to ask for and the ones offered, the scale range, asking only within the layer's bounds, and extra request parameters |
 | `wcs` | no | the WCS service's | Rasters: `{ requestCRS, responseCRS, formats, interpolations, defaultInterpolation }` |
 | `bands` | no | from the file | Rasters: `[{ name, description, unit, nullValues: [...], range: [min, max] }]`, in band order, as WCS shows them |
 | `parameters` | no | none | Rasters: the reading parameters of the web UI's *Coverage Parameters*, e.g. `{ InputTransparentColor: "#000000" }` |
@@ -390,6 +391,9 @@ spec:
 | `credentials` | none | `{ secret }`: a Secret with keys `username` and `password`, for a `postgis`, `sqlserver` or `wfs` store or a WMS or WMTS that needs a login. In the chart, add it to `configops.secrets`. GeoServer keeps the password encrypted, so it's set but not compared |
 | `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
 | `description`, `enabled` | none; `true` | |
+| `disableOnConnectionFailure` | `false` | GeoServer turns the store off when it can't connect |
+| `maxConnections`, `readTimeout`, `connectTimeout`, `connectionPooling` | 6, 60 s, 30 s, `true` | `wms`, `wmts`: connections to the remote server at once, timeouts in seconds, reusing connections. `connectionPooling: false` needs `GEOTOOLS_HTTPCLIENT_PROXY_ENABLED=false` on the GeoServer services, as the chart sets it: GeoServer Cloud's proxy-aware HTTP client can't do without pooling, and creating a layer then fails ("Couldn't create HTTP client") |
+| `header`, `authKey` | none | `wms`, `wmts`: an HTTP header sent with every request (`{ name, value }`, or `{ name, secret, key }` for the value from a Secret) and an authentication key (text, or `{ secret, key }`). GeoServer keeps them as they are, so they're compared; `import` names Secrets for them |
 
 A `Layer` on a store takes `store` and `resource` (the name the store gives it: a coverage, remote layer or table) instead of `dataset` and `table`; `resource` can be left out when the store offers only one thing. Everything else about the layer (title, styles, cache, attribution, access rules) works as for any layer. A store the files don't name, in a workspace the project owns, is unmanaged and removed only with `--prune`.
 

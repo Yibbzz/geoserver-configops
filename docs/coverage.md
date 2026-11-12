@@ -40,7 +40,9 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | GeoPackage, Shapefile, directory of shapefiles, FlatGeobuf, PMTiles | Yes | `Store` with `path:` on the shared data volume (`values-data-volume.yaml`); PMTiles also over `url:` |
 | GeoParquet, property files, CSV | Yes | `Store` `type: geoparquet`, `property`, `csv` |
 | Remote WFS (cascaded) | Yes | `Store` `type: wfs` |
-| Remote WMS, WMTS (cascaded) | Yes | `Store` `type: wms`, `wmts` |
+| Remote WMS, WMTS (cascaded) | Yes | `Store` `type: wms`, `wmts`; connections, timeouts, an HTTP header, an authentication key |
+| Cascaded WMS layer options | Yes | A Layer's `remote`: remote styles and formats, scale range, vendor parameters |
+| Auto-disable on connection failure | Yes | `Store` `disableOnConnectionFailure` |
 | Cloud-Optimised GeoTIFF (HTTP, S3, Azure, Google) | Yes | `Store` `type: cog` |
 | GeoTIFF on disk | Yes | `Store` `type: geotiff` with `path:` |
 | Image mosaic, world image, ArcGrid | Yes | `Store` `type: imagemosaic`, `worldimage`, `arcgrid` |

@@ -34,6 +34,7 @@ What we learned about GeoServer Cloud 3.0's REST API, GeoWebCache and the servic
 - A WMTS layer's `resource` has no `href`; WMS layers, coverages and feature types have one.
 - GeoParquet maps need the GeoParquet 1.1 `bbox` column. CSV stores take `strategy` `guess`, `specify` or `wkt`.
 - A fresh cascaded WMS store has `maxConnections` 6, `readTimeout` 60, `connectTimeout` 30 and metadata `useConnectionPooling` true; a fresh cascaded layer has `preferredFormat` `image/png`.
+- **Turning connection pooling off** (`useConnectionPooling` false) works only with `GEOTOOLS_HTTPCLIENT_PROXY_ENABLED=false`: the proxy-aware HTTP client (GeoServer Cloud's default) can't do without pooling, and creating a cascaded layer then answers 500 ("Couldn't create HTTP client").
 - Big rasters need WMS memory: with a 768 Mi limit, the first GetMap of a 10,980 px Sentinel-2 COG reprojected to EPSG:27700 was OOMKilled once.
 - Cascading a slow WFS is slow: the Environment Agency's took 75 s for one 30 km map.
 

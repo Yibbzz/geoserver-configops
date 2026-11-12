@@ -89,6 +89,18 @@ def credentials(store: Resource, root) -> tuple[str | None, str | None]:
     return user, password
 
 
+def secret_or_text(value, store: Resource, root) -> str:
+    """`value`, `{ value }`, or `{ secret, key }` from a Secret."""
+    if isinstance(value, str):
+        return value
+    if "value" in value:
+        return value["value"]
+    found = secrets.lookup(value["secret"], value["key"], root)
+    if found is None:
+        raise MissingCredentials(f"store {store.name}: no value in secret {value['secret']}, key {value['key']}")
+    return found
+
+
 def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict, dict]:
     """(the body GeoServer takes, the fields compared: name -> value)."""
     spec = spec or store.spec
@@ -98,6 +110,8 @@ def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict,
     compared: dict = {"enabled": body["enabled"]}
     if "description" in spec:
         body["description"] = compared["description"] = spec["description"]
+    if "disableOnConnectionFailure" in spec:
+        body["disableOnConnFailure"] = compared["disableOnConnFailure"] = spec["disableOnConnectionFailure"]
     user, password = credentials(store, root)
     if fam == "coverage":
         body["url"] = compared["url"] = location(spec)
@@ -110,6 +124,18 @@ def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict,
         if user is not None:
             body["user"], body["password"] = user, password  # GeoServer's name: "username" is ignored
             compared["user"] = user
+        for key in ("maxConnections", "readTimeout", "connectTimeout"):
+            if key in spec:
+                body[key] = compared[key] = spec[key]
+        if "connectionPooling" in spec:
+            body["metadata"] = {"entry": [{"@key": "useConnectionPooling", "$": str(spec["connectionPooling"]).lower()}]}
+            compared["connectionPooling"] = spec["connectionPooling"]
+        if "header" in spec:
+            header = spec["header"]
+            body["headerName"] = compared["headerName"] = header["name"]
+            body["headerValue"] = compared["headerValue"] = secret_or_text(header, store, root)
+        if "authKey" in spec:
+            body["authKey"] = compared["authKey"] = secret_or_text(spec["authKey"], store, root)
     else:
         params = {str(k): str(v) for k, v in (spec.get("connection") or {}).items()}
         if kind == "wfs":
@@ -131,7 +157,8 @@ def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict,
 def live_store(live: dict, kind: str) -> dict:
     """A live store's compared fields, in wanted_store's names."""
     fam = TYPES[kind][0]
-    out = {"enabled": live.get("enabled", True), "description": live.get("description")}
+    out = {"enabled": live.get("enabled", True), "description": live.get("description"),
+           "disableOnConnFailure": live.get("disableOnConnFailure", False)}
     if fam == "coverage":
         out["url"] = live.get("url")
         entries = (live.get("metadata") or {}).get("entry") or []
@@ -141,6 +168,11 @@ def live_store(live: dict, kind: str) -> dict:
     elif fam in ("wms", "wmts"):
         out["capabilitiesURL"] = live.get("capabilitiesURL")
         out["user"] = live.get("user")
+        for key in ("maxConnections", "readTimeout", "connectTimeout", "headerName", "headerValue", "authKey"):
+            out[key] = live.get(key)
+        entries = (live.get("metadata") or {}).get("entry") or []
+        pooling = [e.get("$") for e in (entries if isinstance(entries, list) else [entries]) if isinstance(e, dict) and e.get("@key") == "useConnectionPooling"]
+        out["connectionPooling"] = pooling[0] != "false" if pooling else True
     else:
         entries = (live.get("connectionParameters") or {}).get("entry") or []
         for e in entries if isinstance(entries, list) else [entries]:
@@ -215,6 +247,51 @@ def available(gs, ws: str, store: Resource) -> list[str]:
     return items if isinstance(items, list) else [items]
 
 
+# A cascaded WMS layer's options: spec name -> GeoServer's
+REMOTE = {"style": "forcedRemoteStyle", "styles": "selectedRemoteStyles", "format": "preferredFormat", "formats": "selectedRemoteFormats",
+          "minScale": "minScale", "maxScale": "maxScale", "respectBounds": "metadataBBoxRespected", "vendorParameters": "vendorParameters"}
+
+
+def remote_options(spec: dict) -> dict:
+    out = {}
+    for key, value in spec.items():
+        if key in ("styles", "formats"):
+            value = sorted(value)
+        elif key == "vendorParameters":
+            value = {str(k): str(v).lower() if isinstance(v, bool) else str(v) for k, v in value.items()}
+        out[key] = value
+    return out
+
+
+def live_remote(item: dict) -> dict:
+    out = {}
+    for key, field in REMOTE.items():
+        value = item.get(field)
+        if key in ("styles", "formats"):
+            value = sorted(as_list((value or {}).get("string")))
+        elif key == "vendorParameters":
+            value = {e["@key"]: str(e.get("$", "")) for e in as_list((value or {}).get("entry")) if isinstance(e, dict)}
+        elif key == "respectBounds":
+            value = bool(value)
+        out[key] = value
+    return out
+
+
+def remote_body(remote: dict) -> dict:
+    out = {}
+    for key, value in remote.items():
+        if key in ("styles", "formats"):
+            value = {"string": value}
+        elif key == "vendorParameters":
+            value = {"entry": [{"@key": k, "$": v} for k, v in value.items()]}
+        out[REMOTE[key]] = value
+    return out
+
+
+def as_list(value) -> list:
+    return [] if value in (None, "") else value if isinstance(value, list) else [value]
+
+
 def plan_layer(planner, layer: Resource, store: Resource) -> None:
     gs = planner.gs
     spec, fam = layer.spec, family(store)
@@ -247,6 +324,8 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         wanted_item.append(("abstract", spec["abstract"]))
     if spec.get("resource"):
         wanted_item.append(("resource", spec["resource"]))
+    remote = remote_options(spec.get("remote") or {})
+    wanted_item += [(f"remote.{k}", v) for k, v in remote.items()]
     wanted_layer, settings = planner.layer_settings(layer, (item_path, fam["item"]))
 
     def run(old_store=None):
@@ -261,6 +340,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         item[fam["native"]] = resource
         if fam["native"] != "nativeName":
             item["nativeName"] = resource
+        item.update(remote_body(remote))
         gs.upsert(item_path, f"{path}/{fam['items']}", {fam["item"]: item})
         settings()
 
@@ -274,7 +354,8 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         live_store_name = geoserver_name(store) if live_item else None
     current = {"title": live_item.get("title"), "enabled": live_item.get("enabled", True),
                "advertised": live_item.get("advertised", True), "abstract": live_item.get("abstract"),
-               "resource": live_item.get(fam["native"]) or live_item.get("nativeName"), **planner.live_layer_settings(layer, live_layer, live_item)}
+               "resource": live_item.get(fam["native"]) or live_item.get("nativeName"),
+               **{f"remote.{k}": v for k, v in live_remote(live_item).items()}, **planner.live_layer_settings(layer, live_layer, live_item)}
     changed = [(k, current[k], v) for k, v in wanted_item + wanted_layer if current[k] != v]
     live_keywords = (live_item.get("keywords") or {}).get("string")
     live_keywords = live_keywords if isinstance(live_keywords, list) else ([live_keywords] if live_keywords else [])

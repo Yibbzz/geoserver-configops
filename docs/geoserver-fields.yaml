@@ -64,8 +64,8 @@ pages:
       dateModified: *id001
       modifiedBy: *id001
       disableOnConnFailure:
-        status: 'no'
-        note: the store page's 'Auto disable on connection failure'
+        status: 'yes'
+        spec: store.disableOnConnectionFailure
       metadata.CogSettings.Key:
         status: 'yes'
         spec: store.url
@@ -96,20 +96,26 @@ pages:
         test: test_e2e_stores.py::test_apply_then_nothing_to_do
         note: comes back encrypted, so a test checks it
       headerName:
-        status: 'no'
+        status: 'yes'
+        spec: store.header.name
       headerValue:
-        status: 'no'
+        status: 'yes'
+        spec: store.header.value
       authKey:
-        status: 'no'
+        status: 'yes'
+        spec: store.authKey
       maxConnections:
-        status: 'no'
+        status: 'yes'
+        spec: store.maxConnections
       readTimeout:
-        status: 'no'
+        status: 'yes'
+        spec: store.readTimeout
       connectTimeout:
-        status: 'no'
+        status: 'yes'
+        spec: store.connectTimeout
       metadata.useConnectionPooling:
-        status: 'no'
-        note: 'cascaded store: use HTTP connection pooling'
+        status: 'yes'
+        spec: store.connectionPooling
         extra: true
     WMTSStoreInfoImpl:
       capabilitiesURL:
@@ -124,20 +130,26 @@ pages:
         test: test_e2e_stores.py::test_apply_then_nothing_to_do
         note: comes back encrypted, so a test checks it
       maxConnections:
-        status: 'no'
+        status: 'yes'
+        spec: store.maxConnections
       readTimeout:
-        status: 'no'
+        status: 'yes'
+        spec: store.readTimeout
       connectTimeout:
-        status: 'no'
+        status: 'yes'
+        spec: store.connectTimeout
       headerName:
-        status: 'no'
+        status: 'yes'
+        spec: store.header.name
       headerValue:
-        status: 'no'
+        status: 'yes'
+        spec: store.header.value
       authKey:
-        status: 'no'
+        status: 'yes'
+        spec: store.authKey
       metadata.useConnectionPooling:
-        status: 'no'
-        note: 'cascaded store: use HTTP connection pooling'
+        status: 'yes'
+        spec: store.connectionPooling
         extra: true
   Layers:
     ResourceInfoImpl:
@@ -327,32 +339,32 @@ pages:
         spec: layer.resource
     WMSLayerInfoImpl:
       forcedRemoteStyle:
-        status: 'no'
-        note: 'cascaded WMS layer: remote style'
+        status: 'yes'
+        spec: layer.remote.style
       preferredFormat:
-        status: 'no'
-        note: 'cascaded WMS layer: image format'
+        status: 'yes'
+        spec: layer.remote.format
       selectedRemoteFormats:
-        status: 'no'
-        note: 'cascaded WMS layer: formats'
+        status: 'yes'
+        spec: layer.remote.formats
       selectedRemoteStyles:
-        status: 'no'
-        note: 'cascaded WMS layer: styles'
+        status: 'yes'
+        spec: layer.remote.styles
       minScale:
-        status: 'no'
-        note: 'cascaded WMS layer: scale range'
+        status: 'yes'
+        spec: layer.remote.minScale
       maxScale:
-        status: 'no'
-        note: 'cascaded WMS layer: scale range'
+        status: 'yes'
+        spec: layer.remote.maxScale
       metadataBBoxRespected:
-        status: 'no'
-        note: cascaded WMS layer
+        status: 'yes'
+        spec: layer.remote.respectBounds
       allAvailableRemoteStyles:
         status: none
         note: read from the remote server
       vendorParameters:
-        status: 'no'
-        note: 'cascaded WMS layer: vendor parameters'
+        status: 'yes'
+        spec: layer.remote.vendorParameters
     WMTSLayerInfoImpl: {}
     LayerInfoImpl:
       path:
