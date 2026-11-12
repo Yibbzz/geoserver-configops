@@ -523,7 +523,7 @@ spec:
   tileSize: 256                           # the default
 ```
 
-A layer's `cache.gridsets` names it. GeoWebCache's own gridsets are never compared or removed.
+A layer's `cache.gridsets` names it. Also `description`, `levelNames` (a name for each level, as WMTS shows them; default `<name>:<level>`), `pixelSize` (metres per pixel for scale denominators; default 0.00028) and `yAxisFirst` (the CRS lists y first). GeoWebCache's own gridsets are never compared or removed.
 
 ### BlobStore
 
@@ -575,7 +575,7 @@ spec:
   defaultCredentials: true                 # the pod's own Google identity; or credentials: { secret } with key apiKey
 ```
 
-A layer's `cache.blobStore` names one. `maxConnections` (S3, Azure) and `gzip` (S3) are there too. GeoWebCache gives the keys back as they are, so `plan` compares the secret key too, without printing it. Only the blob stores the files name are compared; none is removed.
+A layer's `cache.blobStore` names one. `maxConnections` (S3, Azure) and `gzip` (S3) are there too, `layout: tms` lays a folder's tiles out as TMS, `proxy: { host, port, domain, workstation, credentials: { secret } }` reaches S3 or Azure through an HTTP proxy (`domain` and `workstation` for NTLM, S3 only; the Secret's keys `username` and `password`), and `quotaProject` bills a Google Cloud store's requests to another project. GeoWebCache gives the keys back as they are, so `plan` compares the secret key too, without printing it. Only the blob stores the files name are compared; none is removed.
 
 ### Workspace
 

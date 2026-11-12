@@ -30,8 +30,15 @@ def live(gridset: dict) -> dict:
             "resolutions": [float(r) for r in gridset.get("resolutions") or []], "tileSize": tile,
             "alignTopLeft": gridset.get("alignTopLeft", False), "metersPerUnit": float(gridset.get("metersPerUnit") or 1),
             "description": gridset.get("description") or None, "pixelSize": float(gridset.get("pixelSize") or 2.8e-4),
-            "levelNames": as_list((gridset.get("scaleNames") or {}).get("string")) or None,
+            "levelNames": level_names(gridset.get("scaleNames")),
             "yAxisFirst": gridset.get("yCoordinateFirst", False)}
+
+
+def level_names(value) -> list | None:
+    """GeoWebCache's scale names: a plain list in its JSON (or {"string": [...]})."""
+    if isinstance(value, dict):
+        value = value.get("string")
+    return as_list(value) or None
 
 
 def as_list(value) -> list:

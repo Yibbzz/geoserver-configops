@@ -1579,8 +1579,8 @@ pages:
         status: 'yes'
         spec: gridset.name
       description:
-        status: 'no'
-        note: gridset description
+        status: 'yes'
+        spec: gridset.description
       srs:
         status: 'yes'
         spec: gridset.crs
@@ -1603,11 +1603,11 @@ pages:
         status: 'yes'
         spec: gridset.metersPerUnit
       pixelSize:
-        status: 'no'
-        note: gridset pixel size
+        status: 'yes'
+        spec: gridset.pixelSize
       scaleNames:
-        status: 'no'
-        note: gridset level names
+        status: 'yes'
+        spec: gridset.levelNames
       tileHeight:
         status: 'yes'
         spec: gridset.tileSize
@@ -1615,8 +1615,8 @@ pages:
         status: 'yes'
         spec: gridset.tileSize
       yCoordinateFirst:
-        status: 'no'
-        note: gridset axis order
+        status: 'yes'
+        spec: gridset.yAxisFirst
     XMLGridSubset:
       gridSetName:
         status: 'yes'
@@ -1659,8 +1659,8 @@ pages:
         status: 'yes'
         spec: blobStore.blockSize
       pathGeneratorType:
-        status: 'no'
-        note: 'folder blob store: tile layout (default or TMS)'
+        status: 'yes'
+        spec: blobStore.layout
     S3BlobStoreInfo:
       bucket:
         status: 'yes'
@@ -1684,14 +1684,24 @@ pages:
         status: 'yes'
         spec: blobStore.endpoint
         note: from the endpoint's scheme
-      proxyDomain: &id006
-        status: 'no'
-        note: 'blob store: through a proxy'
-      proxyWorkstation: *id006
-      proxyHost: *id006
-      proxyPort: *id006
-      proxyUsername: *id006
-      proxyPassword: *id006
+      proxyDomain:
+        status: 'yes'
+        spec: blobStore.proxy.domain
+      proxyWorkstation:
+        status: 'yes'
+        spec: blobStore.proxy.workstation
+      proxyHost:
+        status: 'yes'
+        spec: blobStore.proxy.host
+      proxyPort:
+        status: 'yes'
+        spec: blobStore.proxy.port
+      proxyUsername:
+        status: 'yes'
+        spec: blobStore.proxy.credentials
+      proxyPassword:
+        status: 'yes'
+        spec: blobStore.proxy.credentials
       useGzip:
         status: 'yes'
         spec: blobStore.gzip
@@ -1718,10 +1728,18 @@ pages:
         status: 'yes'
         spec: blobStore.endpoint
         note: from the endpoint's scheme
-      proxyHost: *id006
-      proxyPort: *id006
-      proxyUsername: *id006
-      proxyPassword: *id006
+      proxyHost:
+        status: 'yes'
+        spec: blobStore.proxy.host
+      proxyPort:
+        status: 'yes'
+        spec: blobStore.proxy.port
+      proxyUsername:
+        status: 'yes'
+        spec: blobStore.proxy.credentials
+      proxyPassword:
+        status: 'yes'
+        spec: blobStore.proxy.credentials
       serviceURL:
         status: 'yes'
         spec: blobStore.endpoint
@@ -1730,8 +1748,8 @@ pages:
         status: 'yes'
         spec: blobStore.project
       quotaProjectId:
-        status: 'no'
-        note: 'Google Cloud blob store: quota project'
+        status: 'yes'
+        spec: blobStore.quotaProject
       bucket:
         status: 'yes'
         spec: blobStore.bucket

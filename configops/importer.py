@@ -463,6 +463,17 @@ class Importer:
                 spec["alignTopLeft"] = True
             if float(g.get("metersPerUnit") or 1) != 1:
                 spec["metersPerUnit"] = g["metersPerUnit"]
+            from .tiles import live as live_gridset
+
+            extra = live_gridset(g)
+            if extra["description"]:
+                spec["description"] = extra["description"]
+            if extra["levelNames"] and extra["levelNames"] != [f"{name}:{i}" for i in range(len(g["resolutions"]))]:
+                spec["levelNames"] = extra["levelNames"]
+            if extra["pixelSize"] != 2.8e-4:
+                spec["pixelSize"] = extra["pixelSize"]
+            if extra["yAxisFirst"]:
+                spec["yAxisFirst"] = True
             out.append(resource("Gridset", meta, spec))
         return out
 

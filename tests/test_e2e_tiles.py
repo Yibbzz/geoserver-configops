@@ -78,6 +78,10 @@ spec:
   crs: EPSG:27700
   extent: [-238375, 0, 900000, 1376256]
   resolutions: [896, 448, 224, 112, 56, 28, 14]
+  description: British National Grid for the e2e tests
+  levelNames: [bng0, bng1, bng2, bng3, bng4, bng5, bng6]
+  pixelSize: 0.0003
+  yAxisFirst: true
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -115,7 +119,9 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert code == 0, out
     code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
-    assert gs.gridset(GRIDSET)["resolutions"][-1] == 14
+    gridset = gs.gridset(GRIDSET)
+    assert gridset["resolutions"][-1] == 14 and gridset["description"] == "British National Grid for the e2e tests"
+    assert gridset["yCoordinateFirst"] is True and float(gridset["pixelSize"]) == 0.0003 and "bng6" in str(gridset["scaleNames"])
     tiles = gs.tile_layer(f"{WS}:points")
     assert tiles["metaWidthHeight"] == [2, 2] and tiles["gutter"] == 10 and tiles["expireCache"] == 60
     filters = gs.parameter_filters(f"{WS}:points")
