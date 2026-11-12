@@ -450,11 +450,13 @@ pages:
         status: none
         note: read from the data
       range:
-        status: 'no'
-        note: feature type customisation
+        status: 'yes'
+        spec: layer.attributes.range
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       options:
-        status: 'no'
-        note: feature type customisation
+        status: 'yes'
+        spec: layer.attributes.options
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       source:
         status: 'yes'
         spec: layer.attributes.source
@@ -463,7 +465,7 @@ pages:
         spec: layer.attributes.description
         note: feature type customisation
     CoverageDimensionImpl:
-      id: &id004
+      id: &id003
         status: none
         note: an id GeoServer gives
       name:
@@ -535,7 +537,7 @@ pages:
         status: 'yes'
         spec: layer.dimensions.time.default.value
     MetadataLinkInfoImpl:
-      id: *id004
+      id: *id003
       type:
         status: 'yes'
         spec: layer.metadataLinks.type
@@ -549,7 +551,7 @@ pages:
         status: 'yes'
         spec: layer.metadataLinks.url
     DataLinkInfoImpl:
-      id: *id004
+      id: *id003
       about:
         status: none
         note: not shown in the web UI
@@ -560,7 +562,7 @@ pages:
         status: 'yes'
         spec: layer.dataLinks.url
     AttributionInfoImpl:
-      id: *id004
+      id: *id003
       title:
         status: 'yes'
         spec: layer.attribution.title
@@ -710,7 +712,7 @@ pages:
         status: 'no'
         note: 'group styles: other named sets of members and styles'
     LayerGroupStyleImpl:
-      id: *id004
+      id: *id003
       name:
         status: 'no'
         note: group styles
@@ -766,7 +768,7 @@ pages:
       dateModified: *id001
       modifiedBy: *id001
     LegendInfoImpl:
-      id: *id004
+      id: *id003
       width:
         status: 'yes'
         spec: style.legend.width
@@ -1155,7 +1157,7 @@ pages:
         spec: service_wfs.metadata.ogcapiFeatures.propertySelection
   Settings:
     GeoServerInfoImpl:
-      id: *id004
+      id: *id003
       settings:
         status: none
         note: 'the settings object: SettingsInfoImpl'
@@ -1169,10 +1171,10 @@ pages:
       updateSequence:
         status: none
         note: counted by GeoServer
-      adminUsername: &id005
+      adminUsername: &id004
         status: none
         note: 'an old copy: the settings object holds it'
-      adminPassword: *id005
+      adminPassword: *id004
       featureTypeCacheSize:
         status: 'yes'
         spec: settings.global.featureTypeCacheSize
@@ -1196,20 +1198,20 @@ pages:
         status: 'yes'
         spec: settings.global.webUIMode
       userDetailsDisplaySettingsInfo:
-        status: 'no'
-        note: how the web UI shows the logged-in user
+        status: 'yes'
+        spec: settings.global.userDetailsDisplaySettingsInfo
       allowStoredQueriesPerWorkspace:
         status: 'yes'
         spec: settings.global.allowStoredQueriesPerWorkspace
-      contact: *id005
-      charset: *id005
-      title: *id005
-      numDecimals: *id005
-      onlineResource: *id005
-      schemaBaseUrl: *id005
-      proxyBaseUrl: *id005
-      verbose: *id005
-      verboseExceptions: *id005
+      contact: *id004
+      charset: *id004
+      title: *id004
+      numDecimals: *id004
+      onlineResource: *id004
+      schemaBaseUrl: *id004
+      proxyBaseUrl: *id004
+      verbose: *id004
+      verboseExceptions: *id004
       resourceErrorHandling:
         status: 'yes'
         spec: settings.global.resourceErrorHandling
@@ -1234,7 +1236,7 @@ pages:
         extra: true
         test: test_e2e_url_checks.py::test_request_logging_writes_requests_to_the_log
     SettingsInfoImpl:
-      id: *id004
+      id: *id003
       workspace:
         status: 'yes'
         spec: settings.workspace
@@ -1293,18 +1295,10 @@ pages:
         spec: settings.useHeadersProxyURL
       metadata.corsConfigurationSettings:
         status: cant
-        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
-        extra: true
-      metadata.root:
-        status: 'no'
-        note: 'REST: the root folder for file uploads'
-        extra: true
-      metadata.quietOnNotFound:
-        status: 'no'
-        note: 'REST: quiet on not found'
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         extra: true
     ContactInfoImpl:
-      id: *id004
+      id: *id003
       address:
         status: 'yes'
         spec: settings.contact.address
@@ -1511,13 +1505,13 @@ pages:
         status: 'yes'
         spec: settings.global.tileCaching.defaultOtherCacheFormats
       lockProviderName:
-        status: 'no'
-        note: "GeoServer Cloud sets its clustering lock provider; changing it could break locking between services: left alone"
+        status: 'yes'
+        spec: settings.global.tileCaching.lockProviderName
       cacheWarningSkips:
-        status: 'no'
-        note: 'caching defaults: warn when a tile is skipped'
+        status: 'yes'
+        spec: settings.global.tileCaching.cacheWarningSkips
     GeoServerTileLayerInfoImpl:
-      id: *id004
+      id: *id003
       enabled:
         status: 'yes'
         spec: cache
@@ -1531,8 +1525,8 @@ pages:
         status: 'yes'
         spec: cache.formats
       formatModifiers:
-        status: 'no'
-        note: 'tile layer: format modifiers'
+        status: cant
+        note: 'GeoServer Cloud''s GeoWebCache REST API drops them: an XML PUT answers 200 but doesn''t keep them, a JSON PUT answers 500'
       gridSubsets:
         status: 'yes'
         spec: cache.gridsets
@@ -1647,11 +1641,11 @@ pages:
         status: 'yes'
         spec: gridset.resolutions
       scaleDenominators:
-        status: 'no'
-        note: gridset levels by scale instead of resolution
+        status: 'yes'
+        spec: gridset.scales
       levels:
-        status: 'no'
-        note: gridset levels worked out from the extent
+        status: none
+        note: 'GeoWebCache turns it into resolutions and doesn''t keep it: give resolutions or scales'
       metersPerUnit:
         status: 'yes'
         spec: gridset.metersPerUnit
@@ -1871,8 +1865,8 @@ pages:
         status: 'yes'
         spec: settings.global.security.filterChains
       rememberMeService:
-        status: 'no'
-        note: remember-me settings
+        status: 'yes'
+        spec: settings.global.security.rememberMe
       bruteForcePrevention:
         status: 'yes'
         spec: settings.global.security.bruteForcePrevention
@@ -1893,7 +1887,7 @@ pages:
         status: 'yes'
         spec: settings.global.security.bruteForcePrevention.whitelistedMasks
     BaseSecurityNamedServiceConfig:
-      id: *id004
+      id: *id003
       name:
         status: 'yes'
         spec: securityObject.name
@@ -1916,13 +1910,20 @@ pages:
       maxLength:
         status: 'yes'
         spec: passwordPolicy.maxLength
+    MasterPasswordProviderConfig:
+      readOnly:
+        status: 'yes'
+        spec: securityObject.config
+      loginEnabled:
+        status: 'yes'
+        spec: securityObject.config
     URLMasterPasswordProviderConfig:
       url:
-        status: 'no'
-        note: master password providers
+        status: 'yes'
+        spec: securityObject.config
       encrypting:
-        status: 'no'
-        note: master password providers
+        status: 'yes'
+        spec: securityObject.config
     SecurityUserGroupServiceConfig: {}
     SecurityRoleServiceConfig: {}
     FileBasedSecurityServiceConfig:
@@ -2253,76 +2254,76 @@ pages:
     CORSConfiguration:
       enabled:
         status: cant
-        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
       allowedOriginPatterns:
         status: cant
-        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
       allowedMethods:
         status: cant
-        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
       allowedHeaders:
         status: cant
-        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
       maxAge:
         status: cant
-        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
       supportsCredentials:
         status: cant
-        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
     CSPConfiguration:
       enabled:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       reportOnly:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       allowOverride:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       injectProxyBase:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       remoteResources:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       formAction:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       frameAncestors:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       policies:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
     CSPPolicy:
       name:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       description:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       enabled:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       rules:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
     CSPRule:
       name:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       description:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       enabled:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       filter:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
       directives:
         status: cant
-        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
+        note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
     AbstractURLCheck:
       name:
         status: 'yes'
@@ -2476,6 +2477,7 @@ parents:
   LDAPSecurityServiceConfig: LDAPBaseSecurityServiceConfig
   LDAPUserGroupServiceConfig: LDAPBaseSecurityServiceConfig
   LogoutFilterConfig: SecurityFilterConfig
+  MasterPasswordProviderConfig: BaseSecurityNamedServiceConfig
   PasswordPolicyConfig: BaseSecurityNamedServiceConfig
   PreAuthenticatedUserNameFilterConfig: SecurityFilterConfig
   RegexParameterFilter: CaseNormalizingParameterFilter

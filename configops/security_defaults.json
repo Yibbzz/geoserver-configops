@@ -107,6 +107,14 @@
    "passwordEncoderName": "pbePasswordEncoder",
    "passwordPolicyName": "default",
    "validating": "true"
+  },
+  "MasterPasswordProvider/default": {
+   "className": "org.geoserver.security.password.URLMasterPasswordProvider",
+   "name": "default",
+   "readOnly": "false",
+   "loginEnabled": "false",
+   "url": "file:passwd",
+   "encrypting": "true"
   }
  },
  "settings": {
@@ -234,6 +242,9 @@
    }
   ],
   "passwordEncryption": "pbePasswordEncoder",
-  "roleService": "default"
+  "roleService": "default",
+  "rememberMe": {
+   "className": "org.geoserver.security.rememberme.GeoServerTokenBasedRememberMeServices"
+  }
  }
 }

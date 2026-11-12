@@ -10,6 +10,8 @@ AttributeTypeInfoImpl.maxOccurs
 AttributeTypeInfoImpl.minOccurs
 AttributeTypeInfoImpl.name
 AttributeTypeInfoImpl.nillable
+AttributeTypeInfoImpl.options
+AttributeTypeInfoImpl.range
 AttributeTypeInfoImpl.source
 AttributionInfoImpl.href
 AttributionInfoImpl.logoHeight
@@ -170,12 +172,14 @@ GWCConfig.WMSCEnabled
 GWCConfig.WMTSEnabled
 GWCConfig.cacheLayersByDefault
 GWCConfig.cacheNonDefaultStyles
+GWCConfig.cacheWarningSkips
 GWCConfig.defaultCachingGridSetIds
 GWCConfig.defaultCoverageCacheFormats
 GWCConfig.defaultOtherCacheFormats
 GWCConfig.defaultVectorCacheFormats
 GWCConfig.directWMSIntegrationEnabled
 GWCConfig.gutter
+GWCConfig.lockProviderName
 GWCConfig.metaTilingThreads
 GWCConfig.metaTilingX
 GWCConfig.metaTilingY
@@ -194,6 +198,7 @@ GeoServerInfoImpl.metadata.logRequestsEnabled
 GeoServerInfoImpl.metadata.requestLogBufferSize
 GeoServerInfoImpl.resourceErrorHandling
 GeoServerInfoImpl.trailingSlashMatch
+GeoServerInfoImpl.userDetailsDisplaySettingsInfo
 GeoServerInfoImpl.webUIMode
 GeoServerInfoImpl.xmlPostRequestLogBufferSize
 GeoServerRestRoleServiceConfig.adminGroup
@@ -322,6 +327,8 @@ LegendInfoImpl.onlineResource
 LegendInfoImpl.width
 LogoutFilterConfig.formLogoutChain
 LogoutFilterConfig.redirectURL
+MasterPasswordProviderConfig.loginEnabled
+MasterPasswordProviderConfig.readOnly
 MetadataLinkInfoImpl.content
 MetadataLinkInfoImpl.metadataType
 MetadataLinkInfoImpl.type
@@ -399,6 +406,7 @@ SecurityManagerConfig.bruteForcePrevention
 SecurityManagerConfig.configPasswordEncrypterName
 SecurityManagerConfig.encryptingUrlParams
 SecurityManagerConfig.filterChain
+SecurityManagerConfig.rememberMeService
 SecurityManagerConfig.roleServiceName
 ServiceInfoImpl.abstrct
 ServiceInfoImpl.accessConstraints
@@ -449,6 +457,8 @@ StyleInfoImpl.legend
 StyleInfoImpl.name
 StyleInfoImpl.workspace
 StyleParameterFilter.allowedStyles
+URLMasterPasswordProviderConfig.encrypting
+URLMasterPasswordProviderConfig.url
 UserGroupRoleEntries.accessRule.layer
 UserGroupRoleEntries.accessRule.rest
 UserGroupRoleEntries.accessRule.service
@@ -581,6 +591,7 @@ XMLGridSet.metersPerUnit
 XMLGridSet.name
 XMLGridSet.pixelSize
 XMLGridSet.resolutions
+XMLGridSet.scaleDenominators
 XMLGridSet.scaleNames
 XMLGridSet.srs
 XMLGridSet.tileHeight
