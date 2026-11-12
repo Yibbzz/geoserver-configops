@@ -86,6 +86,11 @@ type=$(curl -s -o /tmp/gscloud-smoke -w '%{content_type}' \
   "$BASE/wms?service=WMS&version=1.1.1&request=GetMap&layers=smoke:squares&styles=&srs=EPSG:27700&bbox=0,0,700000,1300000&width=256&height=256&format=image/png")
 [ "$type" = "image/png" ] || { echo "FAIL GetMap smoke:squares returned $type"; head -c 400 /tmp/gscloud-smoke; exit 1; }
 echo "ok   GetMap smoke:squares -> image/png"
+echo "== CORS: the gateway allows the origin values-kind.yaml names, and no other"
+cors() { curl -s -o /dev/null -D - -H "Origin: $1" "$BASE/wms?service=WMS&request=GetCapabilities" | tr -d '\r' | sed -n 's/^access-control-allow-origin: //Ip'; }
+[ "$(cors https://maps.example.org)" = "https://maps.example.org" ] || { echo "FAIL CORS: https://maps.example.org not allowed"; exit 1; }
+[ -z "$(cors https://elsewhere.example.org)" ] || { echo "FAIL CORS: https://elsewhere.example.org allowed"; exit 1; }
+echo "ok   CORS allows https://maps.example.org only"
 echo "== The style's image and the layer's template came through the ConfigMap"
 curl -fsu admin:geoserver "$BASE/rest/resource/workspaces/smoke/styles/marks/dot.png" | cmp - examples/smoke/styles/marks/dot.png \
   || { echo "FAIL GeoServer's styles/marks/dot.png isn't the project's (binaryData)"; exit 1; }
