@@ -443,14 +443,16 @@ class GeoServer:
 
     def put_gridset(self, name: str, epsg: int, extent: list[float], resolutions: list[float], tile_size: int,
                     align_top_left: bool, meters_per_unit: float, extra: dict | None = None) -> None:
-        """`extra`: description, scaleNames, pixelSize, yCoordinateFirst."""
+        """`extra`: description, scaleNames, pixelSize, yCoordinateFirst, scaleDenominators (instead of resolutions)."""
         extra = extra or {}
         doubles = lambda values: "".join(f"<double>{v}</double>" for v in values)
         description = f"<description>{escape(extra['description'])}</description>" if extra.get("description") else ""
         names = "".join(f"<string>{escape(n)}</string>" for n in extra.get("scaleNames") or [])
         xml = (f"<gridSet><name>{escape(name)}</name>{description}<srs><number>{epsg}</number></srs>"
                f"<extent><coords>{doubles(extent)}</coords></extent><alignTopLeft>{str(align_top_left).lower()}</alignTopLeft>"
-               f"<resolutions>{doubles(resolutions)}</resolutions><metersPerUnit>{meters_per_unit}</metersPerUnit>"
+               + (f"<scaleDenominators>{doubles(extra['scaleDenominators'])}</scaleDenominators>" if extra.get("scaleDenominators")
+                  else f"<resolutions>{doubles(resolutions)}</resolutions>") +
+               f"<metersPerUnit>{meters_per_unit}</metersPerUnit>"
                f"<pixelSize>{extra.get('pixelSize', 2.8e-4)}</pixelSize>" + (f"<scaleNames>{names}</scaleNames>" if names else "") +
                f"<tileHeight>{tile_size}</tileHeight><tileWidth>{tile_size}</tileWidth>"
                f"<yCoordinateFirst>{str(extra.get('yCoordinateFirst', False)).lower()}</yCoordinateFirst></gridSet>")

@@ -1,6 +1,6 @@
 # GeoServer ConfigOps
 
-![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-96%25-brightgreen) Of the 619 settings GeoServer Cloud's REST API can set, configops sets 596, and the e2e tests have proved 596 of those (45 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
+![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-98%25-brightgreen) Of the 617 settings GeoServer Cloud's REST API can set, configops sets 607, and the e2e tests have proved 607 of those (46 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
 
 GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud): a Helm chart, plus `configops`, a small command that keeps your GIS data and what GeoServer publishes in YAML files:
 

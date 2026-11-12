@@ -142,6 +142,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Translations (titles, abstracts, contact details in other languages) | Yes | `internationalTitle`, `internationalAbstract` on layers, groups and services; `contact.international*` |
 | JAI, coverage access | Yes | `Settings` `global.jai`, `global.coverageAccess` |
 | Image processing | Yes | As JAI |
+| REST: upload folder, quiet on not found | Yes | `Settings` `restUploadRoot`, `restQuietOnNotFound` |
+| How the web UI shows users | Yes | `Settings` `global.userDetailsDisplaySettingsInfo` |
 | Logging | Chart | GeoServer Cloud logs through Spring Boot, set in the chart's environment |
 | Request logging | Yes | `Settings` `global.requestLogging`: each request (and its headers and body) in the services' logs; the chart sets the logger it needs (`org.geoserver.filters`) to INFO |
 
@@ -171,7 +173,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Authentication: providers, filters, brute force prevention | Yes | `AuthProvider`, `AuthFilter`, `global.security.authProviders`, `bruteForcePrevention` |
 | Filter chains, role services | Yes | `global.security.filterChains`, `RoleService`: written as GeoServer's own files through `/rest/resource` |
 | Other user/group and role services (LDAP, JDBC) | Yes | `UserGroupService`, `RoleService`, `AuthProvider` with their class; tested: logins through an LDAP directory and a JDBC user database |
-| Master password | Yes | `Settings` `global.masterPassword` from a Secret; `import` doesn't write it |
+| Master password | Yes | `Settings` `global.masterPassword` from a Secret; `import` doesn't write it. Providers: `MasterPasswordProvider` |
+| Remember-me | Yes | `Settings` `global.security.rememberMe` |
 | Password policies | Yes | `PasswordPolicy` |
 | URL checks | Yes | `URLCheck` (a regular expression a URL may match), `Settings` `global.urlChecks` for the switch. GeoServer Cloud has them on with no checks, so every external URL (a remote style, graphic) is refused until a check allows it |
 | Content Security Policy | Can't | GeoServer Cloud's services don't send the header from GeoServer's policy (`security/csp.xml`): changing it changes nothing. The web UI sends its own |
