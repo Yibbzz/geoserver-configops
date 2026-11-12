@@ -60,7 +60,8 @@ def project(tmp_path, gs, monkeypatch):
                        "roleSource": {"class": "org.geoserver.security.config.PreAuthenticatedUserNameFilterConfig$PreAuthenticatedUserNameRoleSource",
                                       "value": "UserGroupService"}}}},
         {"kind": "Settings", "metadata": {"name": "global"}, "spec": {"global": {"security": {
-            "filterChains": chains, "bruteForcePrevention": {"maxDelaySeconds": 4}}}}},
+            "filterChains": chains, "encryptUrlParams": True,
+            "bruteForcePrevention": {"enabled": False, "maxDelaySeconds": 4, "maxBlockedThreads": 17}}}}},
     ]
     (tmp_path / "project.yaml").write_text(yaml.safe_dump_all([{"apiVersion": "configops/v1alpha1", **d} for d in docs], sort_keys=False))
     return tmp_path

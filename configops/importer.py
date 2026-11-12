@@ -190,7 +190,7 @@ class Importer:
             for name in self.gs.names(f"workspaces/{self.ws}/{kind}", key):
                 store = self.gs.get(f"workspaces/{self.ws}/{kind}/{name}")[key]
                 spec = {"type": kind[:-6], "url": store.get("capabilitiesURL")}
-                if store.get("username"):
+                if store.get("user"):
                     secret = f"{resource_name(name)[0]}-credentials"
                     self.secrets.append(secret)
                     spec["credentials"] = {"secret": secret}
@@ -375,6 +375,8 @@ class Importer:
                 spec["title"] = g["title"]
             if g.get("abstractTxt"):
                 spec["abstract"] = g["abstractTxt"]
+            if names_of((g.get("keywords") or {}).get("string")):
+                spec["keywords"] = names_of(g["keywords"]["string"])
             mode = MODES.get(g.get("mode", "SINGLE"))
             if mode is None:
                 self.notes.append(f"group {gs_name}: mode {g.get('mode')} has no equivalent in the files; left out")

@@ -108,8 +108,8 @@ def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict,
     elif fam in ("wms", "wmts"):
         body["capabilitiesURL"] = compared["capabilitiesURL"] = spec["url"]
         if user is not None:
-            body["username"], body["password"] = user, password
-            compared["username"] = user
+            body["user"], body["password"] = user, password  # GeoServer's name: "username" is ignored
+            compared["user"] = user
     else:
         params = {str(k): str(v) for k, v in (spec.get("connection") or {}).items()}
         if kind == "wfs":
@@ -140,7 +140,7 @@ def live_store(live: dict, kind: str) -> dict:
                 out["cog"] = (e.get("cogSettings") or {}).get("rangeReaderSettings")
     elif fam in ("wms", "wmts"):
         out["capabilitiesURL"] = live.get("capabilitiesURL")
-        out["username"] = live.get("username")
+        out["user"] = live.get("user")
     else:
         entries = (live.get("connectionParameters") or {}).get("entry") or []
         for e in entries if isinstance(entries, list) else [entries]:

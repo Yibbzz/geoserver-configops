@@ -75,8 +75,8 @@ def wanted_filters(filters: dict) -> dict:
         f = dict(f)
         if f["type"] in ("numbers", "integers"):
             f["values"] = [float(v) if f["type"] == "numbers" else int(v) for v in f.get("values", [])]
-            if "threshold" in f:
-                f["threshold"] = float(f["threshold"])
+            if "threshold" in f:  # GeoWebCache wants a whole number for an integers filter
+                f["threshold"] = float(f["threshold"]) if f["type"] == "numbers" else int(f["threshold"])
         if "default" in f:
             f["default"] = str(f["default"])
         out[key] = f
@@ -498,6 +498,8 @@ class Planner:
                       ("cache", cache)]
             if "abstract" in spec:
                 wanted.append(("abstract", spec["abstract"]))
+            if "keywords" in spec:
+                wanted.append(("keywords", list(spec["keywords"])))
             root = None
             if spec.get("rootLayer") and spec["rootLayer"] not in self.unpublished:
                 root = (self.published(spec["rootLayer"])[1], self.style_ref(spec.get("rootStyle")))
@@ -514,7 +516,7 @@ class Planner:
                     root = (root[0], ((self.gs.layer(root_ws, root_name) or {}).get("layer", {}).get("defaultStyle") or {}).get("name"))
                 self.gs.upsert_layergroup(gs_name, [(kind, n, self.style_ref(style)) for (kind, n), style in entries], ws=ws,
                                           title=spec.get("title"), abstract=spec.get("abstract"), mode=spec.get("mode", "single"),
-                                          root=root)
+                                          root=root, keywords=spec.get("keywords"))
                 if extra or links:
                     self.gs.request("PUT", f"workspaces/{ws}/layergroups/{gs_name}",
                                     {"layerGroup": {**extra, **details.patch_resource({}, links)}})
@@ -527,6 +529,7 @@ class Planner:
             g = live["layerGroup"]
             styles = [s.get("name") if isinstance(s, dict) and s.get("name") else None for s in as_list((g.get("styles") or {}).get("style"))]
             current = {"title": g.get("title"), "mode": g.get("mode"), "abstract": g.get("abstractTxt"),
+                       "keywords": names_of((g.get("keywords") or {}).get("string")),
                        "rootLayer": (g.get("rootLayer") or {}).get("name"), "rootStyle": (g.get("rootLayerStyle") or {}).get("name"),
                        "layers": names_of((g.get("publishables") or {}).get("published")),
                        "styles": styles + [None] * (len(entries) - len(styles)),

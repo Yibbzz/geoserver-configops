@@ -146,5 +146,5 @@ def pytest_runtest_logreport(report):
 
 
 def pytest_collection_modifyitems(items):
-    """Tests marked `last` run after the others (stable: the rest keep their order)."""
-    items.sort(key=lambda item: item.get_closest_marker("last") is not None)
+    """Tests marked `late` run after the others, and `last` after those (stable: the rest keep their order)."""
+    items.sort(key=lambda item: 2 if item.get_closest_marker("last") else 1 if item.get_closest_marker("late") else 0)

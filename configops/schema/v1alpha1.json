@@ -2786,14 +2786,10 @@
           "minLength": 1,
           "description": "s3, azure, gcs: another address than the cloud's own (MinIO, SeaweedFS, Azurite, a local fake)"
         },
-        "region": {
-          "type": "string",
-          "minLength": 1
-        },
         "access": {
           "enum": [
             "private",
-            "public-read"
+            "public"
           ]
         },
         "maxConnections": {

@@ -58,6 +58,11 @@ def env(monkeypatch):
                        "E2EDB_PASSWORD": DB["password"], "WAREHOUSE_USERNAME": DB["user"], "WAREHOUSE_PASSWORD": DB["password"],
                        "WAREHOUSE_CREDENTIALS_USERNAME": DB["user"], "WAREHOUSE_CREDENTIALS_PASSWORD": DB["password"]}.items():
         monkeypatch.setenv(f"CONFIGOPS_{key}", value)
+    monkeypatch.setenv("CONFIGOPS_EOXLOGIN_USERNAME", "e2e-user")
+    monkeypatch.setenv("CONFIGOPS_EOXLOGIN_PASSWORD", "e2e-secret")
+    for secret in ("EOX_WMS_LOGIN_CREDENTIALS", "EOX_WMTS_LOGIN_CREDENTIALS"):  # the Secrets import names
+        monkeypatch.setenv(f"CONFIGOPS_{secret}_USERNAME", "e2e-user")
+        monkeypatch.setenv(f"CONFIGOPS_{secret}_PASSWORD", "e2e-secret")
 
 
 def project_yaml() -> str:
@@ -89,6 +94,16 @@ apiVersion: configops/v1alpha1
 kind: Store
 metadata: {{ name: eox-wmts }}
 spec: {{ type: wmts, url: "https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml" }}
+---
+apiVersion: configops/v1alpha1
+kind: Store
+metadata: {{ name: eox-wms-login }}       # a login, as a service that wants one would; no layer uses it
+spec: {{ type: wms, url: "https://tiles.maps.eox.at/wms?service=WMS&request=GetCapabilities", credentials: {{ secret: eoxlogin }} }}
+---
+apiVersion: configops/v1alpha1
+kind: Store
+metadata: {{ name: eox-wmts-login }}
+spec: {{ type: wmts, url: "https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml", credentials: {{ secret: eoxlogin }} }}
 ---
 apiVersion: configops/v1alpha1
 kind: Store
@@ -135,6 +150,9 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     coverage = gs.get(f"workspaces/{WS}/coveragestores/sentinel_2/coverages/imagery")["coverage"]
     assert coverage["nativeCoverageName"] == "geotiff_coverage" and coverage["srs"] == "EPSG:32630"
     assert gs.layer(WS, "points")["layer"]["defaultStyle"]["name"] == "point"
+    for kind, key, name in (("wmsstores", "wmsStore", "eox_wms_login"), ("wmtsstores", "wmtsStore", "eox_wmts_login")):
+        store = gs.get(f"workspaces/{WS}/{kind}/{name}")[key]
+        assert store["user"] == "e2e-user" and store["password"].startswith("crypt1:"), store  # kept, and encrypted
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):
@@ -151,7 +169,8 @@ def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
     imported = tmp_path_factory.mktemp("imported")
     (imported / "project.yaml").write_text(project_yaml())
     code, out = configops(capsys, "import", WS, "-C", str(imported))
-    assert code == 0 and "4 store(s), 4 layer(s)" in out, out
+    assert code == 0 and "6 store(s), 4 layer(s)" in out, out
     assert "Secret warehouse-credentials (keys: username, password)" in out
+    assert "Secret eox-wms-login-credentials" in out  # the cascaded store's user came back
     code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out

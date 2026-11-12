@@ -281,3 +281,18 @@ spec: { type: shapefile, path: ../etc/passwd }
     assert "spec.url: a geotiff store reads a file on the data volume: use spec.path" in messages
     assert "a pmtiles store needs spec.path (on the data volume) or spec.url, not both" in messages
     assert any(m.startswith("spec.path: '../etc/passwd' isn't allowed") or "does not match" in m for m in messages)
+
+
+def test_a_cascaded_store_sends_its_user_as_geoserver_names_it(monkeypatch, tmp_path):
+    """GeoServer keeps a WMS or WMTS store's user under "user"; it ignores "username"."""
+    from configops.loader import Resource
+    from configops.stores import live_store, wanted_store
+
+    monkeypatch.setenv("CONFIGOPS_EOX_USERNAME", "bob")
+    monkeypatch.setenv("CONFIGOPS_EOX_PASSWORD", "secret")
+    data = {"kind": "Store", "metadata": {"name": "eox"},
+            "spec": {"type": "wms", "url": "https://example.org/wms", "credentials": {"secret": "eox"}}}
+    store = Resource(data=data, file=tmp_path / "x.yaml", node=None)
+    body, compared = wanted_store(store, tmp_path)
+    assert body["user"] == "bob" and "username" not in body
+    assert live_store({"capabilitiesURL": "https://example.org/wms", "user": "bob"}, "wms")["user"] == compared["user"]

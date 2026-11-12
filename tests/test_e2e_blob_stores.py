@@ -174,3 +174,45 @@ def test_azure_and_google_cloud_storage_are_seeded(gs, project, capsys, env):
     assert code == 2 and 'container: "other" -> "e2e-tiles"' in out, out
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
     assert configops(capsys, "plan", "-C", str(project))[0] == 0
+
+
+def test_every_blob_store_field_is_kept(gs, tmp_path, capsys, env, monkeypatch):
+    """S3, Azure and Google Cloud stores with every field set, turned off so GeoWebCache doesn't connect:
+    apply, then plan has nothing to do and GeoWebCache holds each value."""
+    monkeypatch.setenv("CONFIGOPS_E2ES3_ACCESSKEY", "e2e-access")
+    monkeypatch.setenv("CONFIGOPS_E2ES3_SECRETKEY", "e2e-secret")
+    monkeypatch.setenv("CONFIGOPS_E2EGCS_APIKEY", "e2e-api-key")
+    (tmp_path / "project.yaml").write_text(project_yaml().replace(f"workspace: {WS}", "workspace: configops_blobs_off") + """---
+apiVersion: configops/v1alpha1
+kind: BlobStore
+metadata: { name: e2e-s3-off }
+spec: { type: s3, enabled: false, bucket: e2e-bucket, prefix: e2e-prefix, endpoint: "http://e2e-s3.example.org:9000",
+        access: public, maxConnections: 7, gzip: false, credentials: { secret: e2es3 } }
+---
+apiVersion: configops/v1alpha1
+kind: BlobStore
+metadata: { name: e2e-azure-off }
+spec: { type: azure, enabled: false, container: e2e-off, endpoint: "https://e2e.blob.example.org", maxConnections: 9,
+        credentials: { secret: azure } }
+---
+apiVersion: configops/v1alpha1
+kind: BlobStore
+metadata: { name: e2e-gcs-off }
+spec: { type: gcs, enabled: false, bucket: e2e-off, project: e2e, defaultCredentials: true, credentials: { secret: e2egcs } }
+""")
+    try:
+        code, out = configops(capsys, "apply", "-C", str(tmp_path))
+        assert code == 0, out
+        code, out = configops(capsys, "plan", "-C", str(tmp_path))
+        assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+        s3 = gs.gwc_request("GET", "blobstores/e2e-s3-off", accept="application/xml").text
+        for part in ("<bucket>e2e-bucket</bucket>", "<access>PUBLIC</access>", "<maxConnections>7</maxConnections>",
+                     "<useGzip>false</useGzip>", "<useHTTPS>false</useHTTPS>", "<awsAccessKey>e2e-access</awsAccessKey>"):
+            assert part in s3, (part, s3)
+        assert "<maxConnections>9</maxConnections>" in gs.gwc_request("GET", "blobstores/e2e-azure-off", accept="application/xml").text
+        gcs = gs.gwc_request("GET", "blobstores/e2e-gcs-off", accept="application/xml").text
+        assert "<apiKey>e2e-api-key</apiKey>" in gcs and "<useDefaultCredentialsChain>true" in gcs, gcs
+    finally:
+        for store in ("e2e-s3-off", "e2e-azure-off", "e2e-gcs-off"):
+            gs.gwc_request("DELETE", f"blobstores/{store}")
+        gs.delete_workspace("configops_blobs_off")

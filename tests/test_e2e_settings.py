@@ -9,6 +9,8 @@ The settings are put back as they were at the end.
 """
 
 import os
+import secrets
+import warnings
 
 import pytest
 import yaml
@@ -74,6 +76,26 @@ def example(props: dict) -> dict:
     return out
 
 
+# Fields only `geoserver:` reaches, as GeoServer names them
+PASSED = {
+    "wms": {"geoserver": {"outputStrategy": "SPEED", "defaultLocale": "cy", "rootLayerTitle": "e2e root layer",
+                          "rootLayerAbstract": "e2e root abstract", "exceptionOnInvalidDimension": True}},
+    "wfs": {"geoserver": {"csvDateFormat": "yyyy-MM-dd"}},
+}
+
+
+def global_settings(defs: dict) -> dict:
+    """Every global setting, each different from a fresh install's (the schema's booleans are true there)."""
+    spec = example(defs["settings"]["properties"])
+    spec.update({"charset": "ISO-8859-1", "verbose": False, "geoserver": {
+        "title": "e2e settings title", "onlineResource": "https://e2e.example.org/settings",
+        "schemaBaseUrl": "https://e2e.example.org/schemas", "defaultLocale": "cy"}})
+    spec["global"].update({"globalServices": False, "trailingSlashMatch": False, "allowStoredQueriesPerWorkspace": False,
+                           "resourceErrorHandling": "OGC_EXCEPTION_REPORT", "geoserver": {"lockProviderName": "memoryLockProvider"}})
+    spec["global"]["jai"].update({"tileThreads": 5, "memoryCapacity": 0.6, "memoryThreshold": 0.8})
+    return spec
+
+
 @pytest.fixture(scope="module")
 def gs():
     gs = GeoServer(URL.removesuffix("/rest"), "admin", PASSWORD)
@@ -98,11 +120,11 @@ def project(tmp_path, monkeypatch):
         {"kind": "Project", "metadata": {"name": "e2e-settings"}, "spec": {
             "geoserver": {"url": URL.removesuffix("/rest"), "credentials": {"secret": "e2egs"}},
             "database": {"jndi": "java:comp/env/jdbc/mypostgis", "connection": {"secret": "e2edb"}}, "workspace": WS}},
-        {"kind": "Settings", "metadata": {"name": "global"}, "spec": example(defs["settings"]["properties"])},
+        {"kind": "Settings", "metadata": {"name": "global"}, "spec": global_settings(defs)},
         {"kind": "Settings", "metadata": {"name": "own"}, "spec": {
             "workspace": WS, "contact": {"contactPerson": "Workspace Team"}, "numDecimals": 3}},
     ]
-    docs += [{"kind": "Service", "metadata": {"name": s}, "spec": example(defs[f"service_{s}"]["properties"])}
+    docs += [{"kind": "Service", "metadata": {"name": s}, "spec": {**example(defs[f"service_{s}"]["properties"]), **PASSED.get(s, {})}}
              for s in ("wms", "wfs", "wcs", "wmts")]
     docs.append({"kind": "Service", "metadata": {"name": "own-wms"}, "spec": {
         "service": "wms", "workspace": WS, "title": "Workspace maps", "maxBuffer": 25}})
@@ -130,6 +152,10 @@ def test_every_field_is_applied_then_nothing_to_do(gs, project, capsys):
     assert gs.get("services/wms/settings")["wms"]["abstrct"] == "e2e abstract"
     assert gs.get("settings/contact")["contact"]["contactPerson"] == "e2e contactPerson"
     assert gs.get(f"workspaces/{WS}/settings")["settings"]["contact"]["contactPerson"] == "Workspace Team"
+    assert gs.get("security/acl/catalog")["mode"] == "CHALLENGE"
+    settings = gs.get("settings")["global"]
+    assert (settings["settings"]["charset"], settings["globalServices"], settings["jai"]["tileThreads"]) == ("ISO-8859-1", False, 5)
+    assert gs.get("services/wfs/settings")["wfs"]["csvDateFormat"] == "yyyy-MM-dd"
     own = gs.get(f"services/wms/workspaces/{WS}/settings")["wms"]
     assert own["title"] == "Workspace maps" and own["maxBuffer"] == 25 and own["abstrct"] == "e2e abstract"  # the rest from the global
 
@@ -153,3 +179,29 @@ def test_drift_is_shown_and_put_back(gs, project, capsys):
     assert code == 2 and 'title: "Edited in the web UI" -> "e2e title"' in out
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
     assert configops(capsys, "plan", "-C", str(project))[0] == 0
+
+
+@pytest.mark.late  # on a fresh GeoServer Cloud with several services, store passwords set after it can't be read
+def test_master_password_is_changed_and_back(gs, project, capsys, monkeypatch):
+    """The master password from a Secret: apply sets it (twice, from a value it set itself), plan then has
+    nothing to do. The old one is put back: by configops, or by GeoServer's API if configops can't."""
+    old = gs.get("security/masterpw")["oldMasterPassword"]
+    (project / "master.yaml").write_text(yaml.safe_dump({"apiVersion": "configops/v1alpha1", "kind": "Settings",
+        "metadata": {"name": "master"}, "spec": {"global": {"masterPassword": {"secret": "e2emaster", "key": "password"}}}}))
+    (project / "project.yaml").write_text((project / "project.yaml").read_text().split("\n---\n")[0] + "\n")
+    try:
+        for _ in range(2):
+            new = f"e2e-{secrets.token_hex(6)}"
+            monkeypatch.setenv("CONFIGOPS_E2EMASTER_PASSWORD", new)
+            code, out = configops(capsys, "apply", "-C", str(project))
+            assert code == 0, out
+            assert gs.get("security/masterpw")["oldMasterPassword"] == new
+            assert configops(capsys, "plan", "-C", str(project))[0] == 0
+    finally:
+        monkeypatch.setenv("CONFIGOPS_E2EMASTER_PASSWORD", old)
+        code, out = configops(capsys, "apply", "-C", str(project))
+        current = gs.get("security/masterpw")["oldMasterPassword"]
+        if current != old:
+            warnings.warn(f"configops couldn't put the master password back ({len(old)} characters): {out.replace(old, '***')}")
+            gs.request("PUT", "security/masterpw", {"oldMasterPassword": current, "newMasterPassword": old})
+    assert gs.get("security/masterpw")["oldMasterPassword"] == old

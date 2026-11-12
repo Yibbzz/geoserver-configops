@@ -111,3 +111,11 @@ def test_named_tests():
                                                    "user.name": {"status": "yes"}}}}}
     assert coverage.named_tests(manifest, {"tests/test_e2e_security.py::test_password"}) == {"Entries.user.password"}
     assert coverage.named_tests(manifest, set()) == set()
+
+
+def test_an_encrypted_password_stands_for_the_one_written():
+    ev = coverage.Evidence({"pages": {"Stores": {"StoreInfoImpl": {"name": {}, "connectionParameters": {}}}}})
+    path = "/rest/workspaces/w/datastores/s"
+    ev.write(path, {"dataStore": {"name": "s", "connectionParameters": {"entry": [{"@key": "passwd", "$": "secret"}]}}})
+    ev.read(path, {"dataStore": {"name": "s", "connectionParameters": {"entry": [{"@key": "passwd", "$": "crypt1:abc"}]}}})
+    assert "StoreInfoImpl.connectionParameters" in ev.proved

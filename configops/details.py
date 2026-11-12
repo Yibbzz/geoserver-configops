@@ -125,7 +125,7 @@ def dimension(dim: dict) -> dict:
     out = {"attribute": dim["attribute"], "presentation": PRESENTATIONS[dim.get("presentation", "list")]}
     for key in ("endAttribute", "resolution", "units", "unitSymbol"):
         if key in dim:
-            out[key] = dim[key]
+            out[key] = str(dim[key]) if key == "resolution" else dim[key]  # GeoServer gives it back as a number
     if "nearestMatch" in dim:
         out["nearestMatchEnabled"] = dim["nearestMatch"]
     return out
@@ -156,7 +156,8 @@ def live_resource(resource: dict, wanted: dict[str, object]) -> dict[str, object
         elif key.startswith("dimensions."):
             info = (meta.get(dimension_key(resource, key.split(".", 1)[1])) or {}).get("dimensionInfo") or {}
             want = wanted[key]
-            out[key] = {k: info.get(k) for k in want} if info.get("enabled") else None
+            out[key] = {k: str(info[k]) if k == "resolution" and info.get(k) is not None else info.get(k)
+                        for k in want} if info.get("enabled") else None
         elif key == "dataLinks":
             links = as_list((resource.get("dataLinks") or {}).get("org.geoserver.catalog.impl.DataLinkInfoImpl"))
             out[key] = [{"url": d.get("content"), "type": d.get("type")} for d in links]
@@ -316,7 +317,7 @@ def to_spec(resource: dict, layer: dict) -> dict:
             dim = {"attribute": info["attribute"], "presentation": names.get(info.get("presentation"), "list")}
             for key in ("endAttribute", "resolution", "units", "unitSymbol"):
                 if info.get(key) not in (None, ""):
-                    dim[key] = info[key]
+                    dim[key] = str(info[key]) if key == "resolution" else info[key]
             if info.get("nearestMatchEnabled"):
                 dim["nearestMatch"] = True
             out.setdefault("dimensions", {})[name] = dim
