@@ -68,9 +68,14 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Attribution title | Yes | From the file, or the source's licence for OS data |
 | Attribution link and logo | Yes | `attribution: { title, link, logo }` |
 | Rendering buffer, HTTP cache headers | Yes | `buffer`, `httpCache` |
-| Per-layer WFS settings (max features, decimals, other CRSs) | Yes | `wfs` |
+| Per-layer WFS settings (max features, decimals, other CRSs, zero padding, no scientific notation, M values) | Yes | `wfs` |
+| Services the layer is published in | Yes | `disabledServices` |
+| Curved geometries | Yes | `circularArcs`, `linearizationTolerance` |
+| KML regionating | Yes | `kml` |
+| Authority URLs and identifiers | Yes | `authorityURLs`, `identifiers` |
 | Per-layer WMS and WCS settings | Yes | `wms: { path, interpolation }`, `wcs` |
 | **Dimensions:** time, elevation | Yes | `dimensions` |
+| Default value, nearest match, acceptable interval, start and end | Yes | `dimensions.<name>: { default, nearestMatch, acceptableInterval, nearestFailBehavior, rawNearestMatch, start, end }` |
 | Custom dimensions | Yes | Any other name under `dimensions` |
 | **Tile caching:** on or off, gridsets, image formats | Yes | `cache:` |
 | Metatiling, gutter, expiry | Yes | `cache: { metaTiles, gutter, expireCache, expireClients }` |
@@ -87,6 +92,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Bounds, CRS | Yes | Worked out from the members |
 | Tile caching | Yes | |
 | Enabled, advertised, metadata links | Yes | |
+| Queryable, attribution, authority URLs and identifiers | Yes | `queryable`, `attribution`, `authorityURLs`, `identifiers` |
 | Earth observation groups (root layer) | Yes | `mode: eo`, `rootLayer`, `rootStyle` |
 
 ### Styles

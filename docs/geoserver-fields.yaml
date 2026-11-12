@@ -200,11 +200,11 @@ pages:
         spec: layer.store, layer.dataset
         test: test_e2e_details.py::test_apply_then_nothing_to_do
       serviceConfiguration:
-        status: 'no'
-        note: 'the layer''s ''Services'' settings: turning WMS, WFS and so on off for one layer'
+        status: 'yes'
+        spec: layer.disabledServices
       disabledServices:
-        status: 'no'
-        note: 'the layer''s ''Services'' settings: turning WMS, WFS and so on off for one layer'
+        status: 'yes'
+        spec: layer.disabledServices
       simpleConversionEnabled:
         status: 'no'
         note: 'app-schema layers: simple features conversion'
@@ -242,16 +242,16 @@ pages:
         note: coverage views
         extra: true
       metadata.kml.regionateAttribute:
-        status: 'no'
-        note: KML regionating
+        status: 'yes'
+        spec: layer.kml.regionateAttribute
         extra: true
       metadata.kml.regionateStrategy:
-        status: 'no'
-        note: KML regionating
+        status: 'yes'
+        spec: layer.kml.regionateStrategy
         extra: true
       metadata.kml.regionateFeatureLimit:
-        status: 'no'
-        note: KML regionating
+        status: 'yes'
+        spec: layer.kml.regionateFeatureLimit
         extra: true
     FeatureTypeInfoImpl:
       cqlFilter:
@@ -264,11 +264,11 @@ pages:
         status: 'yes'
         spec: layer.wfs.decimals
       padWithZeros:
-        status: 'no'
-        note: 'WFS: pad decimals with zeros'
+        status: 'yes'
+        spec: layer.wfs.padWithZeros
       forcedDecimal:
-        status: 'no'
-        note: 'WFS: no scientific notation'
+        status: 'yes'
+        spec: layer.wfs.forcedDecimal
       responseSRS:
         status: 'yes'
         spec: layer.wfs.otherCRS
@@ -279,14 +279,14 @@ pages:
         status: 'yes'
         spec: layer.wfs.skipNumberMatched
       circularArcPresent:
-        status: 'no'
-        note: curved geometries
+        status: 'yes'
+        spec: layer.circularArcs
       encodeMeasures:
-        status: 'no'
-        note: encode M values
+        status: 'yes'
+        spec: layer.wfs.encodeMeasures
       linearizationTolerance:
-        status: 'no'
-        note: curved geometries
+        status: 'yes'
+        spec: layer.linearizationTolerance
       attributes:
         status: 'yes'
         spec: layer.attributes
@@ -385,11 +385,11 @@ pages:
         status: 'yes'
         spec: layer.attribution
       authorityURLs:
-        status: 'no'
-        note: WMS authority URLs
+        status: 'yes'
+        spec: layer.authorityURLs
       identifiers:
-        status: 'no'
-        note: WMS identifiers
+        status: 'yes'
+        spec: layer.identifiers
       defaultWMSInterpolationMethod:
         status: 'yes'
         spec: layer.wms.interpolation
@@ -488,33 +488,33 @@ pages:
         status: 'yes'
         spec: layer.dimensions.time.unitSymbol
       defaultValue:
-        status: 'no'
-        note: dimension default value
+        status: 'yes'
+        spec: layer.dimensions.time.default
       nearestMatchEnabled:
         status: 'yes'
         spec: layer.dimensions.time.nearestMatch
       rawNearestMatchEnabled:
-        status: 'no'
-        note: nearest match for WCS
+        status: 'yes'
+        spec: layer.dimensions.time.rawNearestMatch
       acceptableInterval:
-        status: 'no'
-        note: nearest match acceptable interval
+        status: 'yes'
+        spec: layer.dimensions.time.acceptableInterval
       startValue:
-        status: 'no'
-        note: dimension range start
+        status: 'yes'
+        spec: layer.dimensions.time.start
       endValue:
-        status: 'no'
-        note: dimension range end
+        status: 'yes'
+        spec: layer.dimensions.time.end
       nearestFailBehavior:
-        status: 'no'
-        note: nearest match failure behaviour
+        status: 'yes'
+        spec: layer.dimensions.time.nearestFailBehavior
     DimensionDefaultValueSetting:
       strategy:
-        status: 'no'
-        note: dimension default value
+        status: 'yes'
+        spec: layer.dimensions.time.default.strategy
       referenceValue:
-        status: 'no'
-        note: dimension default value
+        status: 'yes'
+        spec: layer.dimensions.time.default.value
     MetadataLinkInfoImpl:
       id: *id004
       type:
@@ -622,8 +622,8 @@ pages:
         status: 'yes'
         spec: layerGroup.mode
       queryDisabled:
-        status: 'no'
-        note: 'group: ''Queryable'' off'
+        status: 'yes'
+        spec: layerGroup.queryable
       title:
         status: 'yes'
         spec: layerGroup.title
@@ -667,14 +667,14 @@ pages:
         note: worked out from the members
       metadata: *id002
       attribution:
-        status: 'no'
-        note: group attribution
+        status: 'yes'
+        spec: layerGroup.attribution
       authorityURLs:
-        status: 'no'
-        note: WMS authority URLs
+        status: 'yes'
+        spec: layerGroup.authorityURLs
       identifiers:
-        status: 'no'
-        note: WMS identifiers
+        status: 'yes'
+        spec: layerGroup.identifiers
       keywords:
         status: 'yes'
         spec: layerGroup.keywords

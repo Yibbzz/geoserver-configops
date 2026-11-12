@@ -75,12 +75,19 @@ spec:
   table: { schema: e2e_details, name: readings }
   keywords: [e2e, rivers]
   filter: "kind = 'river'"
-  wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326] }
+  wfs: { maxFeatures: 100, decimals: 2, skipNumberMatched: true, otherCRS: [EPSG:4326], padWithZeros: true, forcedDecimal: true, encodeMeasures: true }
+  circularArcs: true
+  linearizationTolerance: 0.5
+  disabledServices: [wcs, wps]
+  kml: { regionateAttribute: depth, regionateStrategy: random, regionateFeatureLimit: 20 }
+  authorityURLs: [ { name: e2e, href: "https://example.org/authority" } ]
+  identifiers: [ { authority: e2e, identifier: river-readings } ]
   metadataLinks: [ { url: "https://example.org/readings.xml", type: text/xml, standard: ISO19115:2003 } ]
   httpCache: { maxAge: 300 }
   dimensions:
-    time: { attribute: observed, endAttribute: ended, presentation: interval, resolution: "86400000", units: ISO8601, nearestMatch: true }
-    elevation: { attribute: depth, presentation: list, units: EPSG:5030, unitSymbol: m }
+    time: { attribute: observed, endAttribute: ended, presentation: interval, resolution: "86400000", units: ISO8601, nearestMatch: true,
+            acceptableInterval: PT12H, nearestFailBehavior: EXCEPTION, rawNearestMatch: true, default: { strategy: MAXIMUM } }
+    elevation: { attribute: depth, presentation: list, units: EPSG:5030, unitSymbol: m, start: "0", end: "100", default: { strategy: NEAREST, value: "5" } }
   opaque: true
   buffer: 6
   attribution: { title: Readings, link: "https://example.org", logo: { url: "https://example.org/logo.png", width: 16, height: 16, type: image/png } }
@@ -98,7 +105,16 @@ spec:
 apiVersion: configops/v1alpha1
 kind: LayerGroup
 metadata: { name: readings-eo }
-spec: { mode: eo, rootLayer: river-readings, layers: [kinds], abstract: Readings by kind, keywords: [e2e, readings] }
+spec:
+  mode: eo
+  rootLayer: river-readings
+  layers: [kinds]
+  abstract: Readings by kind
+  keywords: [e2e, readings]
+  queryable: false
+  attribution: { title: Readings group, link: "https://example.org/group" }
+  authorityURLs: [ { name: e2e, href: "https://example.org/authority" } ]
+  identifiers: [ { authority: e2e, identifier: readings-group } ]
 """)
     return tmp_path
 
@@ -132,6 +148,14 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert dims["time"]["endAttribute"] == "ended" and dims["time"]["nearestMatchEnabled"] is True
     assert str(dims["time"]["resolution"]) == "86400000" and dims["elevation"]["unitSymbol"] == "m"
     assert ft["metadataLinks"]["metadataLink"]["content"] == "https://example.org/readings.xml"
+    assert (ft["padWithZeros"], ft["forcedDecimal"], ft["encodeMeasures"], ft["circularArcPresent"], ft["linearizationTolerance"]) == (
+        True, True, True, True, 0.5)
+    assert ft["serviceConfiguration"] is True and sorted(ft["disabledServices"]["string"]) == ["WCS", "WPS"]
+    assert dims["time"]["defaultValue"]["strategy"] == "MAXIMUM" and dims["time"]["acceptableInterval"] == "PT12H"
+    assert str(dims["elevation"]["defaultValue"]["referenceValue"]) == "5" and str(dims["elevation"]["endValue"]) == "100"
+    assert layer["identifiers"]["Identifier"]["identifier"] == "river-readings"
+    assert group["queryDisabled"] is True and group["attribution"]["href"] == "https://example.org/group"
+    assert group["authorityURLs"]["AuthorityURL"]["href"] == "https://example.org/authority"
 
 
 def test_drift_is_shown_and_put_back(gs, project, capsys):

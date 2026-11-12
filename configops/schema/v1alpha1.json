@@ -1049,6 +1049,18 @@
               "items": {
                 "$ref": "#/$defs/crs"
               }
+            },
+            "padWithZeros": {
+              "type": "boolean",
+              "description": "Write decimals with trailing zeros up to decimals"
+            },
+            "forcedDecimal": {
+              "type": "boolean",
+              "description": "Never write numbers in scientific notation"
+            },
+            "encodeMeasures": {
+              "type": "boolean",
+              "description": "Write M values"
             }
           }
         },
@@ -1135,6 +1147,63 @@
               },
               "nearestMatch": {
                 "type": "boolean"
+              },
+              "acceptableInterval": {
+                "type": [
+                  "string",
+                  "number"
+                ],
+                "description": "How far a nearest match may be, e.g. PT1H"
+              },
+              "nearestFailBehavior": {
+                "enum": [
+                  "IGNORE",
+                  "EXCEPTION"
+                ]
+              },
+              "rawNearestMatch": {
+                "type": "boolean",
+                "description": "Nearest match in WCS too"
+              },
+              "start": {
+                "type": [
+                  "string",
+                  "number"
+                ],
+                "description": "The start of the values to offer"
+              },
+              "end": {
+                "type": [
+                  "string",
+                  "number"
+                ],
+                "description": "The end of the values to offer"
+              },
+              "default": {
+                "type": "object",
+                "required": [
+                  "strategy"
+                ],
+                "additionalProperties": false,
+                "description": "The value used when a request names none",
+                "properties": {
+                  "strategy": {
+                    "enum": [
+                      "MINIMUM",
+                      "MAXIMUM",
+                      "NEAREST",
+                      "FIXED",
+                      "BUILTIN"
+                    ]
+                  },
+                  "value": {
+                    "type": [
+                      "string",
+                      "number"
+                    ],
+                    "description": "For NEAREST and FIXED"
+                  }
+                }
               }
             }
           },
@@ -1177,6 +1246,63 @@
                 },
                 "nearestMatch": {
                   "type": "boolean"
+                },
+                "acceptableInterval": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "How far a nearest match may be, e.g. PT1H"
+                },
+                "nearestFailBehavior": {
+                  "enum": [
+                    "IGNORE",
+                    "EXCEPTION"
+                  ]
+                },
+                "rawNearestMatch": {
+                  "type": "boolean",
+                  "description": "Nearest match in WCS too"
+                },
+                "start": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "The start of the values to offer"
+                },
+                "end": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "The end of the values to offer"
+                },
+                "default": {
+                  "type": "object",
+                  "required": [
+                    "strategy"
+                  ],
+                  "additionalProperties": false,
+                  "description": "The value used when a request names none",
+                  "properties": {
+                    "strategy": {
+                      "enum": [
+                        "MINIMUM",
+                        "MAXIMUM",
+                        "NEAREST",
+                        "FIXED",
+                        "BUILTIN"
+                      ]
+                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "number"
+                      ],
+                      "description": "For NEAREST and FIXED"
+                    }
+                  }
                 }
               }
             },
@@ -1218,6 +1344,63 @@
                 },
                 "nearestMatch": {
                   "type": "boolean"
+                },
+                "acceptableInterval": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "How far a nearest match may be, e.g. PT1H"
+                },
+                "nearestFailBehavior": {
+                  "enum": [
+                    "IGNORE",
+                    "EXCEPTION"
+                  ]
+                },
+                "rawNearestMatch": {
+                  "type": "boolean",
+                  "description": "Nearest match in WCS too"
+                },
+                "start": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "The start of the values to offer"
+                },
+                "end": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "The end of the values to offer"
+                },
+                "default": {
+                  "type": "object",
+                  "required": [
+                    "strategy"
+                  ],
+                  "additionalProperties": false,
+                  "description": "The value used when a request names none",
+                  "properties": {
+                    "strategy": {
+                      "enum": [
+                        "MINIMUM",
+                        "MAXIMUM",
+                        "NEAREST",
+                        "FIXED",
+                        "BUILTIN"
+                      ]
+                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "number"
+                      ],
+                      "description": "For NEAREST and FIXED"
+                    }
+                  }
                 }
               }
             }
@@ -1426,6 +1609,91 @@
             ]
           },
           "description": "a raster layer's reading parameters, as the web UI's Coverage Parameters (InputTransparentColor, BackgroundValues, ...)"
+        },
+        "circularArcs": {
+          "type": "boolean",
+          "description": "The geometries have circular arcs (curves)"
+        },
+        "linearizationTolerance": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How closely curves are turned into lines, in the layer's units"
+        },
+        "disabledServices": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "wms",
+              "wfs",
+              "wcs",
+              "wmts",
+              "wps"
+            ]
+          },
+          "description": "Services this layer isn't published in"
+        },
+        "kml": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "KML regionating",
+          "properties": {
+            "regionateAttribute": {
+              "type": "string"
+            },
+            "regionateStrategy": {
+              "enum": [
+                "best_guess",
+                "external-sorting",
+                "geometry",
+                "native-sorting",
+                "random"
+              ]
+            },
+            "regionateFeatureLimit": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "authorityURLs": {
+          "type": "array",
+          "description": "Authority URLs, shown in WMS capabilities",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "href"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "href": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "identifiers": {
+          "type": "array",
+          "description": "Identifiers, each from an authority in authorityURLs (here or on a parent)",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "authority",
+              "identifier"
+            ],
+            "properties": {
+              "authority": {
+                "type": "string"
+              },
+              "identifier": {
+                "type": "string"
+              }
+            }
+          }
         }
       },
       "if": {
@@ -1571,6 +1839,95 @@
           "type": "string",
           "minLength": 1,
           "description": "eo: the root layer's style"
+        },
+        "attribution": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "link": {
+                  "type": "string"
+                },
+                "logo": {
+                  "type": "object",
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "width": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "type": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "description": "the text clients must show, or { title, link, logo: { url, width, height, type } }"
+        },
+        "authorityURLs": {
+          "type": "array",
+          "description": "Authority URLs, shown in WMS capabilities",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "href"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "href": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "identifiers": {
+          "type": "array",
+          "description": "Identifiers, each from an authority in authorityURLs (here or on a parent)",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "authority",
+              "identifier"
+            ],
+            "properties": {
+              "authority": {
+                "type": "string"
+              },
+              "identifier": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "queryable": {
+          "type": "boolean",
+          "description": "Whether GetFeatureInfo answers for the group. Default: true"
         }
       }
     },

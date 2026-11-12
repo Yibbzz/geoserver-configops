@@ -170,6 +170,36 @@ def test_a_parameter_filter_keeps_tiles_apart_and_refuses_others(gs, project, ca
     assert get("2025-12-31").status_code >= 400  # not a value the filter allows
 
 
+LAYER_OPTIONS = """---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: wms-only }
+spec:
+  table: { schema: e2e_services, name: readings }
+  disabledServices: [wfs]
+  authorityURLs: [ { name: e2e, href: "https://example.org/authority" } ]
+  identifiers: [ { authority: e2e, identifier: e2e-wms-only } ]
+---
+apiVersion: configops/v1alpha1
+kind: LayerGroup
+metadata: { name: not-queryable }
+spec: { layers: [wms-only], queryable: false }
+"""
+
+
+def test_layer_services_identifiers_and_a_group_that_isnt_queryable(gs, project, capsys):
+    (project / "project.yaml").write_text(HEAD + VECTOR + LAYER_OPTIONS)
+    code, out = configops(capsys, "apply", "-C", str(project))
+    assert code == 0, out
+    wms = re.sub(r"\s+", " ", eventually(lambda: capabilities("wms", "1.3.0"), lambda c: "not_queryable" in c))
+    assert "<Name>wms_only</Name>" in wms and "e2e-wms-only" in wms and "https://example.org/authority" in wms
+    group = re.search(r'<Layer( [^>]*)?>\s*<Name>not_queryable</Name>', wms)
+    assert group and 'queryable="0"' in (group.group(1) or ""), group
+    wfs = eventually(lambda: capabilities("wfs", "2.0.0"), lambda c: "readings" in c)
+    assert f"{WS}:readings" in wfs or "<Name>readings</Name>" in wfs  # the others are there
+    assert "wms_only" not in wfs
+
+
 # --- a raster on the data volume
 
 RASTER = """---

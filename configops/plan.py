@@ -510,18 +510,25 @@ class Planner:
                     wanted.append(("rootStyle", root[1]))
             extra = {"enabled": spec.get("enabled", True), "advertised": spec.get("advertised", True)}
             links = details.wanted_resource({"metadataLinks": spec["metadataLinks"]}) if "metadataLinks" in spec else {}
-            wanted += list(extra.items()) + list(links.items())
+            layer_fields = {k: spec[k] for k in ("attribution", "authorityURLs", "identifiers") if k in spec}
+            if isinstance(layer_fields.get("attribution"), str):
+                layer_fields["attribution"] = {"title": layer_fields["attribution"]}
+            like_layer = details.wanted_layer(layer_fields)
+            if "queryable" in spec:
+                extra["queryDisabled"] = not spec["queryable"]
+            wanted += list(extra.items()) + list(links.items()) + list(like_layer.items())
 
-            def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache, extra=extra, links=links, root=root):
+            def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache, extra=extra, links=links, root=root,
+                    like_layer=like_layer):
                 if root and not root[1]:  # GeoServer wants a root style: the root layer's own
                     root_ws, root_name = root[0].split(":", 1)
                     root = (root[0], ((self.gs.layer(root_ws, root_name) or {}).get("layer", {}).get("defaultStyle") or {}).get("name"))
                 self.gs.upsert_layergroup(gs_name, [(kind, n, self.style_ref(style)) for (kind, n), style in entries], ws=ws,
                                           title=spec.get("title"), abstract=spec.get("abstract"), mode=spec.get("mode", "single"),
                                           root=root, keywords=spec.get("keywords"))
-                if extra or links:
+                if extra or links or like_layer:
                     self.gs.request("PUT", f"workspaces/{ws}/layergroups/{gs_name}",
-                                    {"layerGroup": {**extra, **details.patch_resource({}, links)}})
+                                    {"layerGroup": {**extra, **details.patch_resource({}, links), **details.patch_layer({}, like_layer)}})
                 set_cache(self.gs, f"{ws}:{gs_name}", cache, seed_of(spec))
 
             live = self.gs.layergroup(gs_name, ws)
@@ -537,7 +544,8 @@ class Planner:
                        "styles": styles + [None] * (len(entries) - len(styles)),
                        "cache": cache_name(self.gs, f"{ws}:{gs_name}", cache),
                        "enabled": g.get("enabled", True), "advertised": g.get("advertised", True),
-                       **details.live_resource(g, links)}
+                       "queryDisabled": g.get("queryDisabled", False),
+                       **details.live_resource(g, links), **details.live_layer(g, like_layer)}
             changed = diff([(k, current[k], v) for k, v in wanted])
             if changed:
                 self.add("~", "group", f"{ws}:{gs_name}", changed, run=run)

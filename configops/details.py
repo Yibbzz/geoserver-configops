@@ -15,6 +15,10 @@ from __future__ import annotations
 PRESENTATIONS = {"list": "LIST", "continuous": "CONTINUOUS_INTERVAL", "interval": "DISCRETE_INTERVAL"}
 WCS = {"requestCRS": "requestSRS", "responseCRS": "responseSRS", "formats": "supportedFormats", "interpolations": "interpolationMethods"}
 BAND_FIELDS = ("name", "description", "unit", "nullValues", "range")
+DIMENSION_FIELDS = {"acceptableInterval": "acceptableInterval", "nearestFailBehavior": "nearestFailBehavior",
+                    "rawNearestMatch": "rawNearestMatchEnabled", "start": "startValue", "end": "endValue"}  # spec -> GeoServer
+FT_FIELDS = {"wfs.padWithZeros": "padWithZeros", "wfs.forcedDecimal": "forcedDecimal", "wfs.encodeMeasures": "encodeMeasures",
+             "circularArcs": "circularArcPresent", "linearizationTolerance": "linearizationTolerance"}  # spec -> GeoServer
 
 
 def as_list(value) -> list:
@@ -94,9 +98,16 @@ def wanted_resource(spec: dict) -> dict[str, object]:
     if "filter" in spec:
         out["filter"] = spec["filter"]
     wfs = spec.get("wfs") or {}
-    for key in ("maxFeatures", "decimals", "skipNumberMatched"):
+    for key in ("maxFeatures", "decimals", "skipNumberMatched", "padWithZeros", "forcedDecimal", "encodeMeasures"):
         if key in wfs:
             out[f"wfs.{key}"] = wfs[key]
+    for key in ("circularArcs", "linearizationTolerance"):
+        if key in spec:
+            out[key] = spec[key]
+    if "disabledServices" in spec:
+        out["disabledServices"] = sorted(s.upper() for s in spec["disabledServices"])
+    for key, value in (spec.get("kml") or {}).items():
+        out[f"kml.{key}"] = str(value)
     if "otherCRS" in wfs:
         out["wfs.otherCRS"] = sorted(crs_code(c) for c in wfs["otherCRS"])
     if "metadataLinks" in spec:
@@ -121,6 +132,13 @@ def wanted_resource(spec: dict) -> dict[str, object]:
     return out
 
 
+def as_text(value):
+    """A dimension field's value as configops compares it: GeoServer gives numeric text back as numbers."""
+    if isinstance(value, dict):  # defaultValue
+        return {k: as_text(v) for k, v in value.items()}
+    return str(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+
+
 def dimension(dim: dict) -> dict:
     out = {"attribute": dim["attribute"], "presentation": PRESENTATIONS[dim.get("presentation", "list")]}
     for key in ("endAttribute", "resolution", "units", "unitSymbol"):
@@ -128,6 +146,12 @@ def dimension(dim: dict) -> dict:
             out[key] = str(dim[key]) if key == "resolution" else dim[key]  # GeoServer gives it back as a number
     if "nearestMatch" in dim:
         out["nearestMatchEnabled"] = dim["nearestMatch"]
+    for key, field in DIMENSION_FIELDS.items():
+        if key in dim:
+            out[field] = dim[key] if isinstance(dim[key], bool) else str(dim[key])
+    if "default" in dim:
+        default = dim["default"]
+        out["defaultValue"] = {"strategy": default["strategy"], **({"referenceValue": str(default["value"])} if "value" in default else {})}
     return out
 
 
@@ -143,6 +167,13 @@ def live_resource(resource: dict, wanted: dict[str, object]) -> dict[str, object
             out[key] = resource.get("numDecimals")
         elif key == "wfs.skipNumberMatched":
             out[key] = resource.get("skipNumberMatched", False)
+        elif key in FT_FIELDS:
+            out[key] = resource.get(FT_FIELDS[key], None if key == "linearizationTolerance" else False)
+        elif key == "disabledServices":
+            out[key] = sorted(strings(resource.get("disabledServices"))) if resource.get("serviceConfiguration") else []
+        elif key.startswith("kml."):
+            value = (meta.get(key) or {}).get("$")
+            out[key] = None if value is None else str(value)
         elif key == "wfs.otherCRS":
             codes = as_list((resource.get("responseSRS") or {}).get("string")) if resource.get("overridingServiceSRS") else []
             out[key] = sorted(crs_code(c) for c in codes)
@@ -156,8 +187,7 @@ def live_resource(resource: dict, wanted: dict[str, object]) -> dict[str, object
         elif key.startswith("dimensions."):
             info = (meta.get(dimension_key(resource, key.split(".", 1)[1])) or {}).get("dimensionInfo") or {}
             want = wanted[key]
-            out[key] = {k: str(info[k]) if k == "resolution" and info.get(k) is not None else info.get(k)
-                        for k in want} if info.get("enabled") else None
+            out[key] = {k: as_text(info.get(k)) for k in want} if info.get("enabled") else None
         elif key == "dataLinks":
             links = as_list((resource.get("dataLinks") or {}).get("org.geoserver.catalog.impl.DataLinkInfoImpl"))
             out[key] = [{"url": d.get("content"), "type": d.get("type")} for d in links]
@@ -187,6 +217,13 @@ def patch_resource(resource: dict, wanted: dict[str, object]) -> dict:
             out["numDecimals"] = value
         elif key == "wfs.skipNumberMatched":
             out["skipNumberMatched"] = value
+        elif key in FT_FIELDS:
+            out[FT_FIELDS[key]] = value
+        elif key == "disabledServices":
+            out["serviceConfiguration"] = bool(value)
+            out["disabledServices"] = {"string": value}
+        elif key.startswith("kml."):
+            updates[key] = {"@key": key, "$": value}
         elif key == "wfs.otherCRS":
             out["overridingServiceSRS"] = bool(value)
             out["responseSRS"] = {"string": [c.split(":", 1)[1] if c.startswith("EPSG:") else c for c in value]}
@@ -242,6 +279,10 @@ def wanted_layer(spec: dict) -> dict[str, object]:
         out["wms.path"] = wms["path"]
     if "interpolation" in wms:
         out["wms.interpolation"] = wms["interpolation"].capitalize()
+    if "authorityURLs" in spec:
+        out["authorityURLs"] = [{"name": a["name"], "href": a["href"]} for a in spec["authorityURLs"]]
+    if "identifiers" in spec:
+        out["identifiers"] = [{"authority": i["authority"], "identifier": i["identifier"]} for i in spec["identifiers"]]
     attribution = spec.get("attribution")
     if isinstance(attribution, dict):
         logo = attribution.get("logo") or {}
@@ -264,6 +305,10 @@ def live_layer(layer: dict, wanted: dict[str, object]) -> dict[str, object]:
             out[key] = {k: live.get(k) for k in value}
         elif key == "wms.path":
             out[key] = layer.get("path") or None
+        elif key == "authorityURLs":
+            out[key] = as_list((layer.get("authorityURLs") or {}).get("AuthorityURL"))
+        elif key == "identifiers":
+            out[key] = as_list((layer.get("identifiers") or {}).get("Identifier"))
         elif key == "wms.interpolation":
             out[key] = layer.get("defaultWMSInterpolationMethod")
     return out
@@ -278,6 +323,10 @@ def patch_layer(layer: dict, wanted: dict[str, object]) -> dict:
         out["attribution"] = wanted["attribution"]
     if "wms.path" in wanted:
         out["path"] = wanted["wms.path"]
+    if "authorityURLs" in wanted:
+        out["authorityURLs"] = {"AuthorityURL": wanted["authorityURLs"]}
+    if "identifiers" in wanted:
+        out["identifiers"] = {"Identifier": wanted["identifiers"]}
     if "wms.interpolation" in wanted:
         out["defaultWMSInterpolationMethod"] = wanted["wms.interpolation"]
     if "buffer" in wanted:
@@ -297,6 +346,14 @@ def to_spec(resource: dict, layer: dict) -> dict:
         wfs["decimals"] = resource["numDecimals"]
     if resource.get("skipNumberMatched"):
         wfs["skipNumberMatched"] = True
+    for key, field in FT_FIELDS.items():
+        if resource.get(field) not in (None, False, 0, 0.0, ""):
+            if key.startswith("wfs."):
+                wfs[key[4:]] = resource[field]
+            else:
+                out[key] = resource[field]
+    if resource.get("serviceConfiguration") and strings(resource.get("disabledServices")):
+        out["disabledServices"] = sorted(s.lower() for s in strings(resource.get("disabledServices")))
     codes = as_list((resource.get("responseSRS") or {}).get("string"))
     if resource.get("overridingServiceSRS") and codes:
         wfs["otherCRS"] = sorted(crs_code(c) for c in codes)
@@ -320,6 +377,14 @@ def to_spec(resource: dict, layer: dict) -> dict:
                     dim[key] = str(info[key]) if key == "resolution" else info[key]
             if info.get("nearestMatchEnabled"):
                 dim["nearestMatch"] = True
+            for k, field in DIMENSION_FIELDS.items():
+                value = info.get(field)
+                if value not in (None, "") and value is not False and not (k == "nearestFailBehavior" and value == "IGNORE"):
+                    dim[k] = value if isinstance(value, bool) else str(value)
+            default = info.get("defaultValue") or {}
+            if default.get("strategy") not in (None, "BUILTIN"):
+                dim["default"] = {"strategy": default["strategy"],
+                                  **({"value": str(default["referenceValue"])} if default.get("referenceValue") not in (None, "") else {})}
             out.setdefault("dimensions", {})[name] = dim
     links = as_list((resource.get("dataLinks") or {}).get("org.geoserver.catalog.impl.DataLinkInfoImpl"))
     if links:
@@ -341,6 +406,9 @@ def to_spec(resource: dict, layer: dict) -> dict:
     params = live_parameters(resource)
     if params:
         out["parameters"] = params
+    kml = {k[4:]: int(e["$"]) if k == "kml.regionateFeatureLimit" else e["$"] for k, e in meta.items() if k.startswith("kml.") and "$" in e}
+    if kml:
+        out["kml"] = kml
     if layer.get("opaque"):
         out["opaque"] = True
     buffer = (entries(layer).get("buffer") or {}).get("$")
@@ -353,6 +421,10 @@ def to_spec(resource: dict, layer: dict) -> dict:
         wms["interpolation"] = layer["defaultWMSInterpolationMethod"].lower()
     if wms:
         out["wms"] = wms
+    for key, inner in (("authorityURLs", "AuthorityURL"), ("identifiers", "Identifier")):
+        items = as_list((layer.get(key) or {}).get(inner))
+        if items:
+            out[key] = items
     attribution = layer.get("attribution") or {}
     if attribution.get("href") or attribution.get("logoURL"):
         logo = {k: attribution[g] for k, g in (("url", "logoURL"), ("width", "logoWidth"), ("height", "logoHeight"), ("type", "logoType"))

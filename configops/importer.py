@@ -405,6 +405,10 @@ class Importer:
             links = details.to_spec(g, {}).get("metadataLinks")
             if links:
                 spec["metadataLinks"] = links
+            as_layer = details.to_spec({}, g)
+            spec.update({k: as_layer[k] for k in ("attribution", "authorityURLs", "identifiers") if k in as_layer})
+            if g.get("queryDisabled"):
+                spec["queryable"] = False
             root = (g.get("rootLayer") or {}).get("name")
             if root:
                 short = root.split(":", 1)[-1]
