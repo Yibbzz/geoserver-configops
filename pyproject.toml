@@ -29,6 +29,6 @@ pythonpath = ["."]
 markers = [
     "integration: needs a PostGIS database (TEST_DB_* env vars) and ogr2ogr",
     "e2e: needs the real GeoServer Cloud REST service (tests/e2e/up.sh)",
-    "last: runs after the other tests (tests/test_e2e_coverage.py checks what they saw)",
+    "last(order=2): runs after the other tests, lowest order first (tests/test_e2e_coverage.py checks what they saw)",
 ]
 addopts = "-ra"

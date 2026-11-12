@@ -192,6 +192,7 @@ def test_drift_is_shown_and_put_back(gs, project, capsys):
     assert configops(capsys, "plan", "-C", str(project))[0] == 0
 
 
+@pytest.mark.last(order=1)  # GeoServer Cloud's keystore race can leave REST refusing every login: nothing else after it
 def test_master_password_is_changed_and_back(gs, project, capsys, monkeypatch):
     """The master password from a Secret: apply sets it (twice, from a value it set itself), plan then has
     nothing to do. The old one is put back: by configops, or by GeoServer's API if configops can't.
