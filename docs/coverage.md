@@ -81,7 +81,9 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Custom dimensions | Yes | Any other name under `dimensions` |
 | **Tile caching:** on or off, gridsets, image formats | Yes | `cache:` |
 | Metatiling, gutter, expiry | Yes | `cache: { metaTiles, gutter, expireCache, expireClients }` |
-| Parameter filters | Yes | `cache.parameterFilters` |
+| Parameter filters | Yes | `cache.parameterFilters`, with `case` and `locale` to normalise values |
+| Published and cached zoom levels, bounds per gridset | Yes | `cache.levels` |
+| Expiry by zoom level, warning skips | Yes | `cache.expireByZoom`, `cache.warningSkips` |
 | **Security:** who may read, write, administer | Yes | `AccessRule` with `layer:` |
 
 ### Layer groups
@@ -145,11 +147,12 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Page | Status | Notes |
 | --- | --- | --- |
 | Tile layers | Yes | Each layer's and group's `cache:` |
-| Caching defaults | Yes | `Settings` `global.tileCaching`; GeoServer reads them when its services start |
-| Gridsets (your own) | Yes | `Gridset`, e.g. British National Grid |
+| Caching defaults | Yes | `Settings` `global.tileCaching`, with multi-layer caching, metatiling and seeding threads; GeoServer reads them when its services start |
+| Gridsets (your own) | Yes | `Gridset`, e.g. British National Grid; description, level names, pixel size, axis order |
 | Disk quota | Can't | GeoServer Cloud switches it off (`GWC_DISKQUOTA_DISABLED`), has no REST endpoint for it (404), and would read its settings from each pod's own folder |
 | Blob stores: a folder, S3 | Yes | `BlobStore` `type: file` (on the data volume) or `s3`; `cache.blobStore` |
 | Blob stores: Azure, Google Cloud Storage | Yes | `BlobStore` `type: azure`, `gcs` |
+| Blob store options: TMS layout, proxies, quota project | Yes | `layout`, `proxy`, `quotaProject` |
 | Seeding, truncating | Yes | `cache.seed`: after apply changes a layer and after each load, which also clears the old tiles |
 
 ## Security

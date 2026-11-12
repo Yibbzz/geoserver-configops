@@ -79,7 +79,40 @@ def filter_xml(key: str, f: dict) -> str:
         out += f"<regex>{escape(f.get('regex', '.*'))}</regex>"
     if "threshold" in f:
         out += f"<threshold>{f['threshold']}</threshold>"
+    if "case" in f:
+        locale = f"<locale>{escape(f['locale'])}</locale>" if f.get("locale") else ""
+        out += f"<normalize><case>{f['case'].upper()}</case>{locale}</normalize>"
     return f"<{tag}>{out}</{tag}>"
+
+
+def subset_xml(gridset: str, levels: dict) -> str:
+    """One gridset of a tile layer: its bounds, published zoom levels and cached ones, where set."""
+    out = f"<gridSetName>{escape(gridset)}</gridSetName>"
+    if "bounds" in levels:
+        out += f"<extent><coords>{''.join(f'<double>{float(v)}</double>' for v in levels['bounds'])}</coords></extent>"
+    for key, (low, high) in (("published", ("zoomStart", "zoomStop")), ("cached", ("minCachedLevel", "maxCachedLevel"))):
+        if key in levels:
+            out += f"<{low}>{int(levels[key][0])}</{low}><{high}>{int(levels[key][1])}</{high}>"
+    return f"<gridSubset>{out}</gridSubset>"
+
+
+def tile_extras(xml: str) -> dict:
+    """A tile layer's zoom limits per gridset, expiry by zoom level and warning skips, in the files' form."""
+    root = ET.fromstring(xml)
+    levels = {}
+    for g in root.findall("gridSubsets/gridSubset"):
+        entry: dict = {}
+        coords = [float(d.text) for d in g.findall("extent/coords/double")]
+        if coords:
+            entry["bounds"] = coords
+        for key, (low, high) in (("published", ("zoomStart", "zoomStop")), ("cached", ("minCachedLevel", "maxCachedLevel"))):
+            if g.findtext(low) is not None and g.findtext(high) is not None:
+                entry[key] = [int(g.findtext(low)), int(g.findtext(high))]
+        if entry:
+            levels[g.findtext("gridSetName")] = entry
+    expire = {int(r.get("minZoom")): int(r.get("expiration")) for r in root.findall("expireCacheList/expirationRule")}
+    skips = sorted(w.text for w in root.findall("cacheWarningSkips/warning") if w.text)
+    return {k: v for k, v in (("levels", levels), ("expireByZoom", expire), ("warningSkips", skips)) if v}
 
 
 def tile_name(name: str) -> str:
@@ -377,9 +410,15 @@ class GeoServer:
             extra += f"<blobStoreId>{escape(options['blobStore'])}</blobStoreId>"
         if options.get("parameterFilters"):
             extra += f"<parameterFilters>{''.join(filter_xml(k, f) for k, f in options['parameterFilters'].items())}</parameterFilters>"
+        if "expireByZoom" in options:
+            rules = "".join(f'<expirationRule minZoom="{int(z)}" expiration="{int(s)}"/>' for z, s in sorted(options["expireByZoom"].items()))
+            extra += f"<expireCacheList>{rules}</expireCacheList>"
+        if "warningSkips" in options:
+            extra += f"<cacheWarningSkips>{''.join(f'<warning>{escape(w)}</warning>' for w in options['warningSkips'])}</cacheWarningSkips>"
+        levels = options.get("levels") or {}
         xml = (f"<GeoServerLayer><name>{escape(name)}</name><enabled>true</enabled>{extra}"
                f"<mimeFormats>{''.join(f'<string>{escape(f)}</string>' for f in formats)}</mimeFormats>"
-               f"<gridSubsets>{''.join(f'<gridSubset><gridSetName>{escape(g)}</gridSetName></gridSubset>' for g in gridsets)}"
+               f"<gridSubsets>{''.join(subset_xml(g, levels.get(g) or {}) for g in gridsets)}"
                "</gridSubsets></GeoServerLayer>")
         r = self.gwc_request("PUT", f"layers/{tile_name(name)}", xml)
         if r.status_code != 200:
@@ -403,16 +442,26 @@ class GeoServer:
         raise GeoServerError("GET", f"gwc/gridsets/{name}", r.status_code, r.text)
 
     def put_gridset(self, name: str, epsg: int, extent: list[float], resolutions: list[float], tile_size: int,
-                    align_top_left: bool, meters_per_unit: float) -> None:
+                    align_top_left: bool, meters_per_unit: float, extra: dict | None = None) -> None:
+        """`extra`: description, scaleNames, pixelSize, yCoordinateFirst."""
+        extra = extra or {}
         doubles = lambda values: "".join(f"<double>{v}</double>" for v in values)
-        xml = (f"<gridSet><name>{escape(name)}</name><srs><number>{epsg}</number></srs>"
+        description = f"<description>{escape(extra['description'])}</description>" if extra.get("description") else ""
+        names = "".join(f"<string>{escape(n)}</string>" for n in extra.get("scaleNames") or [])
+        xml = (f"<gridSet><name>{escape(name)}</name>{description}<srs><number>{epsg}</number></srs>"
                f"<extent><coords>{doubles(extent)}</coords></extent><alignTopLeft>{str(align_top_left).lower()}</alignTopLeft>"
                f"<resolutions>{doubles(resolutions)}</resolutions><metersPerUnit>{meters_per_unit}</metersPerUnit>"
-               f"<pixelSize>2.8E-4</pixelSize><tileHeight>{tile_size}</tileHeight><tileWidth>{tile_size}</tileWidth>"
-               "<yCoordinateFirst>false</yCoordinateFirst></gridSet>")
+               f"<pixelSize>{extra.get('pixelSize', 2.8e-4)}</pixelSize>" + (f"<scaleNames>{names}</scaleNames>" if names else "") +
+               f"<tileHeight>{tile_size}</tileHeight><tileWidth>{tile_size}</tileWidth>"
+               f"<yCoordinateFirst>{str(extra.get('yCoordinateFirst', False)).lower()}</yCoordinateFirst></gridSet>")
         r = self.gwc_request("PUT", f"gridsets/{q(name)}.xml", xml)
         if r.status_code not in (200, 201):
             raise GeoServerError("PUT", f"gwc/gridsets/{name}", r.status_code, r.text)
+
+    def tile_layer_extras(self, name: str) -> dict:
+        """A tile layer's zoom limits, expiry by zoom and warning skips (read as XML, like its filters)."""
+        r = self.gwc_request("GET", f"layers/{tile_name(name)}", accept="application/xml")
+        return tile_extras(r.text) if r.status_code == 200 else {}
 
     def parameter_filters(self, name: str) -> dict[str, dict]:
         """A tile layer's parameter filters, by parameter, in the files' form (read as XML: its JSON leaves out their types)."""
@@ -435,6 +484,11 @@ class GeoServer:
             if f.findtext("threshold") is not None:
                 threshold = float(f.findtext("threshold"))
                 entry["threshold"] = int(threshold) if kind == "integers" else threshold
+            case = f.findtext("normalize/case")
+            if case and case != "NONE":
+                entry["case"] = case.lower()
+            if f.findtext("normalize/locale"):
+                entry["locale"] = f.findtext("normalize/locale")
             out[f.findtext("key")] = entry
         return out
 

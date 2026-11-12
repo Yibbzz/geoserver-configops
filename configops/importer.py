@@ -118,7 +118,12 @@ class Importer:
 
     def cache(self, name: str):
         tile_layer = self.gs.tile_layer(name)
-        return cache_setting(tile_layer, self.gs.parameter_filters(name) if tile_layer else None)
+        setting = cache_setting(tile_layer, self.gs.parameter_filters(name) if tile_layer else None)
+        extras = self.gs.tile_layer_extras(name) if tile_layer else {}
+        if setting and extras:
+            setting = {"gridsets": sorted(DEFAULT_GRIDSETS), "formats": sorted(DEFAULT_FORMATS)} if setting is True else setting
+            setting.update(extras)
+        return setting
 
     def style(self, ref: str | None) -> str | None:
         """A live style reference as the files write it, or None if it can't be."""
@@ -458,6 +463,17 @@ class Importer:
                 spec["alignTopLeft"] = True
             if float(g.get("metersPerUnit") or 1) != 1:
                 spec["metersPerUnit"] = g["metersPerUnit"]
+            from .tiles import live as live_gridset
+
+            extra = live_gridset(g)
+            if extra["description"]:
+                spec["description"] = extra["description"]
+            if extra["levelNames"] and extra["levelNames"] != [f"{name}:{i}" for i in range(len(g["resolutions"]))]:
+                spec["levelNames"] = extra["levelNames"]
+            if extra["pixelSize"] != 2.8e-4:
+                spec["pixelSize"] = extra["pixelSize"]
+            if extra["yAxisFirst"]:
+                spec["yAxisFirst"] = True
             out.append(resource("Gridset", meta, spec))
         return out
 
@@ -481,6 +497,8 @@ class Importer:
                     self.notes.append(f"blob store {name}: {live['path']} isn't on the shared data volume; left out")
                     continue
                 spec.update({"type": "file", "path": path})
+                if live.get("layout") == "tms":
+                    spec["layout"] = "tms"
             elif live["type"] in KEYS:
                 kind = live["type"]
                 spec["type"] = kind
@@ -491,6 +509,12 @@ class Importer:
                         spec["access"] = live["access"].lower().replace("_", "-")
                 if kind == "gcs" and not live.get("defaultCredentials"):
                     spec.pop("defaultCredentials", None)
+                proxy = {k[6:]: v for k, v in live.items() if k.startswith("proxy.") and k not in ("proxy.username", "proxy.password")}
+                if "proxy.username" in live:
+                    proxy["credentials"] = {"secret": f"{meta}-proxy"}
+                    self.notes.append(f"blob store {name}: put its proxy login in Secret {meta}-proxy (keys: username, password)")
+                if proxy:
+                    spec["proxy"] = proxy
                 if any(k in live for k in KEYS[kind]):
                     secret = f"{meta}-credentials"
                     spec["credentials"] = {"secret": secret}
