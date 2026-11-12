@@ -2233,6 +2233,172 @@
         "workspace": {
           "$ref": "#/$defs/geoserverName",
           "description": "this workspace's own settings for the service, in place of the global ones"
+        },
+        "disabledVersions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Versions of the service to turn off, e.g. 1.1.1"
+        },
+        "metadataLink": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "description": "A link to the service's metadata record, as a Layer's metadataLinks",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "description": "The record's MIME type. Default: GeoServer's"
+            },
+            "standard": {
+              "type": "string",
+              "description": "e.g. ISO19115:2003"
+            }
+          }
+        },
+        "getMapMimeTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The GetMap formats allowed when getMapMimeTypeCheckingEnabled"
+        },
+        "getFeatureInfoMimeTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The GetFeatureInfo formats allowed when getFeatureInfoMimeTypeCheckingEnabled"
+        },
+        "allowedURLsForAuthForwarding": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Remote URLs (remote styles) that get the user's credentials"
+        },
+        "authorityURLs": {
+          "type": "array",
+          "description": "The root layer's authority URLs",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "href"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "href": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "identifiers": {
+          "type": "array",
+          "description": "The root layer's identifiers, each from an authority in authorityURLs",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "authority",
+              "identifier"
+            ],
+            "properties": {
+              "authority": {
+                "type": "string"
+              },
+              "identifier": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "WMS options GeoServer keeps as metadata (the web UI's WMS page)",
+          "properties": {
+            "pngCompression": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "PNG compression, 0-100"
+            },
+            "jpegCompression": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "JPEG compression, 0-100"
+            },
+            "svgRenderer": {
+              "enum": [
+                "Batik",
+                "Simple"
+              ]
+            },
+            "svgAntiAlias": {
+              "type": "boolean"
+            },
+            "kmlReflectorMode": {
+              "enum": [
+                "refresh",
+                "superoverlay",
+                "download"
+              ]
+            },
+            "kmlSuperoverlayMode": {
+              "enum": [
+                "auto",
+                "raster",
+                "overview",
+                "hybrid",
+                "cached"
+              ]
+            },
+            "kmlAttr": {
+              "type": "boolean"
+            },
+            "kmlPlacemark": {
+              "type": "boolean"
+            },
+            "kmlKmscore": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "advancedProjectionHandling": {
+              "type": "boolean"
+            },
+            "advancedProjectionDensification": {
+              "type": "boolean"
+            },
+            "disableDatelineWrappingHeuristic": {
+              "type": "boolean"
+            },
+            "mapWrapping": {
+              "type": "boolean"
+            },
+            "rootLayerInCapabilities": {
+              "type": "boolean"
+            },
+            "MarkFactoryList": {
+              "type": "string",
+              "description": "Mark factories in the order to try, comma-separated"
+            },
+            "scalehintMapunitsPixel": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
@@ -2327,6 +2493,132 @@
         "workspace": {
           "$ref": "#/$defs/geoserverName",
           "description": "this workspace's own settings for the service, in place of the global ones"
+        },
+        "disabledVersions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Versions of the service to turn off, e.g. 1.1.1"
+        },
+        "metadataLink": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "description": "A link to the service's metadata record, as a Layer's metadataLinks",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "description": "The record's MIME type. Default: GeoServer's"
+            },
+            "standard": {
+              "type": "string",
+              "description": "e.g. ISO19115:2003"
+            }
+          }
+        },
+        "getFeatureOutputTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The GetFeature formats allowed when getFeatureOutputTypeCheckingEnabled"
+        },
+        "gml": {
+          "type": "object",
+          "description": "GML settings for each WFS version: 1.0, 1.1 or 2.0",
+          "propertyNames": {
+            "enum": [
+              "1.0",
+              "1.1",
+              "2.0"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "srsNameStyle": {
+                "enum": [
+                  "NORMAL",
+                  "XML",
+                  "URN",
+                  "URN2",
+                  "URL"
+                ]
+              },
+              "overrideGMLAttributes": {
+                "type": "boolean"
+              },
+              "mimeTypeToForce": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "WFS options GeoServer keeps as metadata",
+          "properties": {
+            "maxNumberOfFeaturesForPreview": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Features the layer preview shows at most"
+            },
+            "SHAPE-ZIP_DEFAULT_PRJ_IS_ESRI": {
+              "type": "boolean",
+              "description": "Shapefile output writes ESRI .prj files"
+            },
+            "ogcapiFeatures": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "OGC API Features conformance classes to offer",
+              "properties": {
+                "core": {
+                  "type": "boolean"
+                },
+                "gml321": {
+                  "type": "boolean"
+                },
+                "gmlSF0": {
+                  "type": "boolean"
+                },
+                "gmlSF2": {
+                  "type": "boolean"
+                },
+                "featuresFilter": {
+                  "type": "boolean"
+                },
+                "crsByReference": {
+                  "type": "boolean"
+                },
+                "filter": {
+                  "type": "boolean"
+                },
+                "search": {
+                  "type": "boolean"
+                },
+                "queryables": {
+                  "type": "boolean"
+                },
+                "ids": {
+                  "type": "boolean"
+                },
+                "sortBy": {
+                  "type": "boolean"
+                },
+                "propertySelection": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2413,6 +2705,34 @@
         "workspace": {
           "$ref": "#/$defs/geoserverName",
           "description": "this workspace's own settings for the service, in place of the global ones"
+        },
+        "disabledVersions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Versions of the service to turn off, e.g. 1.1.1"
+        },
+        "metadataLink": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "description": "A link to the service's metadata record, as a Layer's metadataLinks",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "description": "The record's MIME type. Default: GeoServer's"
+            },
+            "standard": {
+              "type": "string",
+              "description": "e.g. ISO19115:2003"
+            }
+          }
         }
       }
     },
@@ -2464,6 +2784,34 @@
         "workspace": {
           "$ref": "#/$defs/geoserverName",
           "description": "this workspace's own settings for the service, in place of the global ones"
+        },
+        "disabledVersions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Versions of the service to turn off, e.g. 1.1.1"
+        },
+        "metadataLink": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "description": "A link to the service's metadata record, as a Layer's metadataLinks",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "description": "The record's MIME type. Default: GeoServer's"
+            },
+            "standard": {
+              "type": "string",
+              "description": "e.g. ISO19115:2003"
+            }
+          }
         }
       }
     },

@@ -47,7 +47,7 @@ def merge(live: dict, wanted: dict) -> dict:
 
 def unwrap(value):
     """GeoServer's {"string": x} as a list (one item comes back as a plain string)."""
-    if isinstance(value, dict) and set(value) == {"string"}:
+    if isinstance(value, dict) and "string" in value and all(k == "string" or k.startswith("@") for k in value):  # "@class" for a set
         inner = value["string"]
         return inner if isinstance(inner, list) else [inner]
     return value
@@ -70,6 +70,86 @@ def compare(live: dict, wanted: dict, path: str = "") -> list[tuple[str, object,
     return out
 
 
+# --- service fields GeoServer keeps in shapes of its own: the spec's form <-> GeoServer's
+
+SPECIAL = ("metadata", "gml", "disabledVersions", "authorityURLs", "identifiers", "metadataLink")
+LINK = {"url": "content", "type": "type", "standard": "metadataType"}  # as a Layer's metadataLinks: spec name -> GeoServer's
+GML_VERSIONS = {"1.0": "V_10", "1.1": "V_11", "2.0": "V_20"}  # spec name -> GeoServer's
+
+
+def as_list(value) -> list:
+    return [] if value in (None, "") else value if isinstance(value, list) else [value]
+
+
+def service_view(live: dict) -> dict:
+    """A service's special fields in the spec's form."""
+    entries = as_list((live.get("metadata") or {}).get("entry"))
+    meta = {}
+    for e in entries:
+        if not isinstance(e, dict) or "@key" not in e:
+            continue
+        key = e["@key"]
+        meta[key] = e[key] if key in e else typed(str(e.get("$", "")))
+    link = live.get("metadataLink") or {}
+    versions = {v: k for k, v in GML_VERSIONS.items()}
+    gml = {versions.get(e.get("version"), e.get("version")): e.get("gml") or {}
+           for e in as_list((live.get("gml") or {}).get("entry"))}
+    return {
+        "metadata": meta,
+        "gml": gml,
+        "disabledVersions": [v["version"] for v in as_list((live.get("disabledVersions") or {}).get("org.geotools.util.Version"))],
+        "authorityURLs": as_list((live.get("authorityURLs") or {}).get("AuthorityURL")),
+        "identifiers": as_list((live.get("identifiers") or {}).get("Identifier")),
+        "metadataLink": {k: link[g] for k, g in LINK.items() if link.get(g)},
+    }
+
+
+def compare_special(view: dict, wanted: dict) -> list[tuple[str, object, object]]:
+    out = []
+    for key, value in wanted.items():
+        here = view.get(key)
+        if key in ("metadata", "gml"):  # only the entries (and their fields) the file sets
+            for k, v in value.items():
+                h = (here or {}).get(k)
+                if isinstance(v, dict):
+                    out += [(f"{key}.{k}.{f}", (h or {}).get(f), x) for f, x in v.items() if (h or {}).get(f) != x]
+                elif h != v:
+                    out.append((f"{key}.{k}", h, v))
+        elif key == "metadataLink":
+            out += [(f"{key}.{k}", here.get(k), v) for k, v in value.items() if here.get(k) != v]
+        elif key == "disabledVersions" and sorted(here or []) != sorted(value):
+            out.append((key, here, value))
+        elif key in ("authorityURLs", "identifiers") and (here or []) != value:
+            out.append((key, here, value))
+    return out
+
+
+def special_body(current: dict, wanted: dict) -> dict:
+    """The special fields to PUT: metadata and GML merged into what GeoServer has (a PUT replaces them whole)."""
+    view = service_view(current)
+    out = {}
+    if "metadata" in wanted:
+        meta = view["metadata"]
+        for k, v in wanted["metadata"].items():
+            meta[k] = {**(meta.get(k) or {}), **v} if isinstance(v, dict) else v
+        out["metadata"] = {"entry": [{"@key": k, k: v} if isinstance(v, dict) else
+                                     {"@key": k, "$": str(v).lower() if isinstance(v, bool) else str(v)} for k, v in meta.items()]}
+    if "gml" in wanted:
+        gml = view["gml"]
+        for k, v in wanted["gml"].items():
+            gml[k] = {**(gml.get(k) or {}), **v}
+        out["gml"] = {"entry": [{"version": GML_VERSIONS.get(k, k), "gml": v} for k, v in gml.items()]}
+    if "disabledVersions" in wanted:
+        out["disabledVersions"] = {"org.geotools.util.Version": [{"version": v} for v in wanted["disabledVersions"]]}
+    if "authorityURLs" in wanted:
+        out["authorityURLs"] = {"AuthorityURL": wanted["authorityURLs"]}
+    if "identifiers" in wanted:
+        out["identifiers"] = {"Identifier": wanted["identifiers"]}
+    if "metadataLink" in wanted:
+        out["metadataLink"] = {**(current.get("metadataLink") or {}), **{LINK[k]: v for k, v in wanted["metadataLink"].items()}}
+    return out
+
+
 def settings_paths(ws: str | None) -> tuple[str, str]:
     """(REST path, JSON key) of the global settings or one workspace's."""
     return (f"workspaces/{ws}/settings", "settings") if ws else ("settings", "global")
@@ -83,21 +163,22 @@ def plan(planner) -> None:
     for r in planner.files.of_kind("Service"):
         spec = dict(r.spec)
         name, ws = spec.pop("service", None) or r.name, spec.pop("workspace", None)
+        special = {k: spec.pop(k) for k in list(spec) if k in SPECIAL}
         path = f"services/{name}/workspaces/{ws}/settings" if ws else f"services/{name}/settings"
         target = f"{name} ({ws})" if ws else name
         found = gs.get(path)
         live = (found or {}).get(name) or {}
         wanted = to_geoserver(spec)
-        changed = compare(live, wanted)
+        changed = compare(live, wanted) + compare_special(service_view(live), special)
         if found is not None and not changed:
             continue
 
-        def run(name=name, ws=ws, path=path, wanted=wanted):
+        def run(name=name, ws=ws, path=path, wanted=wanted, special=special):
             current = (gs.get(path) or {}).get(name)
             if current is None:  # a workspace's own: starts from the global settings, as the web UI does
                 current = {k: v for k, v in ((gs.get(f"services/{name}/settings") or {}).get(name) or {}).items()
                            if k not in ("id", "workspace")}
-            body = merge(current, wanted)
+            body = {**merge(current, wanted), **special_body(current, special)}
             if ws:
                 body["workspace"] = {"name": ws}
             gs.request("PUT", path, {name: body})

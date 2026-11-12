@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 
 from .importer import resource, resource_name
 from .security import ACCESS, BUILT_IN_ROLES, BUILT_IN_USERS, DEFAULT_RULES, read_rest_rules, roles_list
-from .server import SERVICES, URL_CHECKS_FILE, unwrap
+from .server import SERVICES, URL_CHECKS_FILE, service_view, unwrap
 from .validate import schema
 
 USERS_SECRET = "geoserver-users"  # the Secret imported users' passwords come from
@@ -47,7 +47,9 @@ DEFAULTS = {
     "wfs": {"serviceLevel": "COMPLETE", "maxFeatures": 1000000, "featureBounding": True, "canonicalSchemaLocation": False,
             "encodeFeatureMember": False, "hitsIgnoreMaxFeatures": False, "includeWFSRequestDumpFile": True,
             "disableStoredQueriesManagement": False, "allowGlobalQueries": True, "simpleConversionEnabled": False,
-            "getFeatureOutputTypeCheckingEnabled": False},
+            "getFeatureOutputTypeCheckingEnabled": False, "metadata": {"maxNumberOfFeaturesForPreview": 50},
+            "gml": {"1.0": {"srsNameStyle": "XML", "overrideGMLAttributes": True}, "1.1": {"srsNameStyle": "URN", "overrideGMLAttributes": False},
+                    "2.0": {"srsNameStyle": "URN2", "overrideGMLAttributes": False}}},
     "wcs": {"gmlPrefixing": False, "latLon": False, "subsamplingEnabled": True, "maxInputMemory": -1, "maxOutputMemory": -1,
             "defaultDeflateCompressionLevel": 9, "maxRequestedDimensionValues": 100, "overviewPolicy": "IGNORE"},
     "wmts": {},
@@ -66,7 +68,8 @@ def differing(live: dict, props: dict, defaults: dict) -> dict:
         if value in (None, "", []):
             continue
         if prop.get("type") == "object" and isinstance(value, dict):
-            nested = {k: v for k, v in value.items() if k in prop["properties"] and v not in (None, "")}
+            known = prop.get("properties")  # none: any key (gml's versions)
+            nested = {k: v for k, v in value.items() if (known is None or k in known) and v not in (None, "")}
             wanted = {k: v for k, v in nested.items() if (defaults.get(name) or {}).get(k) != v}
             if wanted:
                 out[name] = wanted
@@ -125,6 +128,7 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
     for name in SERVICES:
         props = defs[f"service_{name}"]["properties"]
         live = (gs.get(f"services/{name}/settings") or {}).get(name) or {}
+        live = {**live, **service_view(live)}
         spec = differing(live, props, {**DEFAULTS["service"], **DEFAULTS[name]})
         if spec:
             found.append(resource("Service", name, spec))
@@ -132,6 +136,7 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
             own = (gs.get(f"services/{name}/workspaces/{ws}/settings") or {}).get(name)
             if own is None:
                 continue
+            own = {**own, **service_view(own)}
             spec = {"service": name, "workspace": ws, **differing(own, props, {k: unwrap(v) for k, v in live.items()})}
             found.append(resource("Service", f"{resource_name(ws)[0]}-{name}", spec))
     return found, notes

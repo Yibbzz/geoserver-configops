@@ -515,6 +515,7 @@ NESTED = {
     "regexParameterFilter": ["RegexParameterFilter", "CaseNormalizingParameterFilter", "ParameterFilter"],
     "floatParameterFilter": ["FloatParameterFilter", "ParameterFilter"],
     "integerParameterFilter": ["IntegerParameterFilter", "ParameterFilter"],
+    "AuthorityURL": ["AuthorityURL"], "Identifier": ["LayerIdentifier"], "ogcapiFeatures": ["FeatureConformance"],
 }
 # Keys a document adds that aren't fields: links, and how lists and maps are wrapped.
 WRAPPERS = {"@key", "$", "@class", "entry", "string", "@name", "link", "@rel", "@type", "@xmlns:atom"}
@@ -652,11 +653,12 @@ def walk(known: dict, obj: dict, owners: list[str]) -> tuple[dict[str, frozenset
                     unlisted.add(f"{label}.{meta}")
                 else:
                     add(f"{meta_owner}.{meta}", leaves({k: v for k, v in entry.items() if k != "@key"}))
-                if isinstance(entry.get("dimensionInfo"), dict):
-                    inner, missing = walk(known, entry["dimensionInfo"], NESTED["dimensionInfo"])
-                    for f, v in inner.items():
-                        add(f, v)
-                    unlisted |= missing
+                for k, v in entry.items():  # an object as the entry's value: dimensionInfo, ogcapiFeatures
+                    if k in NESTED and isinstance(v, dict):
+                        inner, missing = walk(known, v, NESTED[k])
+                        for f, found in inner.items():
+                            add(f, found)
+                        unlisted |= missing
             continue
         if owner and not key.startswith("@"):
             add(f"{owner}.{name}", leaves(value))
