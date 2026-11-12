@@ -257,7 +257,7 @@ spec:
 | `sql` | one of the forms | | A SQL view: `{ schema, query, key, geometry: { column, type, crs } }`, published from the schema's store |
 | `name` (in GeoServer) | no | `metadata.name` with dashes as underscores | Layer name clients use |
 | `crs` | no | the data's own | The declared CRS, forced on the layer |
-| `attributes` | no | all | The attributes published, in this order; the geometry always is |
+| `attributes` | no | all | The attributes published, in this order; the geometry always is. Each is a column's name, or `{ name, source, description, nillable, minOccurs, maxOccurs, binding }`: `source` is a CQL expression the attribute is worked out from (`strToUpperCase(kind)`; another column's name renames it), `binding` its Java class (`java.lang.String`) |
 | `workspace` | no | the project's `workspace` | |
 | `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents |
 | `style` | no | GeoServer's default for the geometry | Default style |

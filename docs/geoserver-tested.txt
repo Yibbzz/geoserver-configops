@@ -4,7 +4,13 @@
 AbstractURLCheck.description
 AbstractURLCheck.enabled
 AbstractURLCheck.name
+AttributeTypeInfoImpl.binding
+AttributeTypeInfoImpl.description
+AttributeTypeInfoImpl.maxOccurs
+AttributeTypeInfoImpl.minOccurs
 AttributeTypeInfoImpl.name
+AttributeTypeInfoImpl.nillable
+AttributeTypeInfoImpl.source
 AttributionInfoImpl.href
 AttributionInfoImpl.logoHeight
 AttributionInfoImpl.logoType
