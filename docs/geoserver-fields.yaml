@@ -252,9 +252,8 @@ pages:
         spec: layer.sql
         extra: true
       metadata.COVERAGE_VIEW:
-        status: 'no'
-        note: coverage views
-        extra: true
+        status: 'yes'
+        spec: layer.view
       metadata.kml.regionateAttribute:
         status: 'yes'
         spec: layer.kml.regionateAttribute
@@ -610,32 +609,32 @@ pages:
         test: test_e2e_details.py::test_apply_then_nothing_to_do
     CoverageView:
       coverageBands:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view.bands
       name:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view
       envelopeCompositionType:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view.envelope
       selectedResolution:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view.resolution
       compositionType:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view.formula
       selectedResolutionIndex:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view.resolutionIndex
       outputName:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view.formula.output
       definition:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view.formula.script
       fillMissingBands:
-        status: 'no'
-        note: 'coverage views: a layer made from bands of a store''s coverages'
+        status: 'yes'
+        spec: layer.view.fillMissingBands
   Layer groups:
     LayerGroupInfoImpl:
       name:

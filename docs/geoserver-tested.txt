@@ -104,6 +104,15 @@ CoverageInfoImpl.requestSRS
 CoverageInfoImpl.responseSRS
 CoverageInfoImpl.supportedFormats
 CoverageStoreInfoImpl.url
+CoverageView.compositionType
+CoverageView.coverageBands
+CoverageView.definition
+CoverageView.envelopeCompositionType
+CoverageView.fillMissingBands
+CoverageView.name
+CoverageView.outputName
+CoverageView.selectedResolution
+CoverageView.selectedResolutionIndex
 CredentialsFromRequestHeaderFilterConfig.parseAsUriComponents
 CredentialsFromRequestHeaderFilterConfig.passwordHeaderName
 CredentialsFromRequestHeaderFilterConfig.passwordRegex
@@ -361,6 +370,7 @@ ResourceInfoImpl.enabled
 ResourceInfoImpl.internationalAbstract
 ResourceInfoImpl.internationalTitle
 ResourceInfoImpl.keywords
+ResourceInfoImpl.metadata.COVERAGE_VIEW
 ResourceInfoImpl.metadata.JDBC_VIRTUAL_TABLE
 ResourceInfoImpl.metadata.cacheAgeMax
 ResourceInfoImpl.metadata.cachingEnabled

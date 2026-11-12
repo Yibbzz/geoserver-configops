@@ -339,6 +339,53 @@ def test_raster_interpolation_wcs_formats_and_bands(gs, raster, env, capsys):
     assert tiff.headers["content-type"].startswith("image/tiff"), tiff.text[:300]
 
 
+VIEW = """---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: dem-view }
+spec:
+  store: dem
+  view: { bands: [{ coverage: dem, band: 0 }], envelope: union, resolution: worst, resolutionIndex: 0, fillMissingBands: true }
+---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: dem-doubled }
+spec:
+  store: dem
+  view: { bands: [{ coverage: dem }], formula: { script: "doubled = dem[0] * 2;", output: doubled } }
+"""
+
+
+def test_a_coverage_view(gs, raster, env, capsys, tmp_path_factory):
+    (raster / "project.yaml").write_text(HEAD + RASTER.replace("INTERPOLATION", "nearest") + VIEW)
+    code, out = configops(capsys, "apply", "-C", str(raster))
+    assert code == 0, out
+    code, out = configops(capsys, "plan", "-C", str(raster))
+    assert code == 0, out
+    assert len(eventually(lambda: draw("dem_view"), lambda img: len(img) > 0)) > 0
+    assert len(eventually(lambda: draw("dem_doubled"), lambda img: len(img) > 0)) > 0
+    tiff = tmp_path_factory.mktemp("wcs") / "doubled.tif"
+    r = requests.get(f"{SERVICES}/{WS}/wcs", timeout=60, params={
+        "service": "WCS", "version": "2.0.1", "request": "GetCoverage", "coverageId": f"{WS}__dem_doubled", "format": "image/tiff"})
+    assert r.headers.get("content-type", "").startswith("image/tiff"), r.text[:500]
+    tiff.write_bytes(r.content)
+    info = subprocess.run(["gdalinfo", "-mm", str(tiff)], capture_output=True, text=True, check=True).stdout
+    assert "Min/Max=0.000,1800.000" in info, info  # the formula ran: the DEM's cells are 0 and 900
+    coverage = gs.request("GET", f"workspaces/{WS}/coverages/dem_view.json").json()["coverage"]
+    entries = coverage["metadata"]["entry"]
+    view = next(e["coverageView"] for e in (entries if isinstance(entries, list) else [entries]) if e.get("@key") == "COVERAGE_VIEW")
+    assert (view["envelopeCompositionType"], view["selectedResolution"], view["fillMissingBands"]) == ("UNION", "WORST", True)
+
+    imported = tmp_path_factory.mktemp("imported")
+    (imported / "project.yaml").write_text(HEAD)
+    code, out = configops(capsys, "import", WS, "-C", str(imported))
+    assert code == 0, out
+    import yaml
+    docs = [d for f in imported.glob("*.yaml") for d in yaml.safe_load_all(f.read_text()) if d]
+    layer = next(d for d in docs if d["kind"] == "Layer" and d["metadata"]["name"] == "dem-view")
+    assert layer["spec"]["view"]["bands"][0]["coverage"] == "dem" and layer["spec"]["view"]["envelope"] == "union", layer
+
+
 MOSAIC = """---
 apiVersion: configops/v1alpha1
 kind: Store

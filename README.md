@@ -1,6 +1,6 @@
 # GeoServer ConfigOps
 
-![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-98%25-brightgreen) Of the 617 settings GeoServer Cloud's REST API can set, configops sets 607, and the e2e tests have proved 607 of those (46 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
+![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-100%25-brightgreen) Of the 617 settings GeoServer Cloud's REST API can set, configops sets 617, and the e2e tests have proved 617 of those (46 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
 
 GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud): a Helm chart, plus `configops`, a small command that keeps your GIS data and what GeoServer publishes in YAML files:
 
@@ -252,7 +252,6 @@ Most of GeoServer's web UI can be kept in the files: [docs/coverage.md](docs/cov
 | Oracle stores | GeoServer Cloud's images don't ship Oracle's JDBC driver |
 | Tile cache disk quota | GeoServer Cloud switches it off and has no REST endpoint for it |
 | Content Security Policy | GeoServer Cloud's services don't send GeoServer's policy header; the web UI sends its own |
-| Layer group styles | GeoServer Cloud's catalog database doesn't keep their members, and WMS can't draw them |
 
 Some settings take effect only when GeoServer's services restart, and `apply` says so: the tile caching defaults. A few live in the Helm chart rather than the project files: which services run, logging, WPS and GeoServer ACL.
 

@@ -65,6 +65,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Attribute customisation: computed or renamed attributes, descriptions, nillable, occurrences | Yes | `attributes: [{ name, source, description, nillable, minOccurs, maxOccurs, binding }]` |
 | SQL views | Yes | `sql: { schema, query, key, geometry }` |
 | Raster bands and coverage parameters | Yes | `bands`, `parameters` |
+| Coverage views (bands of several coverages, or a Jiffle formula) | Yes | A Layer's `view`, with `store:` |
 | **Publishing:** default style, other styles | Yes | |
 | Queryable | Yes | |
 | Opaque | Yes | `opaque` |

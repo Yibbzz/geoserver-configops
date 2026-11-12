@@ -279,6 +279,7 @@ spec:
 | `buffer` | no | none | Rendering buffer in pixels, for symbols that spill over tile edges |
 | `wms` | no | none | `{ path, interpolation }`: where the layer sits in the WMS capabilities tree (`/base/roads`), and `nearest`, `bilinear` or `bicubic` resampling |
 | `dataLinks` | no | none | `[{ url, type }]`: links to the data itself. `type` defaults to `text/html` |
+| `view` | no | none | With `store:` instead of `resource:`, a coverage view: a raster made from bands of the store's coverages. `{ bands: [{ coverage, band }], envelope: intersection \| union, resolution: best \| worst, resolutionIndex, fillMissingBands, formula: { script, output } }`: `formula` is a Jiffle script computing one band (`doubled = dem[0] * 2;`), `output` the band it writes |
 | `remote` | no | none | A cascaded WMS layer's options: `{ style, styles, format, formats, minScale, maxScale, respectBounds, vendorParameters }`: the remote style to draw with and the ones offered, the image format to ask for and the ones offered, the scale range, asking only within the layer's bounds, and extra request parameters |
 | `wcs` | no | the WCS service's | Rasters: `{ requestCRS, responseCRS, formats, interpolations, defaultInterpolation }` |
 | `bands` | no | from the file | Rasters: `[{ name, description, unit, nullValues: [...], range: [min, max] }]`, in band order, as WCS shows them |
