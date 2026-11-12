@@ -2,8 +2,9 @@
 # tests/geoserver_coverage.py writes the list; the statuses, `spec` and `note` are kept by hand.
 #   yes: configops sets it (spec: where, as a path in configops/schema/v1alpha1.json's $defs,
 #        or a project folder: styles/, templates/)
-#   no: possible through GeoServer Cloud's REST API, not built yet
-#   cant: GeoServer Cloud has no way to set it
+#   no: possible through GeoServer's REST API, not built yet
+#   cant: GeoServer has no way to set it (say why in `note`)
+#   cloud: / standard: the status on GeoServer Cloud or on standard GeoServer, where it differs (cloud: cant, with the note)
 #   none: not configuration (ids, timestamps, values worked out by GeoServer or configops)
 versions:
   geoserver: 3.0.2
@@ -72,8 +73,16 @@ pages:
         note: set for a cog store's range reader
         extra: true
       type=Oracle:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud's images don't ship Oracle's JDBC driver
+        extra: true
+        cloud: cant
+      type=CSV:
+        status: 'yes'
+        spec: store.type
+        test: test_e2e_file_stores.py::test_every_file_store_then_nothing_to_do
+        standard: cant
+        note: standard GeoServer has no CSV store (GeoServer Cloud ships one)
         extra: true
     DataStoreInfoImpl: {}
     CoverageStoreInfoImpl:
@@ -708,31 +717,47 @@ pages:
       dateModified: *id001
       modifiedBy: *id001
       layerGroupStyles:
-        status: cant
-        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
+        status: 'no'
+        note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
+          breaks the group'
+        cloud: cant
     LayerGroupStyleImpl:
       id: *id003
       name:
-        status: cant
-        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
+        status: 'no'
+        note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
+          breaks the group'
+        cloud: cant
       title:
-        status: cant
-        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
+        status: 'no'
+        note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
+          breaks the group'
+        cloud: cant
       internationalTitle:
-        status: cant
-        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
+        status: 'no'
+        note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
+          breaks the group'
+        cloud: cant
       abstractTxt:
-        status: cant
-        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
+        status: 'no'
+        note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
+          breaks the group'
+        cloud: cant
       internationalAbstract:
-        status: cant
-        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
+        status: 'no'
+        note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
+          breaks the group'
+        cloud: cant
       layers:
-        status: cant
-        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
+        status: 'no'
+        note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
+          breaks the group'
+        cloud: cant
       styles:
-        status: cant
-        note: "GeoServer Cloud's catalog database doesn't keep a group style's members: after a restart the group can't be read (500 Unexpected item null) and WMS never draws the style; setting them breaks the group"
+        status: 'no'
+        note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
+          breaks the group'
+        cloud: cant
   Styles:
     StyleInfoImpl:
       name:
@@ -1293,9 +1318,10 @@ pages:
         status: 'yes'
         spec: settings.useHeadersProxyURL
       metadata.corsConfigurationSettings:
-        status: cant
+        status: 'no'
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         extra: true
+        cloud: cant
     ContactInfoImpl:
       id: *id003
       address:
@@ -1414,8 +1440,9 @@ pages:
         status: 'yes'
         spec: settings.global.jai.memoryThreshold
       imageIOCache:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud doesn't keep it
+        cloud: cant
       pngEncoderType:
         status: 'yes'
         spec: settings.global.jai.pngEncoderType
@@ -1524,8 +1551,9 @@ pages:
         status: 'yes'
         spec: cache.formats
       formatModifiers:
-        status: cant
+        status: 'no'
         note: 'GeoServer Cloud''s GeoWebCache REST API drops them: an XML PUT answers 200 but doesn''t keep them, a JSON PUT answers 500'
+        cloud: cant
       gridSubsets:
         status: 'yes'
         spec: cache.gridsets
@@ -1813,39 +1841,50 @@ pages:
         spec: blobStore.defaultCredentials
     DiskQuotaConfig:
       enabled:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       cacheCleanUpFrequency:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       cacheCleanUpUnits:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       maxConcurrentCleanUps:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       globalExpirationPolicyName:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       globalQuota:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       layerQuotas:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       quotaStore:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
     LayerQuota:
       layer:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       expirationPolicyName:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
       quota:
-        status: cant
+        status: 'no'
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
+        cloud: cant
   Security:
     SecurityManagerConfig:
       roleServiceName:
@@ -2252,77 +2291,100 @@ pages:
         spec: securityObject.config
     CORSConfiguration:
       enabled:
-        status: cant
+        status: 'no'
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        cloud: cant
       allowedOriginPatterns:
-        status: cant
+        status: 'no'
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        cloud: cant
       allowedMethods:
-        status: cant
+        status: 'no'
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        cloud: cant
       allowedHeaders:
-        status: cant
+        status: 'no'
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        cloud: cant
       maxAge:
-        status: cant
+        status: 'no'
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        cloud: cant
       supportsCredentials:
-        status: cant
+        status: 'no'
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        cloud: cant
     CSPConfiguration:
       enabled:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       reportOnly:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       allowOverride:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       injectProxyBase:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       remoteResources:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       formAction:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       frameAncestors:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       policies:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
     CSPPolicy:
       name:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       description:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       enabled:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       rules:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
     CSPRule:
       name:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       description:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       enabled:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       filter:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
       directives:
-        status: cant
+        status: 'no'
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
+        cloud: cant
     AbstractURLCheck:
       name:
         status: 'yes'

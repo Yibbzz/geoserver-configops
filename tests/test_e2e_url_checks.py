@@ -144,9 +144,12 @@ def imported_global(folder) -> dict:
 
 
 def wms_log(since: str = "3m") -> str:
-    pod = os.environ.get("E2E_DATA_POD")
+    pod, container = os.environ.get("E2E_DATA_POD"), os.environ.get("E2E_REST_CONTAINER")
+    if not pod and container:  # one GeoServer in Docker: its log is the container's
+        run = subprocess.run(["docker", "logs", f"--since={since}", container], capture_output=True, text=True, check=True)
+        return run.stdout + run.stderr
     if not pod:
-        pytest.skip("E2E_DATA_POD not set: no namespace to read the WMS log in")
+        pytest.skip("E2E_DATA_POD or E2E_REST_CONTAINER not set: no WMS log to read")
     namespace = pod.split("/")[0]
     return subprocess.run(["kubectl", "-n", namespace, "logs", "-l", "app.kubernetes.io/component=wms", f"--since={since}",
                            "--tail=-1"], capture_output=True, text=True, check=True).stdout

@@ -82,3 +82,14 @@ What we learned about GeoServer Cloud 3.0's REST API, GeoWebCache and the servic
 - GDAL retries HTTP 429, 502, 503 and 504 (`GDAL_HTTP_MAX_RETRY`, `GDAL_HTTP_RETRY_DELAY`), but not broken connections.
 - GeoJSON always counts as WGS84.
 - data.gov.uk's CKAN API answers plain `curl` with HTML; send an `Accept` header.
+
+## Standard GeoServer, for comparison
+
+configops is also tested against standard GeoServer 3.0.2, the version GeoServer Cloud 3.0 is built on (`tests/e2e/up.sh standard`). What differs:
+
+- Everything above marked as GeoServer Cloud only (the gateway answering CORS, CSP, disk quota, group styles, the master password race) doesn't apply: one process serves REST, the OGC services and the tile cache.
+- **A tile layer PUT without `metaWidthHeight` stores 0 × 0** (GeoServer Cloud fills in the caching defaults), and seeding it then fails with `/ by zero`. Always send it.
+- A fresh standard GeoServer leaves some settings unset (`resourceErrorHandling`, a WCS `overviewPolicy`): a PUT can't unset them again, and `""` isn't one of their values.
+- The official image (`docker.osgeo.org/geoserver`) starts with sample workspaces unless `SKIP_DEMO_DATA=true`; it installs extensions from `STABLE_EXTENSIONS` and `COMMUNITY_EXTENSIONS`, but community builds are snapshots that carry their own copies of core libraries (`gt-main-35-SNAPSHOT` beside `gt-main-35.2`): remove those before starting (`tests/e2e/standard-start.sh`). It runs as root, so files it writes into a mounted folder are root's. Standard GeoServer has no CSV store.
+- It tells you it's standard GeoServer: `/rest/about/version` says `3.0.2`, GeoServer Cloud `3.0.2-CLOUD`.
+

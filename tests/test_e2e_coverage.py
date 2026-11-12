@@ -8,7 +8,8 @@ new value, or when the test its entry names passed.
 It fails when GeoServer shows a field the list doesn't have (sort it), when GeoServer isn't
 the version the list was read from, or when a field docs/geoserver-tested.txt says is proved
 was written and read back wrong. With COVERAGE_WRITE=1 it adds what this run proved to
-docs/geoserver-tested.txt and updates the README's figure:
+docs/geoserver-tested.txt (GeoServer Cloud) or docs/geoserver-tested-standard.txt (standard GeoServer, told apart by
+its version) and updates the README's figures:
 
     COVERAGE_WRITE=1 E2E_GEOSERVER_URL=... pytest -m e2e
 """
@@ -90,19 +91,26 @@ def test_every_field_geoserver_shows_is_listed(evidence):
         "\n".join(f"  {field} (seen at {path})" for field, path in sorted(ev.unlisted.items()))
 
 
+def target() -> str:
+    """"cloud" or "standard": which GeoServer this run tested, from its version."""
+    about = {r["@name"]: str(r.get("Version")) for r in get("/about/version")["about"]["resource"]}
+    return "cloud" if "CLOUD" in about["GeoServer"].upper() else "standard"
+
+
 def test_proved_fields_still_hold(evidence):
-    """Work out what this run proved; fail if a field proved before now reads back wrong."""
+    """Work out what this run proved on this GeoServer; fail if a field proved before now reads back wrong."""
     manifest, ev = evidence
-    yes = coverage.yes_fields(manifest)
-    proved = (ev.proved & yes) | coverage.named_tests(manifest, conftest.PASSED)
-    before = coverage.tested()
+    on = target()
+    yes = coverage.yes_fields(manifest, on)
+    proved = (ev.proved & yes) | (coverage.named_tests(manifest, conftest.PASSED) & yes)
+    before = coverage.tested(on)
     broken = {f: why for f, why in ev.mismatched.items() if f in before and f not in proved}
     if os.environ.get("COVERAGE_WRITE"):
-        coverage.save_tested((before | proved) - set(broken))
+        coverage.save_tested((before | proved) - set(broken), on)
         coverage.report(manifest)
     new = sorted(proved - before)
     warnings.warn(f"coverage: this run proved {len(proved)} of {len(yes)} yes fields, {len(new)} not in "
-                  f"{coverage.TESTED.name}{': ' + ', '.join(new[:20]) if new else ''}"
+                  f"{coverage.TESTED_FILES[on].name}{': ' + ', '.join(new[:20]) if new else ''}"
                   + ("" if os.environ.get("COVERAGE_WRITE") else " (COVERAGE_WRITE=1 adds them)"))
     assert not broken, "fields proved before that GeoServer now shows differently:\n" + \
         "\n".join(f"  {f}: {why}" for f, why in sorted(broken.items()))

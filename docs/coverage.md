@@ -2,14 +2,14 @@
 
 Every page of GeoServer's web UI, and whether `configops` can define it in files and apply it with `plan`/`apply`. The aim is everything that can be configured, as code. Update this page in the same PR as any change to what's covered.
 
-This page is the overview. [geoserver-fields.yaml](geoserver-fields.yaml) goes field by field: every field of GeoServer's configuration, read from GeoServer's and GeoWebCache's source at the versions GeoServer Cloud runs, sorted as here, and [geoserver-tested.txt](geoserver-tested.txt) lists the ones the e2e tests have proved: configops changed the field and GeoServer then showed the new value. The README's figure counts only those. `tests/geoserver_coverage.py` explains how; `refresh` after a GeoServer Cloud upgrade brings in new fields, and the tests fail until each is sorted.
+This page is the overview, for GeoServer Cloud; configops works with standard GeoServer too, where the "Can't"s below are possible (not built yet). [geoserver-fields.yaml](geoserver-fields.yaml) goes field by field: every field of GeoServer's configuration, read from GeoServer's and GeoWebCache's source at the versions GeoServer Cloud runs, sorted as here, with `cloud:` or `standard:` where the two differ. [geoserver-tested.txt](geoserver-tested.txt) (GeoServer Cloud) and [geoserver-tested-standard.txt](geoserver-tested-standard.txt) (standard GeoServer) list the fields the e2e tests have proved on each: configops changed the field and GeoServer then showed the new value. The README's figures count only those, out of every setting GeoServer has, so what one can't set counts against it. `tests/geoserver_coverage.py` explains how; `refresh` after a GeoServer Cloud upgrade brings in new fields, and the tests fail until each is sorted.
 
 | Status | Meaning |
 | --- | --- |
 | **Yes** | In the files: `plan` shows drift, `apply` sets it, `import` writes it |
 | **Partly** | Some of it; the notes say what's missing |
-| **Not yet** | Possible through GeoServer Cloud's REST API; not built |
-| **Can't** | GeoServer Cloud's REST API has no way to set it |
+| **Not yet** | Possible through GeoServer's REST API; not built |
+| **Can't** | GeoServer Cloud has no way to set it (standard GeoServer may) |
 | **Chart** | Set in the Helm chart's `values.yaml`, not in the project files |
 | — | Not configuration (a tool or a view of the data) |
 

@@ -401,8 +401,10 @@ class GeoServer:
         """
         options = options or {}
         extra = ""
-        if "metaTiles" in options:
-            extra += f"<metaWidthHeight><int>{int(options['metaTiles'][0])}</int><int>{int(options['metaTiles'][1])}</int></metaWidthHeight>"
+        # Always sent: standard GeoServer stores 0 x 0 when it's left out (GeoServer Cloud fills in the default), and seeding
+        # then divides by it
+        meta = options.get("metaTiles") or self.default_meta_tiles()
+        extra += f"<metaWidthHeight><int>{int(meta[0])}</int><int>{int(meta[1])}</int></metaWidthHeight>"
         for key in ("gutter", "expireCache", "expireClients"):
             if key in options:
                 extra += f"<{key}>{int(options[key])}</{key}>"
@@ -459,6 +461,28 @@ class GeoServer:
         r = self.gwc_request("PUT", f"gridsets/{q(name)}.xml", xml)
         if r.status_code not in (200, 201):
             raise GeoServerError("PUT", f"gwc/gridsets/{name}", r.status_code, r.text)
+
+    @property
+    def cloud(self) -> bool:
+        """Whether this is GeoServer Cloud (its version ends in -CLOUD) rather than standard GeoServer; read once."""
+        if getattr(self, "_cloud", None) is None:
+            about = (self.get("about/version") or {}).get("about") or {}
+            resources = about.get("resource") or []
+            version = next((r.get("Version", "") for r in (resources if isinstance(resources, list) else [resources])
+                            if isinstance(r, dict) and r.get("@name") == "GeoServer"), "")
+            self._cloud = "CLOUD" in str(version).upper()
+        return self._cloud
+
+    def default_meta_tiles(self) -> list[int]:
+        """The caching defaults' metatiling (gwc-gs.xml), read once; 4 x 4 if it can't be read."""
+        if getattr(self, "_meta_tiles", None) is None:
+            r = self.request("GET", "resource/gwc-gs.xml", ok=(200, 404))
+            try:
+                root = ET.fromstring(r.text) if r.status_code == 200 else None
+                self._meta_tiles = [int(root.findtext("metaTilingX")), int(root.findtext("metaTilingY"))] if root is not None else [4, 4]
+            except (ET.ParseError, TypeError, ValueError):
+                self._meta_tiles = [4, 4]
+        return self._meta_tiles
 
     def tile_layer_extras(self, name: str) -> dict:
         """A tile layer's zoom limits, expiry by zoom and warning skips (read as XML, like its filters)."""

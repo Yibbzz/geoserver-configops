@@ -49,3 +49,6 @@ secrets.yaml
 secrets.yml
 Dockerfile
 .dockerignore
+# Local working files beside the chart (agent notes and worktrees): never packaged
+.claude/
+CLAUDE.md

@@ -43,6 +43,9 @@ VALUES = {
 }
 
 
+ENUMS = {"overviewPolicy", "resourceErrorHandling", "outputStrategy", "interpolation", "serviceLevel", "webUIMode"}
+
+
 def restore(live: dict, saved: dict) -> dict:
     """`saved`, with the text and lists that were empty then blanked: GeoServer keeps what a PUT leaves out."""
     out = dict(saved)
@@ -51,6 +54,8 @@ def restore(live: dict, saved: dict) -> dict:
             if isinstance(value, dict) and isinstance(saved[key], dict) and "string" not in value:
                 out[key] = restore(value, saved[key])
             continue
+        if isinstance(value, str) and key in ENUMS:
+            continue  # unset on a fresh standard GeoServer, and a PUT can't unset it: "" isn't one of its values
         if isinstance(value, str):
             out[key] = ""
         elif isinstance(value, dict) and "string" in value:
@@ -125,6 +130,9 @@ def gs():
             continue
         (key, before), = body.items()
         before.pop("updateSequence", None)
+        if path == "settings":  # a PUT replaces the global settings whole: what was unset comes back unset
+            gs.request("PUT", path, {key: before})
+            continue
         gs.request("PUT", path, {key: restore(gs.get(path)[key], before)})
 
 

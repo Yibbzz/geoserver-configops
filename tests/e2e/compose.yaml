@@ -1,6 +1,7 @@
 # The real GeoServer Cloud REST service, wired the way the Helm chart wires it:
 # same images and tags, same pgconfig settings and the chart's rendered jndi.yml.
-# Started by tests/e2e/up.sh; used by the e2e tests (pytest -m e2e).
+# Or (profile standard) the official GeoServer of the version GeoServer Cloud is built on,
+# with the extensions GeoServer Cloud ships. Started by tests/e2e/up.sh [standard].
 name: gscloud-e2e
 x-pgconfig: &pgconfig
   PGCONFIG_HOST: db
@@ -17,6 +18,7 @@ services:
     ports: ["${E2E_DB_PORT:-55433}:5432"]
     healthcheck: {test: ["CMD", "pg_isready", "-U", "postgres"], interval: 3s, retries: 40}
   rabbitmq:
+    profiles: [cloud]
     image: ${RABBITMQ_IMAGE}
     environment: {RABBITMQ_DEFAULT_USER: user, RABBITMQ_DEFAULT_PASS: guest}
     healthcheck: {test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"], interval: 5s, retries: 40}
@@ -39,6 +41,7 @@ services:
       interval: 3s
       retries: 40
   rest:
+    profiles: [cloud]
     image: geoservercloud/geoserver-cloud-rest:${GEOSERVER_TAG}
     depends_on: {db: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
     environment:
@@ -61,3 +64,30 @@ services:
       interval: 5s
       retries: 60
       start_period: 30s
+  # Standard GeoServer: the version GeoServer Cloud is built on, with the extensions GeoServer Cloud ships
+  # (downloaded once into standard-libs/), the same JNDI PostGIS datasource and the shared data folder
+  geoserver:
+    profiles: [standard]
+    image: docker.osgeo.org/geoserver:${STANDARD_GEOSERVER_VERSION}
+    depends_on: {db: {condition: service_healthy}}
+    environment:
+      SKIP_DEMO_DATA: "true"  # start empty, as GeoServer Cloud does
+      INSTALL_EXTENSIONS: "true"
+      STABLE_EXTENSIONS: app-schema,arcgrid,authkey,control-flow,css,mbstyle,vectortiles,sqlserver,gwc-s3,ogcapi-features,pyramid
+      COMMUNITY_EXTENSIONS: cog-http,cog-s3,cog-azure,cog-google,flatgeobuf,gwc-azure-blobstore,gwc-gcs-blobstore,geoparquet,pmtiles-store
+      POSTGRES_JNDI_ENABLED: "true"
+      POSTGRES_JNDI_RESOURCE_NAME: jdbc/mypostgis
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: postgres
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+      EXTRA_JAVA_OPTS: -Xms256m -Xmx1g
+    entrypoint: ["bash", "/e2e/standard-start.sh"]
+    volumes: ["./standard-libs:/opt/additional_libs", "./data:/data", "./standard-start.sh:/e2e/standard-start.sh:ro"]
+    ports: ["${E2E_STANDARD_PORT:-59091}:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-u", "admin:geoserver", "http://localhost:8080/geoserver/rest/about/version.json"]
+      interval: 5s
+      retries: 120
+      start_period: 60s
