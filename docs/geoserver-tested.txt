@@ -1,6 +1,9 @@
 # Fields the e2e tests have proved (tests/test_e2e_coverage.py writes this file; don't edit it):
 # configops changed the field in GeoServer and GeoServer then showed the new value,
 # or the test the field names in docs/geoserver-fields.yaml passed.
+AbstractURLCheck.description
+AbstractURLCheck.enabled
+AbstractURLCheck.name
 AttributeTypeInfoImpl.name
 AttributionInfoImpl.href
 AttributionInfoImpl.logoHeight
@@ -119,6 +122,10 @@ GeoServerInfoImpl.allowStoredQueriesPerWorkspace
 GeoServerInfoImpl.featureTypeCacheSize
 GeoServerInfoImpl.globalServices
 GeoServerInfoImpl.lockProviderName
+GeoServerInfoImpl.metadata.logBodiesEnabled
+GeoServerInfoImpl.metadata.logHeadersEnabled
+GeoServerInfoImpl.metadata.logRequestsEnabled
+GeoServerInfoImpl.metadata.requestLogBufferSize
 GeoServerInfoImpl.resourceErrorHandling
 GeoServerInfoImpl.trailingSlashMatch
 GeoServerInfoImpl.webUIMode
@@ -252,8 +259,12 @@ PreAuthenticatedUserNameFilterConfig.roleSource
 PreAuthenticatedUserNameFilterConfig.rolesHeaderAttribute
 PreAuthenticatedUserNameFilterConfig.userGroupServiceName
 RegexParameterFilter.regex
+RegexURLCheck.regex
 RequestHeaderAuthenticationFilterConfig.principalHeaderAttribute
+ResourceFiles.fonts
 ResourceFiles.masterPassword
+ResourceFiles.styleGraphics
+ResourceFiles.templates
 ResourceInfoImpl.abstract
 ResourceInfoImpl.advertised
 ResourceInfoImpl.dataLinks

@@ -43,9 +43,10 @@ DEFAULTS = {  # what import leaves out; a file that spells them out means the sa
     "Group": {"roles": []},
     "BlobStore": {"enabled": True, "default": False},
     "Workspace": {"isolated": False, "default": False},
+    "URLCheck": {"enabled": True, "description": ""},
 }
 WORKSPACE_KINDS = ("Workspace", "Store", "Layer", "LayerGroup")
-SECURITY_KINDS = ("Role", "Group", "User", "AccessRule")
+SECURITY_KINDS = ("Role", "Group", "User", "AccessRule", "URLCheck")
 SETTINGS_KINDS = ("Settings", "Service")
 
 

@@ -1177,6 +1177,26 @@ pages:
       resourceErrorHandling:
         status: 'yes'
         spec: settings.global.resourceErrorHandling
+      metadata.logRequestsEnabled:
+        status: 'yes'
+        spec: settings.global.requestLogging.enabled
+        extra: true
+        test: test_e2e_url_checks.py::test_request_logging_writes_requests_to_the_log
+      metadata.logHeadersEnabled:
+        status: 'yes'
+        spec: settings.global.requestLogging.headers
+        extra: true
+        test: test_e2e_url_checks.py::test_request_logging_writes_requests_to_the_log
+      metadata.logBodiesEnabled:
+        status: 'yes'
+        spec: settings.global.requestLogging.bodies
+        extra: true
+        test: test_e2e_url_checks.py::test_request_logging_writes_requests_to_the_log
+      metadata.requestLogBufferSize:
+        status: 'yes'
+        spec: settings.global.requestLogging.bodySize
+        extra: true
+        test: test_e2e_url_checks.py::test_request_logging_writes_requests_to_the_log
     SettingsInfoImpl:
       id: *id004
       workspace:
@@ -1235,22 +1255,6 @@ pages:
       useHeadersProxyURL:
         status: 'yes'
         spec: settings.useHeadersProxyURL
-      metadata.logRequestsEnabled:
-        status: 'no'
-        note: request logging
-        extra: true
-      metadata.logHeadersEnabled:
-        status: 'no'
-        note: request logging
-        extra: true
-      metadata.logBodiesEnabled:
-        status: 'no'
-        note: request logging
-        extra: true
-      metadata.requestLogBufferSize:
-        status: 'no'
-        note: request logging
-        extra: true
       metadata.corsConfigurationSettings:
         status: cant
         note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
@@ -2179,72 +2183,76 @@ pages:
         note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
     CSPConfiguration:
       enabled:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       reportOnly:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       allowOverride:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       injectProxyBase:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       remoteResources:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       formAction:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       frameAncestors:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       policies:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
     CSPPolicy:
       name:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       description:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       enabled:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       rules:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
     CSPRule:
       name:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       description:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       enabled:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       filter:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
       directives:
-        status: 'no'
-        note: Content Security Policy (security/csp.xml)
+        status: cant
+        note: "Content Security Policy (security/csp.xml): GeoServer Cloud's services don't send its header"
     AbstractURLCheck:
       name:
-        status: 'no'
-        note: URL checks (/rest/urlchecks)
+        status: 'yes'
+        spec: urlCheck.name
+        test: test_e2e_url_checks.py::test_url_checks_allow_only_what_they_name
       description:
-        status: 'no'
-        note: URL checks (/rest/urlchecks)
+        status: 'yes'
+        spec: urlCheck.description
+        test: test_e2e_url_checks.py::test_url_checks_allow_only_what_they_name
       enabled:
-        status: 'no'
-        note: URL checks (/rest/urlchecks)
+        status: 'yes'
+        spec: urlCheck.enabled
+        test: test_e2e_url_checks.py::test_url_checks_allow_only_what_they_name
     RegexURLCheck:
       regex:
-        status: 'no'
-        note: URL checks (/rest/urlchecks)
+        status: 'yes'
+        spec: urlCheck.regex
+        test: test_e2e_url_checks.py::test_url_checks_allow_only_what_they_name
     UserGroupRoleEntries:
       user.name:
         status: 'yes'

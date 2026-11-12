@@ -125,3 +125,17 @@ def test_compare_and_merge():
         {"a": {"b": 3, "c": 2}, "l": {"string": ["y"]}}
     assert server.to_geoserver({"abstract": "x", "keywords": ["k"], "geoserver": {"other": 1}}) == \
         {"abstrct": "x", "keywords": {"string": ["k"]}, "other": 1}
+
+
+def test_request_logging_is_written_as_metadata_text():
+    assert server.logging_entries({"enabled": True, "headers": False, "bodySize": 2048}) == {
+        "logRequestsEnabled": "true", "logHeadersEnabled": "false", "requestLogBufferSize": "2048"}
+
+
+def test_a_single_metadata_entry_is_read_like_a_list():
+    one = {"metadata": {"entry": {"@key": "logRequestsEnabled", "$": "true"}}}
+    many = {"metadata": {"entry": [{"@key": "logRequestsEnabled", "$": "true"}, {"@key": "requestLogBufferSize", "$": "64"}]}}
+    assert server.metadata(one) == {"logRequestsEnabled": "true"}
+    assert server.metadata(many) == {"logRequestsEnabled": "true", "requestLogBufferSize": "64"}
+    assert server.metadata({}) == {}
+    assert (server.typed("true"), server.typed("64")) == (True, 64)
