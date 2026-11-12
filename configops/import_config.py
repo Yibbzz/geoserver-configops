@@ -190,10 +190,14 @@ def security_resources(gs) -> tuple[list[dict], list[str], list[str]]:
         taken.add((kind, out))
         return out
 
+    from .security import SecurityFiles
+
+    files = SecurityFiles(gs)
     roles = sorted(set(names_of(gs.get("security/roles"), "roles")) - BUILT_IN_ROLES)
     for role in roles:
         meta = unique("Role", resource_name(role.lower())[0])
         spec = {} if meta.upper().replace("-", "_") == role else {"name": role}
+        spec.update(files.role(role))
         found.append(resource("Role", meta, spec))
 
     for group in sorted(names_of(gs.get("security/usergroup/groups"), "groups")):
@@ -203,6 +207,8 @@ def security_resources(gs) -> tuple[list[dict], list[str], list[str]]:
         group_roles = sorted(names_of(gs.get(f"security/roles/group/{group}"), "roles"))
         if group_roles:
             spec["roles"] = group_roles
+        if not files.group_enabled(group):
+            spec["enabled"] = False
         found.append(resource("Group", meta, spec))
 
     for user in names_of(gs.get("security/usergroup/users"), "users"):
@@ -223,6 +229,9 @@ def security_resources(gs) -> tuple[list[dict], list[str], list[str]]:
             spec["roles"] = own
         if user.get("enabled") is False:
             spec["enabled"] = False
+        properties = files.user_properties(name)
+        if properties:
+            spec["properties"] = properties
         found.append(resource("User", meta, spec))
 
     access = {v: k for k, v in ACCESS.items()}

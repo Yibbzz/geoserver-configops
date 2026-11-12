@@ -16,7 +16,7 @@ from __future__ import annotations
 import requests
 
 from . import secrets
-from .geoserver import MissingCredentials
+from .geoserver import GeoServerError, MissingCredentials
 from .loader import Resource
 
 BUILT_IN_USERS = {"admin"}
@@ -86,6 +86,14 @@ def plan(planner) -> None:
         add("+", "role", name, run=lambda n=name: gs.request("POST", f"security/roles/role/{n}"))
     for name in sorted(live_roles - wanted_roles - BUILT_IN_ROLES):
         unmanaged("role", name, lambda n=name: drop(gs, f"security/roles/role/{n}"))
+    role_files = SecurityFiles(gs)
+    for r in files.of_kind("Role"):
+        want = {k: r.spec[k] for k in ("parent", "properties") if k in r.spec}
+        if want:
+            have = role_files.role(role_name(r))
+            changed = [(k, have.get(k), v) for k, v in want.items() if have.get(k) != v]
+            if changed:
+                add("~", "role", role_name(r), changed, run=lambda n=role_name(r), w=want: SecurityFiles(gs).set_role(n, w))
 
     # Groups
     live_groups = set(names(gs.get("security/usergroup/groups"), "groups"))
@@ -99,6 +107,10 @@ def plan(planner) -> None:
             add("+", "user group", name, note=f"roles: {', '.join(roles) or 'none'}", run=run)
         elif current != roles:
             add("~", "user group", name, [("roles", current, roles)], run=run)
+    for r in files.of_kind("Group"):
+        if "enabled" in r.spec and role_files.group_enabled(account_name(r)) != r.spec["enabled"]:
+            add("~", "user group", account_name(r), [("enabled", not r.spec["enabled"], r.spec["enabled"])],
+                run=lambda n=account_name(r), on=r.spec["enabled"]: SecurityFiles(gs).set_group_enabled(n, on))
     for name in sorted(live_groups - set(wanted_groups)):
         unmanaged("user group", name, lambda n=name: drop(gs, f"security/usergroup/group/{n}"))
 
@@ -129,6 +141,13 @@ def plan(planner) -> None:
             new_password = password
         if changed:
             add("~", "user", name, changed, run=lambda n=name, w=want, p=new_password, h=have: set_user(gs, n, w, p, h, new=False))
+    for r in files.of_kind("User"):
+        if "properties" in r.spec:
+            have = role_files.user_properties(account_name(r))
+            want = {str(k): str(v) for k, v in r.spec["properties"].items()}
+            if have != want:
+                add("~", "user", account_name(r), [("properties", have, want)],
+                    run=lambda n=account_name(r), w=want: SecurityFiles(gs).set_user_properties(n, w))
     for name in sorted(set(live_users) - wanted_users - BUILT_IN_USERS):
         unmanaged("user", name, lambda n=name: drop(gs, f"security/usergroup/user/{n}"))
 
@@ -256,3 +275,108 @@ def plan_rest_rules(gs, wanted: dict[str, list[str]], add, unmanaged) -> None:
                 add("~", "rule", target, changed, run=run(keep_others=True))
     for key, _ in others:
         unmanaged("rule", f"rest {key}", run(keep_others=False))
+
+
+# --- What the REST API doesn't reach: a role's parent and properties, a user's properties, a group
+# turned off. They are in the default services' files, edited through /rest/resource; GeoServer reads
+# them again after a security reload.
+
+ROLES_FILE = "resource/security/role/default/roles.xml"
+USERS_FILE = "resource/security/usergroup/default/users.xml"
+ROLES_NS = "http://www.geoserver.org/security/roles"
+USERS_NS = "http://www.geoserver.org/security/users"
+
+
+class SecurityFiles:
+    def __init__(self, gs):
+        self.gs = gs
+        self._roles = self._users = None
+
+    def _read(self, path: str, ns: str):
+        import xml.etree.ElementTree as ET
+
+        ET.register_namespace("", ns)
+        r = self.gs.request("GET", path, ok=(200, 404))
+        return ET.fromstring(r.text) if r.status_code == 200 and r.text.lstrip().startswith("<") else None
+
+    @property
+    def roles(self):
+        if self._roles is None:
+            self._roles = self._read(ROLES_FILE, ROLES_NS)
+        return self._roles
+
+    @property
+    def users(self):
+        if self._users is None:
+            self._users = self._read(USERS_FILE, USERS_NS)
+        return self._users
+
+    def _find(self, root, ns: str, path: str, attr: str, name: str):
+        if root is None:
+            return None
+        return next((e for e in root.iterfind(path, {"s": ns}) if e.get(attr) == name), None)
+
+    @staticmethod
+    def _properties(element) -> dict:
+        return {p.get("name"): p.text or "" for p in element if p.tag.endswith("property")} if element is not None else {}
+
+    @staticmethod
+    def _set_properties(element, ns: str, values: dict) -> None:
+        import xml.etree.ElementTree as ET
+
+        for p in [p for p in element if p.tag.endswith("property")]:
+            element.remove(p)
+        for k, v in values.items():
+            ET.SubElement(element, f"{{{ns}}}property", {"name": k}).text = v
+
+    def _write(self, path: str, root) -> None:
+        import xml.etree.ElementTree as ET
+
+        from . import auth
+
+        self.gs.request("PUT", path, ET.tostring(root, encoding="unicode", xml_declaration=True), content_type="application/xml")
+        auth.reload_security(self.gs)
+
+    def role(self, name: str) -> dict:
+        e = self._find(self.roles, ROLES_NS, "s:roleList/s:role", "id", name)
+        out: dict = {}
+        if e is not None and e.get("parentID"):
+            out["parent"] = e.get("parentID")
+        props = self._properties(e)
+        if props:
+            out["properties"] = props
+        return out
+
+    def set_role(self, name: str, want: dict) -> None:
+        e = self._find(self.roles, ROLES_NS, "s:roleList/s:role", "id", name)
+        if e is None:
+            raise GeoServerError("PUT", ROLES_FILE, 404, f"role {name} isn't in GeoServer's default role service")
+        if "parent" in want:
+            if want["parent"]:
+                e.set("parentID", want["parent"])
+            else:
+                e.attrib.pop("parentID", None)
+        if "properties" in want:
+            self._set_properties(e, ROLES_NS, {str(k): str(v) for k, v in want["properties"].items()})
+        self._write(ROLES_FILE, self.roles)
+
+    def group_enabled(self, name: str) -> bool:
+        e = self._find(self.users, USERS_NS, "s:groups/s:group", "name", name)
+        return e is None or e.get("enabled", "true") == "true"
+
+    def set_group_enabled(self, name: str, on: bool) -> None:
+        e = self._find(self.users, USERS_NS, "s:groups/s:group", "name", name)
+        if e is None:
+            raise GeoServerError("PUT", USERS_FILE, 404, f"group {name} isn't in GeoServer's default user/group service")
+        e.set("enabled", str(on).lower())
+        self._write(USERS_FILE, self.users)
+
+    def user_properties(self, name: str) -> dict:
+        return self._properties(self._find(self.users, USERS_NS, "s:users/s:user", "name", name))
+
+    def set_user_properties(self, name: str, want: dict) -> None:
+        e = self._find(self.users, USERS_NS, "s:users/s:user", "name", name)
+        if e is None:
+            raise GeoServerError("PUT", USERS_FILE, 404, f"user {name} isn't in GeoServer's default user/group service")
+        self._set_properties(e, USERS_NS, want)
+        self._write(USERS_FILE, self.users)

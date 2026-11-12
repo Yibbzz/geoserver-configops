@@ -2351,8 +2351,9 @@ pages:
         extra: true
         test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
       user.properties:
-        status: 'no'
-        note: user attributes
+        status: 'yes'
+        spec: user.properties
+        test: test_e2e_security_files.py::test_role_parent_properties_and_a_group_turned_off
         extra: true
       user.groups:
         status: 'yes'
@@ -2370,8 +2371,9 @@ pages:
         extra: true
         test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
       group.enabled:
-        status: 'no'
-        note: turning a group off
+        status: 'yes'
+        spec: group.enabled
+        test: test_e2e_security_files.py::test_role_parent_properties_and_a_group_turned_off
         extra: true
       group.roles:
         status: 'yes'
@@ -2384,12 +2386,14 @@ pages:
         extra: true
         test: test_e2e_security.py::test_apply_then_nothing_to_do_and_rules_take_effect
       role.parent:
-        status: 'no'
-        note: role inheritance
+        status: 'yes'
+        spec: role.parent
+        test: test_e2e_security_files.py::test_role_parent_properties_and_a_group_turned_off
         extra: true
       role.properties:
-        status: 'no'
-        note: role parameters
+        status: 'yes'
+        spec: role.properties
+        test: test_e2e_security_files.py::test_role_parent_properties_and_a_group_turned_off
         extra: true
       accessRule.layer:
         status: 'yes'

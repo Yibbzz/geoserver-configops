@@ -444,13 +444,17 @@ UserGroupRoleEntries.accessRule.layer
 UserGroupRoleEntries.accessRule.rest
 UserGroupRoleEntries.accessRule.service
 UserGroupRoleEntries.catalogMode
+UserGroupRoleEntries.group.enabled
 UserGroupRoleEntries.group.name
 UserGroupRoleEntries.group.roles
 UserGroupRoleEntries.role.name
+UserGroupRoleEntries.role.parent
+UserGroupRoleEntries.role.properties
 UserGroupRoleEntries.user.enabled
 UserGroupRoleEntries.user.groups
 UserGroupRoleEntries.user.name
 UserGroupRoleEntries.user.password
+UserGroupRoleEntries.user.properties
 UserGroupRoleEntries.user.roles
 UsernamePasswordAuthenticationFilterConfig.passwordParameterName
 UsernamePasswordAuthenticationFilterConfig.usernameParameterName
