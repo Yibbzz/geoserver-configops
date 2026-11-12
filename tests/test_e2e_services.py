@@ -83,6 +83,7 @@ spec:
     depth: { attribute: depth, units: m }
   cache:
     gridsets: [EPSG:4326]
+    levels: { EPSG:4326: { published: [0, 5], cached: [0, 2] } }
     parameterFilters:
       TIME: { type: regex, regex: "2026-0[12]-01" }
 ---
@@ -168,6 +169,23 @@ def test_a_parameter_filter_keeps_tiles_apart_and_refuses_others(gs, project, ca
     assert get("2026-01-01").headers.get("geowebcache-cache-result") == "HIT"
     assert get("2026-02-01").headers.get("geowebcache-cache-result") == "MISS"  # its own tiles
     assert get("2025-12-31").status_code >= 400  # not a value the filter allows
+
+
+def test_zoom_levels_published_and_cached(gs, project, capsys):
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    gs.truncate(f"{WS}:readings")
+
+    def tile(zoom: int, row: int = 0, col: int = 0):
+        return requests.get(f"{SERVICES}/gwc/service/wmts", timeout=60, params={
+            "SERVICE": "WMTS", "REQUEST": "GetTile", "VERSION": "1.0.0", "LAYER": f"{WS}:readings", "STYLE": "",
+            "TILEMATRIXSET": "EPSG:4326", "TILEMATRIX": f"EPSG:4326:{zoom}", "TILEROW": row, "TILECOL": col,
+            "FORMAT": "image/png", "TIME": "2026-01-01"})
+    first = eventually(lambda: tile(2, 0, 3), lambda r: r.status_code == 200)  # the points are near (-1, 51)
+    assert first.status_code == 200, first.text[:300]
+    assert tile(2, 0, 3).headers.get("geowebcache-cache-result") == "HIT"  # cached
+    assert tile(4, 3, 15).status_code == 200
+    assert tile(4, 3, 15).headers.get("geowebcache-cache-result") != "HIT"  # published, not cached
+    assert tile(6).status_code >= 400  # not published
 
 
 LAYER_OPTIONS = """---

@@ -516,7 +516,7 @@ NESTED = {
     "floatParameterFilter": ["FloatParameterFilter", "ParameterFilter"],
     "integerParameterFilter": ["IntegerParameterFilter", "ParameterFilter"],
     "AuthorityURL": ["AuthorityURL"], "Identifier": ["LayerIdentifier"], "ogcapiFeatures": ["FeatureConformance"],
-    "defaultValue": ["DimensionDefaultValueSetting"],
+    "defaultValue": ["DimensionDefaultValueSetting"], "expirationRule": ["ExpirationRule"],
 }
 # Keys a document adds that aren't fields: links, and how lists and maps are wrapped.
 WRAPPERS = {"@key", "$", "@class", "entry", "string", "@name", "link", "@rel", "@type", "@xmlns:atom"}

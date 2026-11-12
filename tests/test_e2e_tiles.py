@@ -78,6 +78,10 @@ spec:
   crs: EPSG:27700
   extent: [-238375, 0, 900000, 1376256]
   resolutions: [896, 448, 224, 112, 56, 28, 14]
+  description: British National Grid for the e2e tests
+  levelNames: [bng0, bng1, bng2, bng3, bng4, bng5, bng6]
+  pixelSize: 0.0003
+  yAxisFirst: true
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -90,7 +94,11 @@ spec:
     gutter: 10
     expireCache: 60
     expireClients: 30
+    levels: {{ {GRIDSET}: {{ published: [1, 6], cached: [1, 4], bounds: [0, 0, 700000, 1300000] }} }}
+    expireByZoom: {{ 0: 3600, 4: 60 }}
+    warningSkips: [Default, Nearest]
     parameterFilters:
+      ENV: {{ type: values, values: [A, B], default: A, case: upper, locale: en }}
       CQL_FILTER: {{ type: values, values: [INCLUDE, "id = 1"], default: INCLUDE }}
       TIME: {{ type: regex, regex: "[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}" }}
       ELEVATION: {{ type: numbers, values: [0, 10.5], default: 0, threshold: 0.01 }}
@@ -111,7 +119,9 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert code == 0, out
     code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
-    assert gs.gridset(GRIDSET)["resolutions"][-1] == 14
+    gridset = gs.gridset(GRIDSET)
+    assert gridset["resolutions"][-1] == 14 and gridset["description"] == "British National Grid for the e2e tests"
+    assert gridset["yCoordinateFirst"] is True and float(gridset["pixelSize"]) == 0.0003 and "bng6" in str(gridset["scaleNames"])
     tiles = gs.tile_layer(f"{WS}:points")
     assert tiles["metaWidthHeight"] == [2, 2] and tiles["gutter"] == 10 and tiles["expireCache"] == 60
     filters = gs.parameter_filters(f"{WS}:points")
@@ -119,6 +129,10 @@ def test_apply_then_nothing_to_do(gs, project, capsys):
     assert filters["TIME"]["regex"] == "[0-9]{4}-[0-9]{2}-[0-9]{2}" and filters["STYLES"]["values"] == ["point"]
     assert filters["STYLES"].get("default") == "point"
     assert filters["BUFFER"]["values"] == [0, 8, 16] and float(filters["BUFFER"]["threshold"]) == 2
+    assert (filters["ENV"]["case"], filters["ENV"]["locale"]) == ("upper", "en")
+    extras = gs.tile_layer_extras(f"{WS}:points")
+    assert extras["levels"][GRIDSET] == {"published": [1, 6], "cached": [1, 4], "bounds": [0.0, 0.0, 700000.0, 1300000.0]}
+    assert extras["expireByZoom"] == {0: 3600, 4: 60} and extras["warningSkips"] == ["Default", "Nearest"]
 
 
 def test_a_changed_filter_is_drift(gs, project, capsys):
@@ -158,6 +172,10 @@ spec:
       defaultCoverageCacheFormats: [image/png]
       defaultVectorCacheFormats: [image/png8]
       defaultOtherCacheFormats: [image/gif]
+      multiLayerCachingEnabled: true
+      metaTilingThreads: 2
+      seederCorePoolSize: 4
+      seederMaxPoolSize: 8
 """)
         code, out = configops(capsys, "plan", "-C", str(project))
         assert code == 2 and "global.tileCaching.cacheLayersByDefault" in out, out
@@ -166,6 +184,7 @@ spec:
         text = gs.request("GET", "resource/gwc-gs.xml").text
         assert "<cacheLayersByDefault>false</cacheLayersByDefault>" in text and "<metaTilingY>3</metaTilingY>" in text
         assert "<securityEnabled>true</securityEnabled>" in text and "<string>image/png8</string>" in text
+        assert "<multiLayerCachingEnabled>true</multiLayerCachingEnabled>" in text and "<seederMaxPoolSize>8</seederMaxPoolSize>" in text
         code, out = configops(capsys, "plan", "-C", str(project))
         assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     finally:

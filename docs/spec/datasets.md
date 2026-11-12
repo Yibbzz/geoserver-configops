@@ -295,25 +295,14 @@ Every field above works the same on a layer on a `Store`, except `filter` and `w
       TIME: { type: regex, regex: "[0-9]{4}-[0-9]{2}-[0-9]{2}" }
       ELEVATION: { type: numbers, values: [0, 10.5], threshold: 0.01 }    # or integers
       STYLES: { type: styles, values: [polygon, outline] }                 # which of the layer's styles
+      ENV: { type: values, values: [A, B], case: upper, locale: en }       # values made upper case first
     seed: { zoom: [0, 8] }             # also gridsets, formats, bounds [minx, miny, maxx, maxy], threads
+    levels: { EPSG:900913: { published: [0, 18], cached: [0, 14], bounds: [-20000, 6600000, 30000, 6700000] } }
+    expireByZoom: { 0: 86400, 12: 3600 }   # from zoom 12 on, tiles last an hour
+    warningSkips: [Default, Nearest]       # say so in a header when a dimension value stops a tile being cached
 ```
 
-GeoWebCache adds a `STYLES` filter (any of the layer's styles) by itself, so leaving it out means that one. A request with a value no filter allows is refused. GeoWebCache can't take a `%` in a value. `seed` draws those tiles ahead of time, in the background: after `apply` changes the layer, and after each load clears its tiles. Whether tiles are seeded isn't compared.
-
-**Parameter filters and seeding.** A request parameter makes tiles of its own only if the layer's cache has a filter for it:
-
-```yaml
-  cache:
-    gridsets: [EPSG:900913]
-    parameterFilters:
-      CQL_FILTER: { type: values, values: [INCLUDE, "hectares > 300000"], default: INCLUDE }
-      TIME: { type: regex, regex: "[0-9]{4}-[0-9]{2}-[0-9]{2}" }
-      ELEVATION: { type: numbers, values: [0, 10.5], threshold: 0.01 }    # or integers
-      STYLES: { type: styles, values: [polygon, outline] }                 # which of the layer's styles
-    seed: { zoom: [0, 8] }             # also gridsets, formats, bounds [minx, miny, maxx, maxy], threads
-```
-
-GeoWebCache adds a `STYLES` filter (any of the layer's styles) by itself, so leaving it out means that one. A request with a value no filter allows is refused. GeoWebCache can't take a `%` in a value. `seed` draws those tiles ahead of time, in the background: after `apply` changes the layer, and after each load clears its tiles. Whether tiles are seeded isn't compared.
+GeoWebCache adds a `STYLES` filter (any of the layer's styles) by itself, so leaving it out means that one. A request with a value no filter allows is refused. GeoWebCache can't take a `%` in a value. `seed` draws those tiles ahead of time, in the background: after `apply` changes the layer, and after each load clears its tiles. Whether tiles are seeded isn't compared. `levels` limits a gridset: zoom levels outside `published` are refused, and those outside `cached` are drawn each time, never kept. `case` (`upper`, `lower`) applies to `values` and `regex` filters.
 
 ### Store
 
@@ -534,7 +523,7 @@ spec:
   tileSize: 256                           # the default
 ```
 
-A layer's `cache.gridsets` names it. GeoWebCache's own gridsets are never compared or removed.
+A layer's `cache.gridsets` names it. Also `description`, `levelNames` (a name for each level, as WMTS shows them; default `<name>:<level>`), `pixelSize` (metres per pixel for scale denominators; default 0.00028) and `yAxisFirst` (the CRS lists y first). GeoWebCache's own gridsets are never compared or removed.
 
 ### BlobStore
 
@@ -586,7 +575,7 @@ spec:
   defaultCredentials: true                 # the pod's own Google identity; or credentials: { secret } with key apiKey
 ```
 
-A layer's `cache.blobStore` names one. `maxConnections` (S3, Azure) and `gzip` (S3) are there too. GeoWebCache gives the keys back as they are, so `plan` compares the secret key too, without printing it. Only the blob stores the files name are compared; none is removed.
+A layer's `cache.blobStore` names one. `maxConnections` (S3, Azure) and `gzip` (S3) are there too, `layout: tms` lays a folder's tiles out as TMS, `proxy: { host, port, domain, workstation, credentials: { secret } }` reaches S3 or Azure through an HTTP proxy (`domain` and `workstation` for NTLM, S3 only; the Secret's keys `username` and `password`), and `quotaProject` bills a Google Cloud store's requests to another project. GeoWebCache gives the keys back as they are, so `plan` compares the secret key too, without printing it. Only the blob stores the files name are compared; none is removed.
 
 ### Workspace
 
@@ -640,7 +629,7 @@ At most one `Settings` for the global settings and one per workspace.
 
 **Changing the master password.** After the change `apply` has GeoServer read its security files again. GeoServer Cloud needs that: it tells its other services about the change before it has swapped the re-encrypted keystore in, and when one of them swaps it first, the REST service keeps the old keystore in memory and answers 500 (`Cannot find alias: config:password:key in security/geoserver.jceks`) for every store with a password. If you change the master password some other way (the REST API, the web UI) and see that error, restart the REST service: nothing is lost.
 
-**Tile caching defaults** (the web UI's *Caching Defaults* page) are `global.tileCaching`, in GeoServer's own names: `cacheLayersByDefault`, `cacheNonDefaultStyles`, `directWMSIntegrationEnabled`, `requireTiledParameter`, `WMSCEnabled`, `TMSEnabled`, `WMTSEnabled`, `securityEnabled`, `innerCachingEnabled`, `persistenceEnabled`, `metaTilingX`, `metaTilingY`, `gutter`, `defaultCachingGridSetIds`, `defaultCoverageCacheFormats`, `defaultVectorCacheFormats`, `defaultOtherCacheFormats`. GeoServer keeps them in a file it reads only when its services start, so `apply` writes the file and says to restart them (`kubectl rollout restart` the GeoServer deployments); `plan` compares the file.
+**Tile caching defaults** (the web UI's *Caching Defaults* page) are `global.tileCaching`, in GeoServer's own names: `cacheLayersByDefault`, `cacheNonDefaultStyles`, `directWMSIntegrationEnabled`, `requireTiledParameter`, `WMSCEnabled`, `TMSEnabled`, `WMTSEnabled`, `securityEnabled`, `innerCachingEnabled`, `persistenceEnabled`, `metaTilingX`, `metaTilingY`, `gutter`, `defaultCachingGridSetIds`, `defaultCoverageCacheFormats`, `defaultVectorCacheFormats`, `defaultOtherCacheFormats`, `multiLayerCachingEnabled`, `metaTilingThreads`, `seederCorePoolSize`, `seederMaxPoolSize`. GeoServer keeps them in a file it reads only when its services start, so `apply` writes the file and says to restart them (`kubectl rollout restart` the GeoServer deployments); `plan` compares the file.
 
 ### Service
 
