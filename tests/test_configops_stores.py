@@ -106,6 +106,12 @@ class FakeGeoServer:
     def datastore(self, ws, name):
         return None
 
+    def read(self, path):  # no style images, fonts or templates
+        return None
+
+    def files(self, folder):
+        return []
+
     def names(self, path, key):
         return []
 

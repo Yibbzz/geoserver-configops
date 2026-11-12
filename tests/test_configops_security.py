@@ -128,6 +128,12 @@ class FakeGeoServer:
     def workspace(self, ws):
         return {"workspace": {"name": ws}}
 
+    def read(self, path):  # no style images, fonts or templates
+        return None
+
+    def files(self, folder):
+        return []
+
     def names(self, path, key):
         return []
 

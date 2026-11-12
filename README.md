@@ -1,6 +1,6 @@
 # GeoServer ConfigOps
 
-![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-64%25-yellow) Of the 651 settings GeoServer Cloud's REST API can set, configops sets 422, and the e2e tests have proved 422 of those (13 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
+![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-64%25-yellow) Of the 651 settings GeoServer Cloud's REST API can set, configops sets 425, and the e2e tests have proved 422 of those (13 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
 
 GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud): a Helm chart, plus `configops`, a small command that keeps your GIS data and what GeoServer publishes in YAML files:
 
@@ -100,7 +100,7 @@ spec:
   style: polygon
 ```
 
-Styles are SLD files in the project's `styles/` folder, and `LayerGroup`s combine layers. [docs/spec/datasets.md](docs/spec/datasets.md) describes every field and command.
+Styles are SLD files in the project's `styles/` folder, with the images and fonts they use beside them; GetFeatureInfo templates go in `templates/`. `LayerGroup`s combine layers. [docs/spec/datasets.md](docs/spec/datasets.md) describes every field and command.
 
 ## Examples
 

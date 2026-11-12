@@ -226,3 +226,18 @@ def test_a_project_mounted_from_a_configmap(tmp_path):
     project = load(tmp_path)
     assert sorted(p.relative_to(tmp_path).as_posix() for p in project.files) == ["datasets/roads.yaml", "project.yaml"]
     assert problems(tmp_path) == []
+
+
+def test_templates_belong_to_the_workspace_or_a_layer(tmp_path):
+    root = project(tmp_path, extra={
+        "templates/header.ftl": "<h1/>",
+        "templates/road-links/content.ftl": "x",
+        "templates/notes.txt": "x",
+        "templates/rivers/content.ftl": "x",
+        "templates/road-links/deep/content.ftl": "x",
+    })
+    assert sorted(m for _, _, m in problems(root)) == [
+        "a template goes in templates/ (the workspace's) or templates/<layer>/ (one Layer's)",
+        "templates/ holds FreeMarker templates (.ftl) only",
+        "templates/rivers/: no Layer named 'rivers'",
+    ]

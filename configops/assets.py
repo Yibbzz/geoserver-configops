@@ -82,11 +82,11 @@ def plan(planner, managed: list[str]) -> None:
     for path, f in style_files(planner).items():
         kept.add(path)
         body = f.read_bytes()
-        live = gs.request("GET", f"resource/{path}", ok=(200, 404))
-        if live.status_code == 200 and live.content == body:
+        live = gs.read(f"resource/{path}")
+        if live == body:
             continue
         waiting.append(path)
-        add("+" if live.status_code == 404 else "~", "file", path, note=str(f.relative_to(planner.root)),
+        add("+" if live is None else "~", "file", path, note=str(f.relative_to(planner.root)),
             run=lambda path=path, body=body: upload(path, body))
 
     # templates
@@ -110,14 +110,14 @@ def plan(planner, managed: list[str]) -> None:
             base = base or resource_of(gs, ws, geoserver_name(planner.layers[layer_name]))  # a layer made by this apply
             gs.request("PUT", f"{base}/templates/{name}", text.encode(), content_type="text/plain")
 
-        live = gs.request("GET", f"{base}/templates/{f.name}", ok=(200, 404)) if base else None
-        if live is None or live.status_code == 404:
+        live = gs.read(f"{base}/templates/{f.name}") if base else None
+        if live is None:
             add("+", "template", target, note=str(f.relative_to(planner.root)), run=put)
-        elif not same_text(live.text, text):
+        elif not same_text(live.decode("utf-8", "replace"), text):
             add("~", "template", target, note=f"{f.relative_to(planner.root)} differs from GeoServer's copy", run=put)
 
     # what the project's workspaces hold that the files don't
-    for path in [p for ws in managed for p in live_files(gs, f"workspaces/{ws}")]:
+    for path in [p for ws in managed for p in gs.files(f"workspaces/{ws}")]:
         suffix = Path(path).suffix.lower()
         in_styles = path.split("/")[2] == "styles"
         if path in kept or not (suffix == TEMPLATE and not in_styles or suffix in GRAPHICS and in_styles):
@@ -129,26 +129,11 @@ def plan(planner, managed: list[str]) -> None:
             add("?", kind, path, note="unmanaged; removed with --prune")
 
 
-def live_files(gs, folder: str) -> list[str]:
-    """Every file GeoServer keeps under one of its folders, as resource paths."""
-    r = gs.request("GET", f"resource/{folder}", params={"format": "json"}, ok=(200, 404))
-    if r.status_code == 404:
-        return []
-    out = []
-    for child in as_list(((r.json().get("ResourceDirectory") or {}).get("children") or {}).get("child")):
-        path = f"{folder}/{child['name']}"
-        if (child.get("link") or {}).get("type") == "application/json" and not child["name"].endswith(".json"):
-            out += live_files(gs, path)  # a folder
-        else:
-            out.append(path)
-    return out
-
-
 def download(gs, ws: str, layers: dict[str, str]) -> tuple[dict[str, bytes], list[str]]:
     """What import writes for a workspace: its images as styles/..., its templates as templates/...
     (path in the project -> content), and notes on what it left. `layers`: GeoServer name -> Layer name."""
     found, notes = {}, []
-    for path in live_files(gs, f"workspaces/{ws}"):
+    for path in gs.files(f"workspaces/{ws}"):
         parts, suffix = path.split("/")[2:], Path(path).suffix.lower()
         if parts[0] == "styles":
             if suffix not in GRAPHICS:
@@ -163,7 +148,9 @@ def download(gs, ws: str, layers: dict[str, str]) -> tuple[dict[str, bytes], lis
         else:
             notes.append(f"template {path} isn't the workspace's or a layer's: not imported")
             continue
-        found[where] = gs.request("GET", f"resource/{path}").content
+        body = gs.read(f"resource/{path}")
+        if body is not None:
+            found[where] = body
     return found, notes
 
 
@@ -177,7 +164,3 @@ def write(target: Path, found: dict[str, bytes]) -> list[str]:
             path.write_bytes(body)
             written.append(where)
     return written
-
-
-def as_list(value) -> list:
-    return [] if value is None else value if isinstance(value, list) else [value]

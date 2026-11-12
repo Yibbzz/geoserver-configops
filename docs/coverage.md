@@ -97,6 +97,9 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Workspace styles | Yes | |
 | Global styles | Yes | `Style` `global: true`; GeoServer's built-in ones are used without defining them |
 | Legend graphic | Yes | `Style` `legend` |
+| Images a style points to (icons, fills) | Yes | `.png`, `.svg`, `.jpg`, `.gif` in `styles/` |
+| Fonts | Yes | `.ttf`, `.otf` in `styles/` |
+| FreeMarker templates (GetFeatureInfo and others) | Yes | `templates/` for the workspace, `templates/<layer>/` for one layer; not for a store or global |
 
 ### Loading data
 

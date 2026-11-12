@@ -146,6 +146,28 @@ class GeoServer:
         items = outer.get(key, []) if isinstance(outer, dict) else []
         return [i["name"] for i in (items if isinstance(items, list) else [items])]
 
+    # --- files GeoServer keeps beside its catalog (style images, fonts, templates)
+
+    def read(self, path: str) -> bytes | None:
+        """A file as GeoServer serves it (resource/..., .../templates/x.ftl), or None if there is none."""
+        r = self.request("GET", path, ok=(200, 404))
+        return None if r.status_code == 404 else r.content
+
+    def files(self, folder: str) -> list[str]:
+        """Every file under one of GeoServer's resource folders, as resource paths (folder/...)."""
+        r = self.request("GET", f"resource/{folder}", params={"format": "json"}, ok=(200, 404))
+        if r.status_code == 404:
+            return []
+        children = ((r.json().get("ResourceDirectory") or {}).get("children") or {}).get("child")
+        out = []
+        for child in children if isinstance(children, list) else [children] if children else []:
+            path = f"{folder}/{child['name']}"
+            if (child.get("link") or {}).get("type") == "application/json" and not child["name"].endswith(".json"):
+                out += self.files(path)  # a folder
+            else:
+                out.append(path)
+        return out
+
     def wait(self, seconds: float, every: float = 5) -> None:
         """
         Wait up to `seconds` for GeoServer's REST API, and GeoWebCache's, to

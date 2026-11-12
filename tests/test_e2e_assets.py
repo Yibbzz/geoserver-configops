@@ -215,7 +215,7 @@ def test_import_writes_the_images_and_templates(gs, project, tmp_path_factory, c
     (project / "templates" / "zones").mkdir(parents=True)
     (project / "templates" / "footer.ftl").write_text("<p>Assets footer</p></body></html>\n")
     (project / "templates" / "zones" / "content.ftl").write_text("<p>Zones</p>\n")
-    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    assert configops(capsys, "apply", "-C", str(project), "--prune")[0] == 0  # what earlier tests left goes
     target = tmp_path_factory.mktemp("imported")
     (target / "project.yaml").write_text(PROJECT.split("\n---\n")[0] + "\n")
     code, out = configops(capsys, "import", WS, "-C", str(target))
