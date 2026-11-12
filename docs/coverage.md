@@ -54,7 +54,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 
 | Tab and setting | Status | Notes |
 | --- | --- | --- |
-| **Data:** name, title, abstract, keywords | Yes | |
+| **Data:** name, title, abstract, keywords | Yes | Keywords with a language and vocabulary: `{ keyword, language, vocabulary }` |
 | Enabled, advertised | Yes | |
 | Declared CRS | Yes | `crs`, forced on the layer |
 | Bounding boxes | Yes | Worked out from the data on every apply and after every load |

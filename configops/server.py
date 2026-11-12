@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 
-from . import secrets
+from . import keywords, secrets
 from .geoserver import GeoServerError, MissingCredentials
 from .loader import Resource
 
@@ -32,7 +32,7 @@ def to_geoserver(spec: dict) -> dict:
         if isinstance(value, dict):
             value = to_geoserver(value)
         elif isinstance(value, list):
-            value = {"string": value}
+            value = {"string": keywords.to_strings(value) if key == "keywords" else value}
         out[RENAMES.get(key, key)] = value
     return merge(out, spec.get(RAW) or {})
 

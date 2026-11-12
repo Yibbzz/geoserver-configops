@@ -259,14 +259,14 @@ spec:
 | `crs` | no | the data's own | The declared CRS, forced on the layer |
 | `attributes` | no | all | The attributes published, in this order; the geometry always is |
 | `workspace` | no | the project's `workspace` | |
-| `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents |
+| `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents. A keyword is text, or `{ keyword, language, vocabulary }` (also in a `Service`) |
 | `style` | no | GeoServer's default for the geometry | Default style |
 | `styles` | no | none | Extra styles |
 | `enabled`, `advertised`, `queryable` | no | `true` | Publishing switches |
 | `cache` | no | `false` | `true`, or `{ gridsets, formats, metaTiles: [w, h], gutter, expireCache, expireClients }`: the gridsets (GeoWebCache's own, or a `Gridset`), image formats, tiles drawn at once, pixels drawn around each tile, how long (seconds) the cache and clients keep a tile, and `blobStore`: the `BlobStore` the tiles go in. `parameterFilters` and `seed`: see below. Only the options set are compared |
 | `attribution` | no | from the dataset's source, where known | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026"; or `{ title, link, logo: { url, width, height, type } }` |
 | `filter` | no | none | A CQL filter: only these features are published, e.g. `"flood_zone = 'FZ3'"` |
-| `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …], padWithZeros, forcedDecimal, encodeMeasures }`: this layer's WFS settings (`padWithZeros` writes decimals up to `decimals`, `forcedDecimal` never writes scientific notation, `encodeMeasures` writes M values) |
+| `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …], padWithZeros, forcedDecimal, encodeMeasures }`: this layer's WFS settings (`padWithZeros` writes decimals up to `decimals`, `forcedDecimal` never writes scientific notation, `encodeMeasures` writes M values, `simpleConversion` also serves an app-schema layer as simple features) |
 | `disabledServices` | no | none | Services this layer isn't published in: `wms`, `wfs`, `wcs`, `wmts`, `wps` |
 | `circularArcs`, `linearizationTolerance` | no | `false`, none | The geometries have curves; how closely they're turned into lines, in the layer's units |
 | `kml` | no | none | KML regionating: `{ regionateAttribute, regionateStrategy: best_guess \| external-sorting \| geometry \| native-sorting \| random, regionateFeatureLimit }` |
@@ -489,7 +489,7 @@ spec:
 | `mode` | no | `single` | How clients see the group (below) |
 | `name` (in GeoServer) | no | `metadata.name` with dashes as underscores | Name clients use |
 | `workspace` | no | the project's `workspace` | |
-| `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents |
+| `title`, `abstract`, `keywords` | no | title = name | Shown in capabilities documents. A keyword is text, or `{ keyword, language, vocabulary }` (also in a `Service`) |
 | `cache` | no | `false` | Tile caching for the group as a whole, in the same form as a Layer's |
 | `enabled`, `advertised` | no | `true` | An unadvertised group works but isn't listed in capabilities |
 | `metadataLinks` | no | none | As on a Layer |

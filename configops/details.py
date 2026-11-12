@@ -17,7 +17,7 @@ WCS = {"requestCRS": "requestSRS", "responseCRS": "responseSRS", "formats": "sup
 BAND_FIELDS = ("name", "description", "unit", "nullValues", "range")
 DIMENSION_FIELDS = {"acceptableInterval": "acceptableInterval", "nearestFailBehavior": "nearestFailBehavior",
                     "rawNearestMatch": "rawNearestMatchEnabled", "start": "startValue", "end": "endValue"}  # spec -> GeoServer
-FT_FIELDS = {"wfs.padWithZeros": "padWithZeros", "wfs.forcedDecimal": "forcedDecimal", "wfs.encodeMeasures": "encodeMeasures",
+FT_FIELDS = {"wfs.simpleConversion": "simpleConversionEnabled", "wfs.padWithZeros": "padWithZeros", "wfs.forcedDecimal": "forcedDecimal", "wfs.encodeMeasures": "encodeMeasures",
              "circularArcs": "circularArcPresent", "linearizationTolerance": "linearizationTolerance"}  # spec -> GeoServer
 
 
@@ -98,7 +98,7 @@ def wanted_resource(spec: dict) -> dict[str, object]:
     if "filter" in spec:
         out["filter"] = spec["filter"]
     wfs = spec.get("wfs") or {}
-    for key in ("maxFeatures", "decimals", "skipNumberMatched", "padWithZeros", "forcedDecimal", "encodeMeasures"):
+    for key in ("maxFeatures", "decimals", "skipNumberMatched", "padWithZeros", "forcedDecimal", "encodeMeasures", "simpleConversion"):
         if key in wfs:
             out[f"wfs.{key}"] = wfs[key]
     for key in ("circularArcs", "linearizationTolerance"):

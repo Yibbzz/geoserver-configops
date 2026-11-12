@@ -21,7 +21,7 @@ from pathlib import Path
 
 import psycopg2
 
-from . import assets, auth, details, discover, ingest, remote, security, server, stores, sync, tiles, urlchecks
+from . import assets, auth, keywords, details, discover, ingest, remote, security, server, stores, sync, tiles, urlchecks
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
@@ -418,7 +418,7 @@ class Planner:
                     self.gs.delete_featuretype(ws, old_store, name)
                 extra = {"metadata": {"entry": {"@key": "JDBC_VIRTUAL_TABLE", "virtualTable": view}}} if view else None
                 self.gs.upsert_featuretype(ws, schema, name, table, title=title, abstract=spec.get("abstract"),
-                                           keywords=spec.get("keywords"), enabled=spec.get("enabled", True),
+                                           keywords=keywords.to_strings(spec.get("keywords")), enabled=spec.get("enabled", True),
                                            advertised=spec.get("advertised", True), srs=spec.get("crs"), extra=extra)
                 if "attributes" in spec:
                     self.set_attributes(ft_path, spec["attributes"])
@@ -441,8 +441,8 @@ class Planner:
                 **self.live_layer_settings(layer, live_layer, ft),
             }
             changed = diff([(k, current[k], v) for k, v in wanted_ft + wanted_layer])
-            if "keywords" in spec and names_of((ft.get("keywords") or {}).get("string")) != spec["keywords"]:
-                changed.append(("keywords", names_of((ft.get("keywords") or {}).get("string")), spec["keywords"]))
+            if "keywords" in spec and names_of((ft.get("keywords") or {}).get("string")) != keywords.to_strings(spec["keywords"]):
+                changed.append(("keywords", names_of((ft.get("keywords") or {}).get("string")), keywords.to_strings(spec["keywords"])))
             if store != schema:
                 changed.append(("store", store, schema))
             if changed:
@@ -518,7 +518,7 @@ class Planner:
             if "abstract" in spec:
                 wanted.append(("abstract", spec["abstract"]))
             if "keywords" in spec:
-                wanted.append(("keywords", list(spec["keywords"])))
+                wanted.append(("keywords", keywords.to_strings(spec["keywords"])))
             root = None
             if spec.get("rootLayer") and spec["rootLayer"] not in self.unpublished:
                 root = (self.published(spec["rootLayer"])[1], self.style_ref(spec.get("rootStyle")))
@@ -542,7 +542,7 @@ class Planner:
                     root = (root[0], ((self.gs.layer(root_ws, root_name) or {}).get("layer", {}).get("defaultStyle") or {}).get("name"))
                 self.gs.upsert_layergroup(gs_name, [(kind, n, self.style_ref(style)) for (kind, n), style in entries], ws=ws,
                                           title=spec.get("title"), abstract=spec.get("abstract"), mode=spec.get("mode", "single"),
-                                          root=root, keywords=spec.get("keywords"))
+                                          root=root, keywords=keywords.to_strings(spec.get("keywords")))
                 if extra or links or like_layer:
                     self.gs.request("PUT", f"workspaces/{ws}/layergroups/{gs_name}",
                                     {"layerGroup": {**extra, **details.patch_resource({}, links), **details.patch_layer({}, like_layer)}})

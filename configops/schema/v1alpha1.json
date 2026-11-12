@@ -704,8 +704,33 @@
     },
     "keywords": {
       "type": "array",
+      "description": "Keywords: text, or { keyword, language, vocabulary }",
       "items": {
-        "type": "string"
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "keyword"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "keyword": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string",
+                "description": "e.g. en, cy"
+              },
+              "vocabulary": {
+                "type": "string",
+                "description": "e.g. GEMET"
+              }
+            }
+          }
+        ]
       }
     },
     "schedule": {
@@ -1061,6 +1086,10 @@
             "encodeMeasures": {
               "type": "boolean",
               "description": "Write M values"
+            },
+            "simpleConversion": {
+              "type": "boolean",
+              "description": "app-schema layers: also serve them as simple features (GeoJSON, CSV, shapefile)"
             }
           }
         },

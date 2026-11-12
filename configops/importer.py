@@ -19,6 +19,7 @@ from . import assets, details, secrets, stores
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import default_table, load
 from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, SOURCE_ATTRIBUTION, PlanError, as_list, names_of
+from .keywords import to_entries
 from .stores import DATA
 from .validate import BUILT_IN_STYLES
 
@@ -282,7 +283,7 @@ class Importer:
             spec["abstract"] = item["abstract"]
         keywords = names_of((item.get("keywords") or {}).get("string"))
         if keywords and not (len(keywords) == 2 and "features" in keywords):  # GeoServer's own: features and the name
-            spec["keywords"] = keywords
+            spec["keywords"] = to_entries(keywords)
         style = self.style((layer.get("defaultStyle") or {}).get("name"))
         if style and style not in BUILT_IN_STYLES:
             spec["style"] = style
@@ -350,7 +351,7 @@ class Importer:
                 spec["abstract"] = ft["abstract"]
             keywords = names_of((ft.get("keywords") or {}).get("string"))
             if keywords and sorted(keywords) != sorted(["features", table]):
-                spec["keywords"] = keywords
+                spec["keywords"] = to_entries(keywords)
             style = self.style((layer.get("defaultStyle") or {}).get("name"))
             if style and style != default_style(ft):
                 spec["style"] = style
@@ -399,7 +400,7 @@ class Importer:
             if g.get("abstractTxt"):
                 spec["abstract"] = g["abstractTxt"]
             if names_of((g.get("keywords") or {}).get("string")):
-                spec["keywords"] = names_of(g["keywords"]["string"])
+                spec["keywords"] = to_entries(names_of(g["keywords"]["string"]))
             mode = MODES.get(g.get("mode", "SINGLE"))
             if mode is None:
                 self.notes.append(f"group {gs_name}: mode {g.get('mode')} has no equivalent in the files; left out")

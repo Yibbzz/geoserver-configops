@@ -35,7 +35,7 @@ SAVED = ["settings", "settings/contact", "services/wms/settings", "services/wfs/
 VALUES = {
     "charset": "UTF-8", "schemaBaseURL": "https://schemas.example.org", "onlineResource": "https://maps.example.org",
     "proxyBaseUrl": "https://maps.example.org/geoserver-cloud", "srs": ["EPSG:27700", "EPSG:4326"],
-    "keywords": ["e2e", "maps"], "enabled": True, "disabledVersions": ["1.0.0"], "getMapMimeTypes": ["image/png", "image/jpeg"],
+    "keywords": ["e2e", "maps", {"keyword": "mapiau", "language": "cy", "vocabulary": "e2e"}], "enabled": True, "disabledVersions": ["1.0.0"], "getMapMimeTypes": ["image/png", "image/jpeg"],
     "getFeatureInfoMimeTypes": ["text/html", "application/json"], "getFeatureOutputTypes": ["application/json", "GML2"],
     "allowedURLsForAuthForwarding": ["https://styles.example.org"], "authorityURLs": [{"name": "e2e", "href": "https://example.org/authority"}],
     "identifiers": [{"authority": "e2e", "identifier": "e2e-root"}], "MarkFactoryList": "WKTMarkFactory,WellKnownMarkFactory",
