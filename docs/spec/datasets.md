@@ -600,6 +600,8 @@ spec:
 
 At most one `Settings` for the global settings and one per workspace.
 
+**Changing the master password: a known problem.** On a fresh GeoServer Cloud install with all its services (CI's kind cluster), store passwords saved after the master password changed couldn't be read: GeoServer answered `Cannot find alias: config:password:key in security/geoserver.jceks`. It didn't happen on a long-running cluster, nor with the REST service alone. Until it's understood, set `masterPassword` only on a GeoServer that already has stores with passwords, and check one of them afterwards.
+
 **Tile caching defaults** (the web UI's *Caching Defaults* page) are `global.tileCaching`, in GeoServer's own names: `cacheLayersByDefault`, `cacheNonDefaultStyles`, `directWMSIntegrationEnabled`, `requireTiledParameter`, `WMSCEnabled`, `TMSEnabled`, `WMTSEnabled`, `securityEnabled`, `innerCachingEnabled`, `persistenceEnabled`, `metaTilingX`, `metaTilingY`, `gutter`, `defaultCachingGridSetIds`, `defaultCoverageCacheFormats`, `defaultVectorCacheFormats`, `defaultOtherCacheFormats`. GeoServer keeps them in a file it reads only when its services start, so `apply` writes the file and says to restart them (`kubectl rollout restart` the GeoServer deployments); `plan` compares the file.
 
 ### Service
