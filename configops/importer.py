@@ -70,6 +70,27 @@ BUILT_IN_GRIDSETS = re.compile(r"^(EPSG:(4326|900913|3857|4258)|GlobalCRS84(Pixe
 GWC_DEFAULTS = {"metaWidthHeight": [4, 4], "gutter": 0, "expireCache": 0, "expireClients": 0, "blobStoreId": None}
 
 
+ATTRIBUTE_DEFAULTS = {"nillable": True, "minOccurs": 0, "maxOccurs": 1}
+
+
+def attribute_entry(a: dict):
+    """A live attribute as the files write it: its name, or an object for a described or worked-out one."""
+    from .plan import from_international
+
+    name = a["name"]
+    entry: dict = {"name": name}
+    if a.get("source") not in (None, "", name, f'"{name}"'):
+        entry["source"] = a["source"]
+        if a.get("binding"):
+            entry["binding"] = a["binding"]
+    description = from_international(a.get("description"))
+    if description:
+        entry["description"] = description
+    if len(entry) > 1:
+        entry.update({k: a[k] for k, v in ATTRIBUTE_DEFAULTS.items() if a.get(k) is not None and a[k] != v})
+    return entry if len(entry) > 1 else name
+
+
 def cache_setting(tile_layer: dict | None, filters: dict | None = None):
     if not tile_layer or not tile_layer.get("enabled", True):
         return None
@@ -370,11 +391,14 @@ class Importer:
             cache = self.cache(f"{self.ws}:{gs_name}")
             if cache:
                 spec["cache"] = cache
-            published = [a["name"] for a in as_list((ft.get("attributes") or {}).get("attribute"))
-                         if not str(a.get("binding", "")).startswith("org.locationtech.jts.geom.")]
+            live_attrs = [a for a in as_list((ft.get("attributes") or {}).get("attribute"))
+                          if not str(a.get("binding", "")).startswith("org.locationtech.jts.geom.")]
+            published = [a["name"] for a in live_attrs]
+            entries = [attribute_entry(a) for a in live_attrs]
             full = self.columns(schema, table) if self.columns else None
-            if full is not None and published not in full:  # GeoServer lists every attribute unless the layer narrows them
-                spec["attributes"] = published
+            customised = any(isinstance(e, dict) for e in entries)
+            if customised or (full is not None and published not in full):  # GeoServer lists every attribute unless the layer narrows them
+                spec["attributes"] = entries
             if ft.get("projectionPolicy") == "FORCE_DECLARED" and ft.get("srs") and ft["srs"] != (native_code(ft) or self.project_crs):
                 spec["crs"] = ft["srs"]
             spec.update(details.to_spec(ft, layer))

@@ -62,6 +62,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Data links | Yes | `dataLinks` |
 | Restrict features (CQL filter) | Yes | `filter` |
 | Attributes shown | Yes | `attributes`; `import` tells a narrowed list from the full one by reading the table, so it needs the project's database |
+| Attribute customisation: computed or renamed attributes, descriptions, nillable, occurrences | Yes | `attributes: [{ name, source, description, nillable, minOccurs, maxOccurs, binding }]` |
 | SQL views | Yes | `sql: { schema, query, key, geometry }` |
 | Raster bands and coverage parameters | Yes | `bands`, `parameters` |
 | **Publishing:** default style, other styles | Yes | |

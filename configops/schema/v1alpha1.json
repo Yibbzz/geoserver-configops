@@ -1470,12 +1470,51 @@
         },
         "attributes": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
           "minItems": 1,
-          "description": "the attributes to publish (the geometry always is)"
+          "description": "the attributes to publish (the geometry always is): a column's name, or { name, source, description, nillable, minOccurs, maxOccurs, binding }",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "A CQL expression it's worked out from (another column's name renames it)"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "nillable": {
+                    "type": "boolean"
+                  },
+                  "minOccurs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "maxOccurs": {
+                    "type": "integer",
+                    "minimum": -1
+                  },
+                  "binding": {
+                    "type": "string",
+                    "description": "Its Java class, e.g. java.lang.String"
+                  }
+                }
+              }
+            ]
+          }
         },
         "wms": {
           "type": "object",
