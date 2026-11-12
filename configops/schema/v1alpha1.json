@@ -37,7 +37,8 @@
         "AuthFilter",
         "AuthProvider",
         "UserGroupService",
-        "RoleService"
+        "RoleService",
+        "URLCheck"
       ]
     },
     "metadata": {
@@ -648,6 +649,22 @@
         "properties": {
           "spec": {
             "$ref": "#/$defs/securityObject"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "URLCheck"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/urlCheck"
           }
         }
       }
@@ -2033,6 +2050,31 @@
                   }
                 }
               }
+            },
+            "requestLogging": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Log every request to the GeoServer services' logs",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "headers": {
+                  "type": "boolean"
+                },
+                "bodies": {
+                  "type": "boolean"
+                },
+                "bodySize": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Bytes of each request body to log. Default: 1024"
+                }
+              }
+            },
+            "urlChecks": {
+              "type": "boolean",
+              "description": "Whether GeoServer checks external URLs against the URLChecks. Default: true"
             }
           }
         },
@@ -3020,6 +3062,33 @@
         "config": {
           "type": "object",
           "description": "its other fields, as GeoServer's own file names them; { class, value } for a field with a class"
+        }
+      }
+    },
+    "urlCheck": {
+      "type": "object",
+      "required": [
+        "regex"
+      ],
+      "additionalProperties": false,
+      "description": "An external URL GeoServer may fetch: remote styles, graphics, WMS/WFS references",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The check's name in GeoServer. Default: metadata.name"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Default: true"
+        },
+        "regex": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A Java regular expression the whole URL must match"
         }
       }
     }

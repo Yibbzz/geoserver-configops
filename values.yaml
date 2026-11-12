@@ -117,6 +117,9 @@ env: &common-env
     value: '$(JAVA_OPTS_DEFAULT)'
   GEOTOOLS_HTTPCLIENT_PROXY_ENABLED:
     value: 'false'
+  # GeoServer's request logging (Settings global.requestLogging) logs at INFO; Cloud's default is WARN
+  LOGGING_LEVEL_ORG_GEOSERVER_FILTERS:
+    value: INFO
   PGCONFIG_HOST:
     type: 'valueFrom'
     valueFrom:

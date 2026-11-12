@@ -120,6 +120,8 @@ def plan_settings(planner, gs, r: Resource) -> None:
 
         auth.plan_settings(planner, security_settings)
     master = top_spec.pop("masterPassword", None)
+    logging = top_spec.pop("requestLogging", None)
+    url_checks = top_spec.pop("urlChecks", None)
     top = to_geoserver(top_spec)
     settings = to_geoserver(spec)
     path, key = settings_paths(ws)
@@ -136,6 +138,19 @@ def plan_settings(planner, gs, r: Resource) -> None:
     changed = [("contact." + f, a, b) for f, a, b in compare(live_contact, contact)]
     changed += compare(live_settings, settings)
     changed += [("global." + f, a, b) for f, a, b in compare(live, top)]
+    wanted_meta = logging_entries(logging) if logging else {}
+    live_meta = metadata(live)
+    changed += [("global.requestLogging." + LOGGING_NAMES[k], typed(live_meta.get(k, LOGGING_DEFAULTS[k])), typed(v))
+                for k, v in wanted_meta.items() if live_meta.get(k, LOGGING_DEFAULTS[k]) != v]
+    checks_xml = None
+    if url_checks is not None:
+        checks_xml = gs.request("GET", URL_CHECKS_FILE, ok=(200, 404))
+        checks_xml = checks_xml.text if checks_xml.status_code == 200 else "<checks/>"
+        live_on = (ET.fromstring(checks_xml).findtext("enabled") or "true") == "true"
+        if live_on != url_checks:
+            changed.append(("global.urlChecks", live_on, url_checks))
+        else:
+            checks_xml = None
     if catalog_mode:
         live_mode = ((gs.get("security/acl/catalog") or {}).get("mode") or "").lower()
         if live_mode != catalog_mode:
@@ -171,7 +186,17 @@ def plan_settings(planner, gs, r: Resource) -> None:
             body = merge(current, {**top, "settings": merge(current.get("settings") or {}, settings)})
             body["settings"]["contact"] = merge(body["settings"].get("contact") or {}, contact)
             body.pop("updateSequence", None)  # GeoServer's own counter
+            if wanted_meta:
+                entries = {**metadata(current), **wanted_meta}
+                body["metadata"] = {"entry": [{"@key": k, "$": v} for k, v in entries.items()]}
         gs.request("PUT", path, {key: body})
+        if checks_xml:
+            root = ET.fromstring(checks_xml)
+            switch = root.find("enabled")
+            if switch is None:
+                switch = ET.SubElement(root, "enabled")
+            switch.text = str(url_checks).lower()
+            gs.request("PUT", URL_CHECKS_FILE, ET.tostring(root, encoding="unicode"), content_type="application/xml")
         if catalog_mode:
             gs.request("PUT", "security/acl/catalog", {"mode": catalog_mode.upper()})
         if new_master:
@@ -195,6 +220,32 @@ def plan_settings(planner, gs, r: Resource) -> None:
         planner.add("~", "settings", target, changed, run=run)
     else:
         planner.add("+", "settings", target, note="this workspace's own settings", run=run)
+
+
+# --- request logging: entries in the global settings' metadata, which GeoServer reads on every request
+
+LOGGING_KEYS = {"enabled": "logRequestsEnabled", "headers": "logHeadersEnabled", "bodies": "logBodiesEnabled",
+                "bodySize": "requestLogBufferSize"}  # spec name -> GeoServer's
+LOGGING_NAMES = {v: k for k, v in LOGGING_KEYS.items()}
+LOGGING_DEFAULTS = {"logRequestsEnabled": "false", "logHeadersEnabled": "false", "logBodiesEnabled": "false",
+                    "requestLogBufferSize": "1024"}
+URL_CHECKS_FILE = "resource/security/urlchecks.xml"  # the switch for every URL check (GeoServer's web UI: URL Checks)
+
+
+def logging_entries(spec: dict) -> dict[str, str]:
+    """The request logging spec as GeoServer's metadata entries (all text)."""
+    return {LOGGING_KEYS[k]: str(v).lower() if isinstance(v, bool) else str(v) for k, v in spec.items()}
+
+
+def metadata(settings: dict) -> dict[str, str]:
+    """The global settings' metadata entries, as text; GeoServer gives a single entry as an object, not a list."""
+    entries = (settings.get("metadata") or {}).get("entry") or []
+    entries = entries if isinstance(entries, list) else [entries]
+    return {e["@key"]: str(e.get("$", "")) for e in entries if isinstance(e, dict) and "@key" in e}
+
+
+def typed(text: str):
+    return text == "true" if text in ("true", "false") else int(text) if text.isdigit() else text
 
 
 # --- tile caching defaults: GeoServer's gwc-gs.xml, which it reads only when it starts

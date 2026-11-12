@@ -9,10 +9,11 @@ from a Secret the import names, and it lists the keys to fill in.
 from __future__ import annotations
 
 import re
+import xml.etree.ElementTree as ET
 
 from .importer import resource, resource_name
 from .security import ACCESS, BUILT_IN_ROLES, BUILT_IN_USERS, DEFAULT_RULES, read_rest_rules, roles_list
-from .server import SERVICES, unwrap
+from .server import SERVICES, URL_CHECKS_FILE, unwrap
 from .validate import schema
 
 USERS_SECRET = "geoserver-users"  # the Secret imported users' passwords come from
@@ -94,6 +95,12 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
     caching = tile_caching(gs, props["global"]["properties"]["tileCaching"]["properties"])
     if caching:
         top["tileCaching"] = caching
+    logging = request_logging(live)
+    if logging:
+        top["requestLogging"] = logging
+    checks = gs.request("GET", URL_CHECKS_FILE, ok=(200, 404))
+    if checks.status_code == 200 and ET.fromstring(checks.text).findtext("enabled") == "false":
+        top["urlChecks"] = False
     security = security_settings(gs)
     if security:
         top["security"] = security
@@ -128,6 +135,13 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
             spec = {"service": name, "workspace": ws, **differing(own, props, {k: unwrap(v) for k, v in live.items()})}
             found.append(resource("Service", f"{resource_name(ws)[0]}-{name}", spec))
     return found, notes
+
+
+def request_logging(live: dict) -> dict:
+    """The request logging switches that differ from a fresh GeoServer's."""
+    from .server import LOGGING_DEFAULTS, LOGGING_NAMES, metadata, typed
+
+    return {LOGGING_NAMES[k]: typed(v) for k, v in metadata(live).items() if k in LOGGING_NAMES and v != LOGGING_DEFAULTS[k]}
 
 
 def tile_caching(gs, props: dict) -> dict:
@@ -222,6 +236,17 @@ def security_resources(gs) -> tuple[list[dict], list[str], list[str]]:
         if missing:
             notes.append(f"rule {kind} {key} names role(s) GeoServer doesn't have: {', '.join(missing)}; add Roles for them")
     found += auth_resources(gs, notes)
+    from .urlchecks import live_checks
+
+    for name, check in sorted(live_checks(gs).items()):
+        meta = unique("URLCheck", resource_name(name)[0])
+        spec = {"name": name} if meta != name else {}
+        spec["regex"] = check["regex"]
+        if check["description"]:
+            spec["description"] = check["description"]
+        if check["enabled"] is False:
+            spec["enabled"] = False
+        found.append(resource("URLCheck", meta, spec))
     return found, notes, keys
 
 

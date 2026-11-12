@@ -623,7 +623,7 @@ spec:
 | `contact` | `contactPerson`, `contactOrganization`, `contactPosition`, `contactEmail`, `contactVoice`, `contactFacsimile`, `addressType`, `address`, `addressDeliveryPoint`, `addressCity`, `addressState`, `addressPostalCode`, `addressCountry`, `onlineResource`, `welcome` |
 | `proxyBaseUrl`, `useHeadersProxyURL` | The address clients see in capabilities documents, when GeoServer sits behind a proxy |
 | `numDecimals`, `charset`, `verbose`, `verboseExceptions`, `localWorkspaceIncludesPrefix`, `showCreatedTimeColumnsInAdminList`, `showModifiedTimeColumnsInAdminList`, `showModifiedUserAdminList` | As in the web UI |
-| `global` | Only without `workspace`: `catalogMode` (`hide`, `mixed`, `challenge`: how GeoServer hides what someone may not see), `globalServices`, `resourceErrorHandling` (`OGC_EXCEPTION_REPORT`, `SKIP_MISCONFIGURED_LAYERS`), `webUIMode` (`DEFAULT`, `REDIRECT`, `DO_NOT_REDIRECT`), `xmlPostRequestLogBufferSize`, `featureTypeCacheSize`, `trailingSlashMatch`, `allowStoredQueriesPerWorkspace`, `masterPassword: { secret, key }` (the keystore's master password, from a Secret: `plan` shows it as changed only when GeoServer's differs, and never prints it; `import` can't read it back), `jai` (image processing: `allowInterpolation`, `recycling`, `tilePriority`, `tileThreads`, `memoryCapacity`, `memoryThreshold`, `pngEncoderType`), `coverageAccess` (`maxPoolSize`, `corePoolSize`, `keepAliveTime`, `queueType`, `imageIOCacheThreshold`, `granuleCacheMaxSizeMB`, `granuleCacheThresholdKB`), `tileCaching` (below), and `geoserver:` for any other global field |
+| `global` | Only without `workspace`: `catalogMode` (`hide`, `mixed`, `challenge`: how GeoServer hides what someone may not see), `globalServices`, `resourceErrorHandling` (`OGC_EXCEPTION_REPORT`, `SKIP_MISCONFIGURED_LAYERS`), `webUIMode` (`DEFAULT`, `REDIRECT`, `DO_NOT_REDIRECT`), `xmlPostRequestLogBufferSize`, `featureTypeCacheSize`, `trailingSlashMatch`, `allowStoredQueriesPerWorkspace`, `masterPassword: { secret, key }` (the keystore's master password, from a Secret: `plan` shows it as changed only when GeoServer's differs, and never prints it; `import` can't read it back), `jai` (image processing: `allowInterpolation`, `recycling`, `tilePriority`, `tileThreads`, `memoryCapacity`, `memoryThreshold`, `pngEncoderType`), `coverageAccess` (`maxPoolSize`, `corePoolSize`, `keepAliveTime`, `queueType`, `imageIOCacheThreshold`, `granuleCacheMaxSizeMB`, `granuleCacheThresholdKB`), `tileCaching` (below), `requestLogging` (each request in the GeoServer services' logs: `enabled`, `headers`, `bodies`, `bodySize` in bytes, default 1024; the chart sets the logger they write to, `org.geoserver.filters`, to INFO), `urlChecks` (`false` turns the `URLCheck`s off: GeoServer then fetches any external URL; default `true`), and `geoserver:` for any other global field |
 | `geoserver` | Any other settings field, as GeoServer's REST API names it |
 
 At most one `Settings` for the global settings and one per workspace.
@@ -773,6 +773,28 @@ spec:
 
 **How they're applied.** GeoServer Cloud's REST API has no endpoints for most of these, but GeoServer keeps each in a file (`security/<kind>/<name>/config.xml`, `security/config.xml`) that `/rest/resource` reads and writes. `apply` writes the file, then has GeoServer read its security files again (by saving its default authentication provider unchanged); the other services follow within a minute. Objects are written before the settings that name them. If GeoServer refuses new settings, `apply` puts the old file back. Only the fields a file sets are compared; nothing is removed. A workspace administrator is an `AccessRule` with `access: admin` on the workspace's layers.
 
+### URLCheck
+
+An external URL GeoServer may fetch: a style given as `SLD=<url>` in a GetMap, a graphic a style points to, and other remote references. While URL checks are on (the global `Settings`' `urlChecks`, on in GeoServer Cloud), GeoServer refuses every URL no enabled check matches.
+
+```yaml
+apiVersion: configops/v1alpha1
+kind: URLCheck
+metadata: { name: council-styles }
+spec:
+  regex: '^https://styles\.example\.org/.*$'
+  description: Our published styles
+```
+
+| Field | Meaning |
+| --- | --- |
+| `regex` | A Java regular expression the whole URL must match. Required |
+| `description` | Shown in GeoServer's web UI |
+| `enabled` | Default: `true` |
+| `name` | The check's name in GeoServer. Default: `metadata.name` |
+
+The WMS service follows a change within about 20 s.
+
 ## Secrets
 
 A `secret` field names a secret; the files never hold its value. Where the tool looks:
@@ -790,6 +812,7 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 - Global styles and other workspaces are never changed or deleted, unless a resource names them. Fonts are global: added and changed, never deleted.
 - Tables: only tables a Dataset declares, in the configured schemas, are created, replaced or backed up. A Layer on someone else's table only publishes it.
 - Settings and services: only the ones a `Settings` or `Service` resource names, and only the fields it sets. They are never deleted.
+- URL checks: only when the project has a `URLCheck`; then checks it doesn't name are unmanaged, removed only with `--prune`.
 - Security: only when the project has a `Role`, `Group`, `User` or `AccessRule`; then the rest is unmanaged, as in a workspace (see above). GeoServer's own users, roles and default rules are never touched unless a file names them. GeoServer has one set of global settings, so when several projects share a GeoServer, let one of them hold the global `Settings` and the `Service`s.
 
 ## Commands
@@ -997,7 +1020,7 @@ Wrote server.yaml: 1 Settings, 2 Service(s); security.yaml: 2 role(s), 1 group(s
   note: passwords can't be read from GeoServer: put each user's in Secret geoserver-users (keys: alice, bob), and add it to configops.secrets; plan stops until it's there
 ```
 
-`server.yaml` holds the global `Settings`, a `Settings` for each workspace with settings of its own, and a `Service` for each service, with only the fields that differ from a fresh GeoServer Cloud. `security.yaml` holds every role, group, user and access rule that isn't GeoServer's own unchanged default. Fields outside the schema aren't imported. Passwords can't be read back, so each user's comes from Secret `geoserver-users`, under a key named after the user; until it holds them, `plan` stops and says which is missing. With them there, `plan` on the imported files has nothing to do.
+`server.yaml` holds the global `Settings`, a `Settings` for each workspace with settings of its own, and a `Service` for each service, with only the fields that differ from a fresh GeoServer Cloud. `security.yaml` holds every role, group, user and access rule that isn't GeoServer's own unchanged default, and every URL check. Fields outside the schema aren't imported. Passwords can't be read back, so each user's comes from Secret `geoserver-users`, under a key named after the user; until it holds them, `plan` stops and says which is missing. With them there, `plan` on the imported files has nothing to do.
 
 ### Bringing changes made in GeoServer back into the files
 

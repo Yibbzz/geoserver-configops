@@ -120,7 +120,7 @@ def check_project(project: Project) -> list[Problem]:
         problems.append(Problem(extra.file, extra.line(), "a second Project: every directory has exactly one", extra.label))
 
     for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store", "Workspace", "Gridset", "BlobStore",
-                 "PasswordPolicy", "AuthFilter", "AuthProvider", "UserGroupService", "RoleService"):
+                 "PasswordPolicy", "AuthFilter", "AuthProvider", "UserGroupService", "RoleService", "URLCheck"):
         first: dict[str, Resource] = {}
         for r in project.of_kind(kind):
             if r.name in first and kind != "Project":
