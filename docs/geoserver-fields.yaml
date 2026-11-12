@@ -428,18 +428,22 @@ pages:
         spec: layer.attributes
         test: test_e2e_layer_data.py::test_apply_then_nothing_to_do
       minOccurs:
-        status: 'no'
-        note: feature type customisation
+        status: 'yes'
+        spec: layer.attributes.minOccurs
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       maxOccurs:
-        status: 'no'
-        note: feature type customisation
+        status: 'yes'
+        spec: layer.attributes.maxOccurs
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       nillable:
-        status: 'no'
-        note: feature type customisation
+        status: 'yes'
+        spec: layer.attributes.nillable
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       metadata: *id002
       binding:
-        status: 'no'
-        note: feature type customisation
+        status: 'yes'
+        spec: layer.attributes.binding
+        test: test_e2e_details.py::test_apply_then_nothing_to_do
       length:
         status: none
         note: read from the data
@@ -450,10 +454,11 @@ pages:
         status: 'no'
         note: feature type customisation
       source:
-        status: 'no'
-        note: 'feature type customisation: an attribute worked out by a CQL expression'
+        status: 'yes'
+        spec: layer.attributes.source
       description:
-        status: 'no'
+        status: 'yes'
+        spec: layer.attributes.description
         note: feature type customisation
     CoverageDimensionImpl:
       id: &id004

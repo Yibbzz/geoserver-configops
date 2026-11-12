@@ -150,6 +150,49 @@ def seed_cache(gs: GeoServer, name: str, cache: dict, seed: dict) -> None:
             gs.seed(name, gridset, fmt, seed["zoom"], seed.get("bounds"), seed.get("threads", 1))
 
 
+ATTRIBUTE_FIELDS = {"source": "source", "description": "description", "nillable": "nillable", "minOccurs": "minOccurs",
+                    "maxOccurs": "maxOccurs", "binding": "binding"}  # spec -> GeoServer
+
+
+def to_international(text: str) -> dict:
+    """Text GeoServer keeps per language (an InternationalString): this one as the default, for every language."""
+    return {"entry": [{"@key": "", "$": text}]}
+
+
+def from_international(value) -> str | None:
+    """The default language's text of an InternationalString (GeoServer gives one entry as plain text)."""
+    if isinstance(value, dict):
+        entries = value.get("entry")
+        if isinstance(entries, str):
+            return entries
+        for e in entries if isinstance(entries, list) else [entries]:
+            if isinstance(e, dict) and e.get("@key", "") == "":
+                return e.get("$")
+        return None
+    return value or None
+
+
+def wanted_attributes(attributes: list) -> list:
+    """A layer's attributes as compared: a column's name, or {name, and the fields the file sets}."""
+    return [a if isinstance(a, str) else (a["name"] if set(a) == {"name"} else dict(a)) for a in attributes]
+
+
+def live_attributes(ft: dict, wanted: list) -> list:
+    """The feature type's attributes (not the geometry) in wanted_attributes' form, with the fields `wanted` sets."""
+    want = {a["name"]: a for a in wanted if isinstance(a, dict)}
+    out = []
+    for a in as_list((ft.get("attributes") or {}).get("attribute")):
+        if is_geometry(a) and a["name"] not in want:
+            continue
+        w = want.get(a["name"])
+        if w is None or set(w) == {"name"}:
+            out.append(a["name"])
+        else:
+            out.append({"name": a["name"], **{k: from_international(a.get("description")) if k == "description" else a.get(ATTRIBUTE_FIELDS[k])
+                                              for k in w if k != "name"}})
+    return out
+
+
 def is_geometry(attribute: dict) -> bool:
     return str(attribute.get("binding", "")).startswith("org.locationtech.jts.geom.")
 
@@ -391,7 +434,7 @@ class Planner:
             if view:
                 wanted_ft.append(("sql", sql_fields(view)))
             if "attributes" in spec:
-                wanted_ft.append(("attributes", list(spec["attributes"])))
+                wanted_ft.append(("attributes", wanted_attributes(spec["attributes"])))
             ft_path = f"workspaces/{ws}/datastores/{schema}/featuretypes/{name}"
             wanted_layer, settings = self.layer_settings(layer, (ft_path, "featureType"))
 
@@ -420,7 +463,7 @@ class Planner:
                 "nativeName": ft.get("nativeName"), "abstract": ft.get("abstract"),
                 "crs": ft.get("srs") if ft.get("projectionPolicy") == "FORCE_DECLARED" else None,
                 "sql": sql_fields(live_view) if live_view else None,
-                "attributes": [a["name"] for a in as_list((ft.get("attributes") or {}).get("attribute")) if not is_geometry(a)],
+                "attributes": live_attributes(ft, spec.get("attributes") or []),
                 **self.live_layer_settings(layer, live_layer, ft),
             }
             changed = diff([(k, current[k], v) for k, v in wanted_ft + wanted_layer])
@@ -431,12 +474,19 @@ class Planner:
             if changed:
                 self.add("~", "layer", target, changed, run=lambda run=run, store=store: run(old_store=store))
 
-    def set_attributes(self, path: str, names: list[str]) -> None:
-        """Publish only these attributes, and the geometry: clearing the list makes GeoServer list them all again."""
+    def set_attributes(self, path: str, attributes: list) -> None:
+        """Publish only these attributes, and the geometry: clearing the list makes GeoServer list them all again.
+        An entry with `source` is GeoServer's own attribute, worked out from that expression."""
         self.gs.request("PUT", path, {"featureType": {"attributes": {"attribute": []}}})
-        every = as_list(((self.gs.get(path) or {}).get("featureType") or {}).get("attributes", {}).get("attribute"))
-        kept = [a for a in every if is_geometry(a) or a["name"] in names]
-        kept.sort(key=lambda a: names.index(a["name"]) if a["name"] in names else -1)  # geometry first, then the files' order
+        every = {a["name"]: a for a in as_list(((self.gs.get(path) or {}).get("featureType") or {}).get("attributes", {}).get("attribute"))}
+        kept = [a for a in every.values() if is_geometry(a)]
+        for entry in wanted_attributes(attributes):
+            if isinstance(entry, str):
+                kept.append(every[entry]) if entry in every else None
+                continue
+            base = dict(every.get(entry["name"]) or {"name": entry["name"], "nillable": True, "minOccurs": 0, "maxOccurs": 1})
+            base.update({ATTRIBUTE_FIELDS[k]: to_international(v) if k == "description" else v for k, v in entry.items() if k != "name"})
+            kept.append(base)
         self.gs.request("PUT", path, {"featureType": {"attributes": {"attribute": kept}}})
 
     @staticmethod
