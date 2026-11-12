@@ -95,6 +95,15 @@ def normal(kind: str, key: str, value, name: str, default_ws: str | None = None,
         if key == "workspace" and kind in WORKSPACE_KINDS:
             return default_ws
         return DEFAULTS.get(kind, {}).get(key)
+    if key == "attributes" and isinstance(value, list):  # GeoServer's usual nillable/minOccurs/maxOccurs: as if left out
+        usual = {"nillable": True, "minOccurs": 0, "maxOccurs": 1}
+        out = []
+        for a in value:
+            if isinstance(a, dict):
+                a = {k: v for k, v in a.items() if usual.get(k, object()) != v}
+                a = a["name"] if set(a) == {"name"} else a
+            out.append(a)
+        return out
     if key == "dimensions" and isinstance(value, dict):
         return {k: {"presentation": "list", **(v or {})} for k, v in value.items()}
     if key == "cache" and value is not False:
