@@ -1,6 +1,6 @@
 # GeoServer ConfigOps
 
-![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-64%25-yellow) Of the 651 settings GeoServer Cloud's REST API can set, configops sets 425, and the e2e tests have proved 422 of those (13 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
+![GeoServer coverage](https://img.shields.io/badge/GeoServer_coverage-65%25-yellow) Of the 644 settings GeoServer Cloud's REST API can set, configops sets 425, and the e2e tests have proved 422 of those (20 more GeoServer Cloud can't set; [field by field](docs/geoserver-fields.yaml)).
 
 GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud): a Helm chart, plus `configops`, a small command that keeps your GIS data and what GeoServer publishes in YAML files:
 
@@ -212,6 +212,23 @@ spec: { layer: { workspace: uk, layer: flood_zones, access: read }, roles: [EDIT
 `plan` spots a changed password by logging in with it, and a REST rule GeoServer would never reach. GeoServer's own `admin` user, roles and default rules are left alone unless a file names them.
 
 **Bring in an existing GeoServer:** `configops import <workspace> --settings --security -C my-project` writes the files that describe the workspace, GeoServer's settings and services, and its security, so `plan` on them has nothing to do. Passwords can't be read back: put each user's in Secret `geoserver-users`, as the import's note says.
+
+**Allow web pages on other sites to call GeoServer (CORS).** GeoServer Cloud's gateway answers cross-origin requests from any origin. To allow only yours, give the gateway a values file like this one (GeoServer's own CORS setting doesn't apply: the gateway answers first):
+
+```yaml
+geoserver:
+  services:
+    gateway:
+      containers:
+        spring:
+          env:
+            SPRING_APPLICATION_JSON:
+              value: >-
+                {"spring": {"cloud": {"gateway": {"server": {"webmvc": {"globalcors": {"cors-configurations":
+                {"[/**]": {"allowedOrigins": ["https://maps.example.org"]}}}}}}}}}
+```
+
+`allowedMethods`, `allowedHeaders`, `allowCredentials` and `maxAge` go beside `allowedOrigins`. The kind test deploys with exactly this and checks it.
 
 **Keep a change made in the web UI:** run the same `import` in the project folder. It updates the files in place, only what changed, keeping your names, order and comments; review it with `git diff` and commit. `--prune` also takes out what GeoServer no longer has.
 

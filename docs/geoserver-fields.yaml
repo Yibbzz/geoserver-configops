@@ -1252,8 +1252,8 @@ pages:
         note: request logging
         extra: true
       metadata.corsConfigurationSettings:
-        status: 'no'
-        note: 'CORS settings: CORSConfiguration'
+        status: cant
+        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
         extra: true
       metadata.root:
         status: 'no'
@@ -2160,23 +2160,23 @@ pages:
         spec: securityObject.config
     CORSConfiguration:
       enabled:
-        status: 'no'
-        note: CORS settings (global settings page)
+        status: cant
+        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
       allowedOriginPatterns:
-        status: 'no'
-        note: CORS settings (global settings page)
+        status: cant
+        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
       allowedMethods:
-        status: 'no'
-        note: CORS settings (global settings page)
+        status: cant
+        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
       allowedHeaders:
-        status: 'no'
-        note: CORS settings (global settings page)
+        status: cant
+        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
       maxAge:
-        status: 'no'
-        note: CORS settings (global settings page)
+        status: cant
+        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
       supportsCredentials:
-        status: 'no'
-        note: CORS settings (global settings page)
+        status: cant
+        note: "GeoServer reads it only at startup, and GeoServer Cloud's gateway answers CORS first: set the gateway's (README, CORS)"
     CSPConfiguration:
       enabled:
         status: 'no'

@@ -12,7 +12,18 @@ geoserver:
   ingress:
     enabled: false
   services:
-    gateway: *slow-start
+    gateway:
+      containers:
+        spring:
+          livenessProbe:
+            initialDelaySeconds: 300
+            failureThreshold: 20
+          # CORS for one origin only, as the README's how-to does: deploy-test.sh checks it
+          env:
+            SPRING_APPLICATION_JSON:
+              value: >-
+                {"spring": {"cloud": {"gateway": {"server": {"webmvc": {"globalcors": {"cors-configurations":
+                {"[/**]": {"allowedOrigins": ["https://maps.example.org"]}}}}}}}}}
     webui: *slow-start
     rest: *slow-start
     wfs: *slow-start
