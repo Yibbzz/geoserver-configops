@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v0.2.0: the package goes to PyPI (geoserver-configops), the image to
-# ghcr.io/<owner>/geoserver-configops, and both onto a GitHub release.
+# Push a tag like v0.2.0 (the version in pyproject.toml): the image goes to
+# ghcr.io/<owner>/<repo name>, the package onto a GitHub release, and to PyPI once PyPI trusts
+# this workflow (environment pypi); re-run the pypi job after setting that up.
 on:
   push:
     tags: ['v*']
@@ -57,7 +58,7 @@ jobs:
           docker push "$image:latest"
 
   github:
-    needs: [pypi, image]
+    needs: [package, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write

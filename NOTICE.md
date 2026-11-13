@@ -2,8 +2,8 @@
 
 This repository started as a Helm chart for GeoServer Cloud, from Camptocamp's
 [helm-geoserver-cloud](https://github.com/camptocamp/helm-geoserver-cloud)
-(BSD 2-Clause, Copyright (c) 2011-2024 Camptocamp SA). The chart has since been removed;
-`configops` works with any GeoServer or GeoServer Cloud.
+(BSD 2-Clause, Copyright (c) 2011-2024 Camptocamp SA). The chart has since been removed, and
+none of its code is left; `configops` is MIT-licensed and works with any GeoServer or GeoServer Cloud.
 
 GeoServer Cloud is developed at [geoserver/geoserver-cloud](https://github.com/geoserver/geoserver-cloud),
 GeoServer at [geoserver/geoserver](https://github.com/geoserver/geoserver).

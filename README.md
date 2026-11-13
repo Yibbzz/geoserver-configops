@@ -320,6 +320,6 @@ Set the version in `pyproject.toml` and `configops/__init__.py`, merge, then pus
 
 ## Licence and data attribution
 
-BSD 2-Clause (see `LICENSE.txt`); see `NOTICE.md` for credits.
+MIT (see `LICENSE`); see `NOTICE.md` for credits.
 
 Data you publish keeps its own licence: give a layer the attribution it asks for (`attribution:`). OS OpenData is released under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) and needs "Contains OS data © Crown copyright and database right &lt;year&gt;", as the examples' OS layers say.
