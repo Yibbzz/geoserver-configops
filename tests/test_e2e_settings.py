@@ -139,13 +139,16 @@ def gs():
 
 
 @pytest.fixture
-def project(tmp_path, monkeypatch):
+def project(tmp_path, monkeypatch, gs):
     defs = schema()["$defs"]
+    settings = global_settings(defs)
+    if gs.series and gs.series < (3, 0):
+        del settings["contact"]["internationalTitle"]  # came in 3.0: tests/test_configops_standard.py checks plan leaves it out
     docs = [
         {"kind": "Project", "metadata": {"name": "e2e-settings"}, "spec": {
             "geoserver": {"url": URL.removesuffix("/rest"), "credentials": {"secret": "e2egs"}},
             "database": {"jndi": "java:comp/env/jdbc/mypostgis", "connection": {"secret": "e2edb"}}, "workspace": WS}},
-        {"kind": "Settings", "metadata": {"name": "global"}, "spec": global_settings(defs)},
+        {"kind": "Settings", "metadata": {"name": "global"}, "spec": settings},
         {"kind": "Settings", "metadata": {"name": "own"}, "spec": {
             "workspace": WS, "contact": {"contactPerson": "Workspace Team"}, "numDecimals": 3}},
     ]

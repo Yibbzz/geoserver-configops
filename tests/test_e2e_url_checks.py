@@ -173,7 +173,8 @@ def test_request_logging_writes_requests_to_the_log(gs, tmp_path, monkeypatch, c
         requests.post(f"{SERVICES}/wms", params={"e2e": marker}, headers={"X-Configops-E2e": marker, "Content-Type": "application/xml"},
                       data=f'<GetCapabilities service="WMS" version="1.3.0"><!-- body-{marker} --></GetCapabilities>', timeout=60)
         log = wms_log()
-        return all(text in log for text in (f"e2e={marker}", f"X-Configops-E2e: {marker}", f"body-{marker}"))
+        log = log.lower()  # header names are case-insensitive, and GeoServer 2.28's web server writes them lowercase
+        return all(text in log for text in (f"e2e={marker}", f"x-configops-e2e: {marker}", f"body-{marker}"))
     eventually(logged)
 
     imported = tmp_path.parent / f"{tmp_path.name}-imported"  # beside the project: inside, it would be part of it

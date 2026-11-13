@@ -1,9 +1,10 @@
-"""What only standard GeoServer can set, and how plan leaves it out on GeoServer Cloud.
+"""What not every GeoServer can set, and how plan leaves it out where it can't.
 
 A few of GeoServer's settings don't survive GeoServer Cloud's split into services (the
-reasons are in CLOUD_CANT). On GeoServer Cloud, plan shows each one the files set as a `!`
-line saying why, and leaves it out; on standard GeoServer it is applied like anything else.
-configops tells the two apart by the version GeoServer reports (GeoServer.cloud).
+reasons are in CLOUD_CANT), and a few came in GeoServer 3.0 (SINCE). Where the GeoServer
+can't take one, plan shows each the files set as a `!` line saying why, and leaves it out;
+elsewhere it is applied like anything else. configops tells them apart by the version
+GeoServer reports (GeoServer.version).
 
 Three of them are settings of their own, planned here:
   global.cors                   CORS: an entry in the global settings' metadata, read when GeoServer starts
@@ -28,21 +29,52 @@ CLOUD_CANT = [
     ("Settings", ("global", "diskQuota"), "it turns GeoWebCache's disk quota off"),
 ]
 CLOUD_STORE_TYPES = {"oracle": "its images don't have Oracle's JDBC driver"}
+# (kind, path in the spec, the GeoServer series it came in): older GeoServers don't have it
+SINCE = [
+    ("Settings", ("global", "cors"), (3, 0)),
+    ("Settings", ("contact", "internationalTitle"), (3, 0)),
+    ("Settings", ("global", "tileCaching", "seederCorePoolSize"), (3, 0)),
+    ("Settings", ("global", "tileCaching", "seederMaxPoolSize"), (3, 0)),
+]
 LABELS = {"LayerGroup": "group", "Layer": "layer", "Settings": "settings", "Store": "store"}
+
+
+def sets(r, kind: str, path: tuple) -> bool:
+    """Whether resource r is of `kind` and its spec sets `path`."""
+    parent = r.spec if r.kind == kind else None
+    for step in path[:-1]:
+        parent = parent.get(step) if isinstance(parent, dict) else None
+    return isinstance(parent, dict) and path[-1] in parent
 
 
 def only_standard(r) -> list[tuple]:
     """(the path in the spec, why) for each thing in a resource only standard GeoServer can set; () for an Oracle store."""
-    found = []
-    for kind, path, why in CLOUD_CANT:
-        parent = r.spec if r.kind == kind else None
-        for step in path[:-1]:
-            parent = parent.get(step) if isinstance(parent, dict) else None
-        if isinstance(parent, dict) and path[-1] in parent:
-            found.append((path, why))
+    found = [(path, why) for kind, path, why in CLOUD_CANT if sets(r, kind, path)]
     if r.kind == "Store" and r.spec.get("type") in CLOUD_STORE_TYPES:
         found.append(((), CLOUD_STORE_TYPES[r.spec["type"]]))
     return found
+
+
+def remove(r, path: tuple) -> None:
+    parent = r.spec
+    for step in path[:-1]:
+        parent = parent[step]
+    del parent[path[-1]]
+
+
+def leave_out_unsupported(planner) -> None:
+    """Take out of the files what this GeoServer can't set, with a `!` line for each: what GeoServer Cloud
+    can't take, and what came in a later GeoServer. GeoServer is asked its version only when the files set any of it."""
+    leave_out_on_cloud(planner)
+    found = [(r, path, since) for r in planner.files.resources for kind, path, since in SINCE if sets(r, kind, path)]
+    series = getattr(planner.gs, "series", None) if found else None
+    if not found or series is None:
+        return
+    for r, path, since in found:
+        if series < since and sets(r, r.kind, path):
+            remove(r, path)
+            planner.add("!", LABELS[r.kind], r.name, note=f"GeoServer {planner.gs.version} can't set {'.'.join(path)}: "
+                                                          f"it came in GeoServer {'.'.join(map(str, since))}")
 
 
 def leave_out_on_cloud(planner) -> None:
@@ -53,10 +85,7 @@ def leave_out_on_cloud(planner) -> None:
         return
     for r, path, why in found:
         if path:
-            parent = r.spec
-            for step in path[:-1]:
-                parent = parent[step]
-            del parent[path[-1]]
+            remove(r, path)
             planner.add("!", LABELS[r.kind], r.name, note=f"GeoServer Cloud can't set {'.'.join(path)}: {why}")
             continue
         planner.files.resources.remove(r)

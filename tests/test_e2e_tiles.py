@@ -193,10 +193,15 @@ spec:
         text = gs.request("GET", "resource/gwc-gs.xml").text
         assert "<cacheLayersByDefault>false</cacheLayersByDefault>" in text and "<metaTilingY>3</metaTilingY>" in text
         assert "<securityEnabled>true</securityEnabled>" in text and "<string>image/png8</string>" in text
-        assert "<multiLayerCachingEnabled>true</multiLayerCachingEnabled>" in text and "<seederMaxPoolSize>8</seederMaxPoolSize>" in text
+        assert "<multiLayerCachingEnabled>true</multiLayerCachingEnabled>" in text
         assert "<warning>Nearest</warning>" in text and "<lockProviderName>nioLock</lockProviderName>" in text
         code, out = configops(capsys, "plan", "-C", str(project))
-        assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+        if gs.series and gs.series < (3, 0):  # the seeder's pool sizes came in GeoServer 3.0: left out, with the reason
+            assert "<seederMaxPoolSize>" not in text
+            assert code == 3 and f"GeoServer {gs.version} can't set global.tileCaching.seederMaxPoolSize: it came in GeoServer 3.0" in out, out
+        else:
+            assert "<seederMaxPoolSize>8</seederMaxPoolSize>" in text
+            assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     finally:
         gs.request("PUT", "resource/gwc-gs.xml", saved, content_type="application/xml")
 

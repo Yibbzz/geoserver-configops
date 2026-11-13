@@ -91,3 +91,12 @@ configops is also tested against standard GeoServer 3.0.2, the version GeoServer
 - **Disk quota:** `/gwc/rest/diskquota` PUT changes it in memory only (`DiskQuotaController.applyDiff`, no save) and ignores `quotaStore`; GET shows quotas as `bytes`, but a PUT must send `<value>` and `<units>` (`B`, `KiB`, ... `TiB`), in that order. What survives a restart is `gwc/geowebcache-diskquota.xml` (root `gwcQuotaConfiguration`, `LayerQuota` entries), read at startup with the quota store. 3.0.2 has HSQL and JDBC quota stores, not H2.
 - **Settings that do nothing in 3.0.2:** JAI's `imageIOCache` (kept, never read; the web UI's JAI page no longer has it) and a tile layer's `formatModifiers` (kept, but `GeoServerTileLayer.getFormatModifiers()` always returns none). configops sets neither.
 
+## GeoServer 2.28
+
+configops is tested against GeoServer 2.28 as well (`tests/e2e/up.sh standard-2`), the older series still maintained. What differs from 3.0:
+
+- **Nine settings aren't there:** the CORS settings (the web UI's CORS page came in 3.0), a contact's `internationalTitle`, and GeoWebCache's `seederCorePoolSize` and `seederMaxPoolSize`. GeoServer 2.28 accepts them and drops them, so `plan` leaves them out on 2.x with the reason instead of showing drift for ever. Read from the two versions' source: nothing 2.28 has is missing from 3.0.
+- **The GeoParquet community extension** for 2.28 needs GeoTools' DuckDB module, which neither GeoServer 2.28 nor the extension's zip has: add `gt-duckdb` at GeoServer's GeoTools version (34.x); `tests/e2e/standard-start.sh` does.
+- **Header names come lowercase** in request logging (`x-configops-e2e: ...`): its web server's doing; header names are case-insensitive anyway.
+- Everything else configops sets behaves the same: the e2e suite passes unchanged, Oracle stores included.
+

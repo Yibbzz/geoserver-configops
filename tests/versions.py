@@ -1,5 +1,8 @@
 """The GeoServer Cloud and standard GeoServer versions the e2e tests run, and the newest released.
 
+Standard GeoServer is tested twice: the newest release, and the newest of the 2.28 series (SERIES_2),
+the older series still maintained.
+
     python tests/versions.py           what the repo pins, and the newest releases with images
     python tests/versions.py update    pin the newest: tests/e2e/up.sh, examples/compose.yaml, the README's
                                        "Tested on" line, and docs/geoserver-fields.yaml (read again from
@@ -26,6 +29,7 @@ COMPOSE = "examples/compose.yaml"
 README = "README.md"
 FIELDS = "docs/geoserver-fields.yaml"
 TESTED = re.compile(r"<!-- tested-on -->.*?<!-- /tested-on -->", re.S)
+SERIES_2 = "2.28"
 
 
 def get(url: str, accept: str = "application/json", method: str = "GET") -> bytes | None:
@@ -72,8 +76,10 @@ def newest() -> dict[str, str]:
     cloud = next(v for v in releases("geoserver/geoserver-cloud") if cloud_image(v))
     base = pom_value("geoserver/geoserver-cloud", f"v{cloud}", "src/pom.xml", "gs.version").removesuffix("-CLOUD")
     gwc = pom_value("geoserver/geoserver", base, "src/pom.xml", "gwc.version")
-    standard = next(v for v in releases("geoserver/geoserver") if standard_image(v))
-    return {"cloud": cloud, "standard": standard, "geoserver": base, "geowebcache": gwc}
+    standard = releases("geoserver/geoserver")
+    newest_standard = next(v for v in standard if standard_image(v))
+    newest_2 = next(v for v in standard if v.startswith(SERIES_2 + ".") and standard_image(v))
+    return {"cloud": cloud, "standard": newest_standard, "standard-2": newest_2, "geoserver": base, "geowebcache": gwc}
 
 
 def pinned() -> dict[str, str]:
@@ -81,14 +87,15 @@ def pinned() -> dict[str, str]:
     fields = (ROOT / FIELDS).read_text()
     return {"cloud": re.search(r"^export GEOSERVER_TAG=(\S+)", up, re.M).group(1),
             "standard": re.search(r"^export STANDARD_GEOSERVER_VERSION=(\S+)", up, re.M).group(1),
+            "standard-2": re.search(r"^export STANDARD_2_GEOSERVER_VERSION=(\S+)", up, re.M).group(1),
             "geoserver": re.search(r"^  geoserver: (\S+)", fields, re.M).group(1),
             "geowebcache": re.search(r"^  geowebcache: (\S+)", fields, re.M).group(1)}
 
 
 def tested_line(v: dict[str, str]) -> str:
-    return (f"<!-- tested-on -->Tested on **GeoServer Cloud {v['cloud']}** and **GeoServer {v['standard']}**: every pull "
-            f"request runs the e2e tests on both, and a daily job (`.github/workflows/versions.yaml`) tries each new "
-            f"release.<!-- /tested-on -->")
+    return (f"<!-- tested-on -->Tested on **GeoServer Cloud {v['cloud']}**, **GeoServer {v['standard']}** and "
+            f"**GeoServer {v['standard-2']}**: every pull request runs the e2e tests on all three, and a daily job "
+            f"(`.github/workflows/versions.yaml`) tries each new release.<!-- /tested-on -->")
 
 
 def sub(path: str, pattern: str, new: str) -> None:
@@ -102,6 +109,7 @@ def sub(path: str, pattern: str, new: str) -> None:
 def write(v: dict[str, str], old: dict[str, str]) -> None:
     sub(UP, r"^export GEOSERVER_TAG=\S+", f"export GEOSERVER_TAG={v['cloud']}")
     sub(UP, r"^export STANDARD_GEOSERVER_VERSION=\S+", f"export STANDARD_GEOSERVER_VERSION={v['standard']}")
+    sub(UP, r"^export STANDARD_2_GEOSERVER_VERSION=\S+", f"export STANDARD_2_GEOSERVER_VERSION={v['standard-2']}")
     sub(COMPOSE, r"image: docker\.osgeo\.org/geoserver:\S+", f"image: docker.osgeo.org/geoserver:{v['standard']}")
     sub(README, TESTED.pattern, tested_line(v))
     if (v["geoserver"], v["geowebcache"]) != (old["geoserver"], old["geowebcache"]):
@@ -116,11 +124,11 @@ def write(v: dict[str, str], old: dict[str, str]) -> None:
 
 def main(argv: list[str]) -> int:
     old, new = pinned(), newest()
-    for name in ("cloud", "standard", "geoserver", "geowebcache"):
+    for name in ("cloud", "standard", "standard-2", "geoserver", "geowebcache"):
         mark = "" if old[name] == new[name] else "   <- newer"
         print(f"{name:12} pinned {old[name]:10} newest {new[name]}{mark}")
-    changed = (old["cloud"], old["standard"]) != (new["cloud"], new["standard"]) and \
-        key(new["cloud"]) >= key(old["cloud"]) and key(new["standard"]) >= key(old["standard"])
+    pins = ("cloud", "standard", "standard-2")
+    changed = any(old[p] != new[p] for p in pins) and all(key(new[p]) >= key(old[p]) for p in pins)
     if argv[:1] == ["update"]:
         if changed:
             write({**old, **new}, old)
@@ -130,8 +138,8 @@ def main(argv: list[str]) -> int:
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a") as out:
                 out.write(f"changed={'true' if changed else 'false'}\n")
-                out.write(f"branch=versions/cloud-{new['cloud']}-geoserver-{new['standard']}\n")
-                out.write(f"title=GeoServer Cloud {new['cloud']} and GeoServer {new['standard']}\n")
+                out.write(f"branch=versions/cloud-{new['cloud']}-geoserver-{new['standard']}-{new['standard-2']}\n")
+                out.write(f"title=GeoServer Cloud {new['cloud']}, GeoServer {new['standard']} and {new['standard-2']}\n")
     return 0
 
 

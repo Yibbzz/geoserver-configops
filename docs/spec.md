@@ -751,6 +751,8 @@ Plan: 1 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
 
 `+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done yet, such as a layer on a table that doesn't exist yet. Groups leave such a layer out until it can be published. `plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables loaded separately, often after the deploy, so an apply Job doesn't fail for them, or are settings only standard GeoServer can take (below). It exits 1 when a change fails.
 
+**GeoServer 2.28.** The same files work on GeoServer 2.28 too, apart from four settings that came in GeoServer 3.0: the global `cors`, a contact's `internationalTitle`, and `tileCaching`'s `seederCorePoolSize` and `seederMaxPoolSize`. When the files set one, `plan` asks GeoServer its version and, on 2.x, shows it as `!` with the reason and leaves it out.
+
 **GeoServer Cloud or standard GeoServer.** The same files work on both. A few settings only standard GeoServer can take: a group's `styles`, `oracle` stores, and the global `cors`, `contentSecurityPolicy` and `diskQuota`. When the files set any of them, `plan` asks GeoServer which it is (GeoServer Cloud's version ends in `-CLOUD`) and, on GeoServer Cloud, shows each as `!` with the reason and leaves it out; a layer on an `oracle` store goes with it:
 
 ```

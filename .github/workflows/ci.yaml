@@ -105,3 +105,32 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker logs gscloud-e2e-geoserver-1 2>&1 | tail -300
+
+  # And against GeoServer 2.28, the older series still maintained (tests/e2e/up.sh pins its newest)
+  e2e-standard-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Install GDAL (some e2e tests make their files with it)
+        run: tests/ci/install-gdal.sh
+      - name: Install Python dependencies
+        run: pip install -e '.[dev]'
+      - name: Start GeoServer 2.28 and PostGIS
+        run: tests/e2e/up.sh standard-2
+      - name: e2e tests
+        env:
+          E2E_GEOSERVER_URL: http://localhost:59091/geoserver/rest
+          E2E_SERVICES_URL: http://localhost:59091/geoserver
+          E2E_GWC_URL: http://localhost:59091/geoserver/gwc/rest
+          E2E_DB_PORT: '55433'
+          E2E_DB_HOST_IN_GEOSERVER: db
+          E2E_DATA_DIR: tests/e2e/data
+          E2E_LDAP_URL: ldap://ldap:389
+          E2E_REST_CONTAINER: gscloud-e2e-geoserver-1  # restarted by the caching defaults test; its log has the requests
+        run: pytest -m e2e -v
+      - name: Logs on failure
+        if: failure()
+        run: docker logs gscloud-e2e-geoserver-1 2>&1 | tail -300
