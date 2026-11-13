@@ -1,9 +1,9 @@
 name: GeoServer versions
 
 # Daily: when GeoServer Cloud or GeoServer has a new release, pin it (tests/versions.py), open a pull
-# request, and run CI on it. Pull requests opened with the workflow's own token don't start CI by
-# themselves, so this starts it. Needs Settings → Actions → General → "Allow GitHub Actions to create
-# and approve pull requests".
+# request, and run CI on it (GitHub holds CI on a pull request the workflow opened until it's
+# approved; the workflow approves it). Needs Settings → Actions → General → "Allow GitHub Actions to
+# create and approve pull requests".
 on:
   schedule:
     - cron: '17 5 * * *'
@@ -45,4 +45,16 @@ jobs:
           git commit -am "$TITLE"
           git push origin "$BRANCH"
           gh pr create --head "$BRANCH" --title "$TITLE" --body "A new release: tests/versions.py pinned it. CI runs every e2e test on both. If it fails, the log says what changed, such as settings the new GeoServer added that docs/geoserver-fields.yaml hasn't sorted yet."
-          gh workflow run ci.yaml --ref "$BRANCH"
+          # GitHub holds CI on a pull request the workflow's token opened ("action_required"): approve it,
+          # so it runs and shows on the pull request. If no run turns up, start one.
+          for _ in $(seq 1 24); do
+            run=$(gh run list --workflow ci.yaml --branch "$BRANCH" --event pull_request --json databaseId,conclusion \
+              --jq '.[0] | select(.conclusion == "action_required") | .databaseId')
+            [ -n "$run" ] && break
+            sleep 5
+          done
+          if [ -n "$run" ]; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run/approve"
+          else
+            gh workflow run ci.yaml --ref "$BRANCH"
+          fi
