@@ -264,6 +264,7 @@ pages:
       metadata.COVERAGE_VIEW:
         status: 'yes'
         spec: layer.view
+        extra: true
       metadata.kml.regionateAttribute:
         status: 'yes'
         spec: layer.kml.regionateAttribute

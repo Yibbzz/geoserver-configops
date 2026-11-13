@@ -1,0 +1,48 @@
+name: GeoServer versions
+
+# Daily: when GeoServer Cloud or GeoServer has a new release, pin it (tests/versions.py), open a pull
+# request, and run CI on it. Pull requests opened with the workflow's own token don't start CI by
+# themselves, so this starts it. Needs Settings → Actions → General → "Allow GitHub Actions to create
+# and approve pull requests".
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Install Python dependencies
+        run: pip install -e '.[dev]'
+      - name: Pin the newest versions
+        id: versions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tests/versions.py update
+      - name: Open a pull request and run CI on it
+        if: steps.versions.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.versions.outputs.branch }}
+          TITLE: ${{ steps.versions.outputs.title }}
+        run: |
+          if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null; then
+            echo "$BRANCH is already open"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit -am "$TITLE"
+          git push origin "$BRANCH"
+          gh pr create --head "$BRANCH" --title "$TITLE" --body "A new release: tests/versions.py pinned it. CI runs every e2e test on both. If it fails, the log says what changed, such as settings the new GeoServer added that docs/geoserver-fields.yaml hasn't sorted yet."
+          gh workflow run ci.yaml --ref "$BRANCH"

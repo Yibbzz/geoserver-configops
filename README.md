@@ -12,7 +12,9 @@ Point it at a GeoServer you already run: `https://<host>/geoserver-cloud` for Ge
 
 Loading open data into PostGIS (Ordnance Survey, CKAN portals such as data.gov.uk, WFS, OGC API Features) and keeping it up to date is a separate tool, [geodata-sync](https://github.com/Yibbzz/geodata-sync); configops publishes the tables, whoever loads them.
 
-> **Status: early.** The same e2e tests run against GeoServer Cloud and against standard GeoServer 3.0.2 (the version GeoServer Cloud 3.0 is built on). Expect breaking changes. [docs/coverage.md](docs/coverage.md) goes through the web UI page by page; the figures above count every field of GeoServer's configuration, read from its source (`tests/geoserver_coverage.py`), and what one of them can't set counts against it.
+<!-- tested-on -->Tested on **GeoServer Cloud 3.0.2.1** and **GeoServer 3.0.2**: every pull request runs the e2e tests on both, and a daily job (`.github/workflows/versions.yaml`) tries each new release.<!-- /tested-on -->
+
+> **Status: early.** Expect breaking changes. [docs/coverage.md](docs/coverage.md) goes through the web UI page by page; the figures above count every field of GeoServer's configuration, read from its source (`tests/geoserver_coverage.py`), and what one of them can't set counts against it.
 
 ## Install
 
@@ -313,6 +315,10 @@ E2E_GEOSERVER_URL=http://localhost:59091/geoserver/rest E2E_SERVICES_URL=http://
   E2E_DATA_DIR=tests/e2e/data E2E_LDAP_URL=ldap://ldap:389 E2E_REST_CONTAINER=gscloud-e2e-geoserver-1 .venv/bin/pytest -m e2e
 tests/e2e/up.sh down
 ```
+
+## New GeoServer versions
+
+`.github/workflows/versions.yaml` runs daily: when GeoServer Cloud or GeoServer has a new release (`python tests/versions.py` shows what's pinned and what's newest), it pins it (`tests/e2e/up.sh`, `examples/compose.yaml`, the README's "Tested on" line, and `docs/geoserver-fields.yaml`, read again from GeoServer's source when GeoServer Cloud moves to a new GeoServer), opens a pull request and runs CI on it. A green pull request can be merged; a red one says what changed, such as settings the new GeoServer added that `docs/geoserver-fields.yaml` hasn't sorted yet.
 
 ## Releasing
 
