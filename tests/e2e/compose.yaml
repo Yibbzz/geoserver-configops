@@ -73,7 +73,7 @@ services:
     environment:
       SKIP_DEMO_DATA: "true"  # start empty, as GeoServer Cloud does
       INSTALL_EXTENSIONS: "true"
-      STABLE_EXTENSIONS: app-schema,arcgrid,authkey,control-flow,css,mbstyle,vectortiles,sqlserver,gwc-s3,ogcapi-features,pyramid
+      STABLE_EXTENSIONS: app-schema,arcgrid,authkey,control-flow,css,mbstyle,vectortiles,sqlserver,oracle,gwc-s3,ogcapi-features,pyramid
       COMMUNITY_EXTENSIONS: cog-http,cog-s3,cog-azure,cog-google,flatgeobuf,gwc-azure-blobstore,gwc-gcs-blobstore,geoparquet,pmtiles-store
       POSTGRES_JNDI_ENABLED: "true"
       POSTGRES_JNDI_RESOURCE_NAME: jdbc/mypostgis

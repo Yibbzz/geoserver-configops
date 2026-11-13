@@ -118,6 +118,9 @@ def settings_resources(gs) -> tuple[list[dict], list[str]]:
     security = security_settings(gs)
     if security:
         top["security"] = security
+    from .standard import import_settings
+
+    top.update(import_settings(gs))  # standard GeoServer only
     if top:
         spec["global"] = top
     if spec:

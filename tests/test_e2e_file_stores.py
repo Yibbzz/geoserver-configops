@@ -41,8 +41,6 @@ STORES = [("sites-gpkg", "geopackage", "e2e/sites.gpkg"), ("sites-shp", "shapefi
           ("sites-parquet", "geoparquet", "e2e/sites.parquet"), ("sites-props", "property", "e2e/props"),
           ("places-csv", "csv", "e2e/places.csv", "connection: { strategy: specify, latField: lat, lngField: lon }"),
           ("dem-pyramid", "imagepyramid", "e2e/pyramid")]
-if not GeoServer(URL.removesuffix("/rest"), "admin", PASSWORD).cloud:
-    STORES = [s for s in STORES if s[1] != "csv"]  # standard GeoServer has no CSV store (GeoServer Cloud ships one)
 FIXTURES = Path(__file__).parent / "e2e" / "fixtures"
 
 

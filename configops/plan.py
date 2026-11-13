@@ -21,7 +21,7 @@ from pathlib import Path
 
 import psycopg2
 
-from . import assets, auth, keywords, details, discover, ingest, remote, security, server, stores, sync, tiles, urlchecks
+from . import assets, auth, keywords, details, discover, ingest, remote, security, server, standard, stores, sync, tiles, urlchecks
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, default_table, load
 from .sources import SourceError
@@ -81,6 +81,29 @@ def wanted_filters(filters: dict) -> dict:
         if "default" in f:
             f["default"] = str(f["default"])
         out[key] = f
+    return out
+
+
+def group_style_body(style: dict) -> dict:
+    """A group style as GeoServer takes it."""
+    return {"name": style["name"], "title": style["title"], "abstractTxt": style["abstract"],
+            **{k: style[k] for k in details.TRANSLATED if style[k]},
+            "layers": {"published": [{"@type": kind, "name": name} for kind, name in style["layers"]]},
+            "styles": {"style": [{"name": s} if s else "" for s in style["styles"]]}}
+
+
+def live_group_styles(group: dict) -> list[dict]:
+    """A live group's named styles in group_style's form."""
+    out = []
+    for s in as_list((group.get("layerGroupStyles") or {}).get("LayerGroupStyle")):
+        name = s.get("name")
+        published = as_list((s.get("layers") or {}).get("published"))
+        styles = [x.get("name") if isinstance(x, dict) and x.get("name") else None for x in as_list((s.get("styles") or {}).get("style"))]
+        out.append({"name": (name.get("name") if isinstance(name, dict) else name) or "", "title": s.get("title") or "",
+                    "abstract": s.get("abstractTxt") or "",
+                    **{k: {a: b for a, b in (s.get(k) or {}).items() if b} if isinstance(s.get(k), dict) else {} for k in details.TRANSLATED},
+                    "layers": [[p.get("@type"), p.get("name")] for p in published],
+                    "styles": styles + [None] * (len(published) - len(styles))})
     return out
 
 
@@ -293,6 +316,7 @@ class Planner:
         self.changes: list[Change] = []
         self.synced: set[str] = set()
         self.unpublished: set[str] = set()  # layers and groups that can't be published yet ("!")
+        standard.leave_out_on_cloud(self)  # what only standard GeoServer can set: "!" on GeoServer Cloud
 
     # --- what the files say
 
@@ -618,6 +642,10 @@ class Planner:
             if "queryable" in spec:
                 extra["queryDisabled"] = not spec["queryable"]
             wanted += list(extra.items()) + list(links.items()) + list(like_layer.items())
+            group_styles = [self.group_style(s) for s in spec["styles"]] if "styles" in spec else None
+            if group_styles is not None:  # standard GeoServer only (standard.CLOUD_CANT)
+                wanted.append(("groupStyles", group_styles))
+                extra = {**extra, "layerGroupStyles": {"LayerGroupStyle": [group_style_body(s) for s in group_styles]}}
 
             def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache, extra=extra, links=links, root=root,
                     like_layer=like_layer):
@@ -645,11 +673,20 @@ class Planner:
                        "styles": styles + [None] * (len(entries) - len(styles)),
                        "cache": cache_name(self.gs, f"{ws}:{gs_name}", cache),
                        "enabled": g.get("enabled", True), "advertised": g.get("advertised", True),
-                       "queryDisabled": g.get("queryDisabled", False),
+                       "queryDisabled": g.get("queryDisabled", False), "groupStyles": live_group_styles(g),
                        **details.live_resource(g, links), **details.live_layer(g, like_layer)}
             changed = diff([(k, current[k], v) for k, v in wanted])
             if changed:
                 self.add("~", "group", f"{ws}:{gs_name}", changed, run=run)
+
+    def group_style(self, spec: dict) -> dict:
+        """One of a group's named styles, as compared: its own members, each in a style (or its default)."""
+        entries = [(entry if isinstance(entry, str) else entry["layer"], None if isinstance(entry, str) else entry.get("style"))
+                   for entry in spec["layers"]]
+        entries = [(self.published(member), style) for member, style in entries if member not in self.unpublished]
+        return {"name": spec["name"], "title": spec.get("title", ""), "abstract": spec.get("abstract", ""),
+                **{k: {str(a): str(b) for a, b in spec.get(k, {}).items()} for k in details.TRANSLATED},
+                "layers": [list(p) for p, _ in entries], "styles": [self.style_ref(s) for _, s in entries]}
 
     def group_order(self) -> list[str]:
         """Groups after the groups they hold (validate rules out loops)."""
@@ -792,7 +829,7 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
         blocked = any(c.action == "!" for c in changes)
         todo = [c for c in changes if c.run is not None]
         if not apply:
-            # 1 is kept for errors; 3 says only layers waiting for your own tables are left
+            # 1 is kept for errors; 3 says only "!" lines are left: layers waiting for your own tables, settings GeoServer Cloud can't take
             return 2 if todo else (3 if blocked else 0)
         if todo:
             print("\nApplying:")
@@ -809,7 +846,8 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
             print(f"\nApplied {len(todo)} change(s).")
         if blocked:
             # Not a failure: the tables are yours to load, often after the deploy. plan exits 3 for them.
-            print("Left for later: the layers marked ! wait for tables you load yourself; apply again once they exist.")
+            print("Left out: the lines marked ! (layers waiting for tables you load yourself: apply again once they exist; "
+                  "settings GeoServer Cloud can't take)")
         return 0
     finally:
         conn.close()

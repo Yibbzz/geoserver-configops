@@ -6,6 +6,8 @@ from configops import import_config
 
 
 class FakeGeoServer:
+    cloud = True  # a fresh GeoServer Cloud: CORS, CSP and the disk quota aren't read
+
     def __init__(self, objects, rest_file="/**;GET,HEAD=ADMIN\n/**;POST,DELETE,PUT=ADMIN\n"):
         self.objects, self.rest_file = objects, rest_file
 

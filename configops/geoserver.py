@@ -464,9 +464,11 @@ class GeoServer:
 
     @property
     def cloud(self) -> bool:
-        """Whether this is GeoServer Cloud (its version ends in -CLOUD) rather than standard GeoServer; read once."""
+        """Whether this is GeoServer Cloud (its version ends in -CLOUD) rather than standard GeoServer; read once.
+        A server that won't say (security rules can refuse /rest/about) counts as standard GeoServer."""
         if getattr(self, "_cloud", None) is None:
-            about = (self.get("about/version") or {}).get("about") or {}
+            r = self.request("GET", "about/version.json", ok=(200, 401, 403, 404))
+            about = (r.json() if r.status_code == 200 else {}).get("about") or {}
             resources = about.get("resource") or []
             version = next((r.get("Version", "") for r in (resources if isinstance(resources, list) else [resources])
                             if isinstance(r, dict) and r.get("@name") == "GeoServer"), "")

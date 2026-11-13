@@ -42,11 +42,13 @@ TYPES = {
     "csv": ("data", "CSV"),
     "appschema": ("data", "Application Schema DataAccess"),  # needs values-app-schema.yaml
     "sqlserver": ("data", "Microsoft SQL Server"),
+    "oracle": ("data", "Oracle NG"),  # standard GeoServer with its oracle extension (standard.CLOUD_STORE_TYPES)
 }
 DATA = "/data"  # where values-data-volume.yaml mounts the shared volume
 FILE_PARAMS = {"geopackage": "database", "shapefile": "url", "shapefiles": "url", "flatgeobuf": "url", "pmtiles": "pmtiles",
                "geoparquet": "uri", "property": "directory", "csv": "file", "appschema": "url"}
-DBTYPES = {"postgis": "postgis", "geopackage": "geopkg", "geoparquet": "geoparquet", "appschema": "app-schema", "sqlserver": "sqlserver"}
+DBTYPES = {"postgis": "postgis", "geopackage": "geopkg", "geoparquet": "geoparquet", "appschema": "app-schema", "sqlserver": "sqlserver",
+           "oracle": "oracle"}
 FAMILIES = {
     "coverage": {"stores": "coveragestores", "key": "coverageStore", "items": "coverages", "item": "coverage",
                  "native": "nativeCoverageName", "list": "all"},
@@ -59,7 +61,7 @@ FAMILIES = {
 }
 COG_READERS = {"http": "HTTP", "https": "HTTP", "s3": "S3", "gs": "GS", "az": "AZURE", "azure": "AZURE"}
 WFS = "WFSDataStoreFactory:"
-SECRET_PARAMS = {"postgis": ("user", "passwd"), "sqlserver": ("user", "passwd"), "wfs": (f"{WFS}USERNAME", f"{WFS}PASSWORD")}
+SECRET_PARAMS = {"postgis": ("user", "passwd"), "sqlserver": ("user", "passwd"), "oracle": ("user", "passwd"), "wfs": (f"{WFS}USERNAME", f"{WFS}PASSWORD")}
 
 
 def location(spec: dict) -> str:

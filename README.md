@@ -1,6 +1,6 @@
 # GeoServer ConfigOps
 
-![GeoServer Cloud coverage](https://img.shields.io/badge/GeoServer_Cloud-93%25-brightgreen) ![GeoServer coverage](https://img.shields.io/badge/GeoServer-92%25-brightgreen) Of the 664 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (46 more it can't set) and 617 on standard GeoServer (1 more it can't set) ([field by field](docs/geoserver-fields.yaml)).
+![GeoServer Cloud coverage](https://img.shields.io/badge/GeoServer_Cloud-93%25-brightgreen) ![GeoServer coverage](https://img.shields.io/badge/GeoServer-100%25-brightgreen) Of the 662 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (44 more it can't set) and 662 on standard GeoServer ([field by field](docs/geoserver-fields.yaml)).
 
 GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud): a Helm chart, plus `configops`, a small command that keeps your GIS data and what GeoServer publishes in YAML files:
 
@@ -9,7 +9,7 @@ GeoServer configuration and open GIS data as code, for [GeoServer Cloud](https:/
 - **publish them** as GeoServer layers, styles and layer groups, alongside other stores (Cloud-Optimised GeoTIFFs, GeoPackages and other files, cascaded WMS, WMTS and WFS, other PostGIS databases), SQL views and tile caching; set GeoServer's own settings and services (contact details, titles, limits), and its security (users, groups, roles, who may see and do what, the master password), with an OpenTofu-style `plan` and `apply`;
 - **catch drift and keep it:** an hourly check shows when GeoServer no longer matches the files, `apply` puts it back, and `import` brings a change made in the web UI back into the files instead.
 
-`configops` works with standard GeoServer too: point it at `https://<host>/geoserver` instead. It tells the two apart by the version GeoServer reports; the Helm chart is GeoServer Cloud's.
+`configops` works with standard GeoServer too: point it at `https://<host>/geoserver` instead. Standard GeoServer can also take a few settings GeoServer Cloud can't (below); when the files set one, configops asks GeoServer which it is (by the version it reports), and on GeoServer Cloud `plan` shows it as `!` with the reason and leaves it out. The Helm chart is GeoServer Cloud's.
 
 > **Status: early.** It runs end to end on k3s 1.37 with Helm 4, and on kind in CI; the same e2e tests run against GeoServer Cloud and against standard GeoServer 3.0.2 (the version GeoServer Cloud 3.0 is built on). Expect breaking changes. [docs/coverage.md](docs/coverage.md) goes through the web UI page by page; the figures above count every field of GeoServer's configuration, read from its source (`tests/geoserver_coverage.py`), and what one of them can't set counts against it.
 
@@ -247,15 +247,17 @@ spec: { regex: '^https://styles\.example\.org/.*$', description: Our published s
 
 ## What can't be done as code
 
-Most of GeoServer's web UI can be kept in the files: [docs/coverage.md](docs/coverage.md) goes page by page, and [docs/geoserver-fields.yaml](docs/geoserver-fields.yaml) field by field, with what isn't built yet. GeoServer Cloud has no way to set these at all:
+All of GeoServer's configuration can be kept in the files on standard GeoServer: [docs/coverage.md](docs/coverage.md) goes page by page, and [docs/geoserver-fields.yaml](docs/geoserver-fields.yaml) field by field. GeoServer Cloud has no way to set these, so they work only on standard GeoServer:
 
-| What | Why |
-| --- | --- |
-| Oracle stores | GeoServer Cloud's images don't ship Oracle's JDBC driver |
-| Tile cache disk quota | GeoServer Cloud switches it off and has no REST endpoint for it |
-| Content Security Policy | GeoServer Cloud's services don't send GeoServer's policy header; the web UI sends its own |
+| What | In the files | Why GeoServer Cloud can't |
+| --- | --- | --- |
+| Group styles | `LayerGroup` `styles` | Its catalog database doesn't keep their layers: the group breaks after a restart |
+| Oracle stores | `Store` `type: oracle` | Its images don't ship Oracle's JDBC driver |
+| Tile cache disk quota | `Settings` `global.diskQuota` | It switches the disk quota off and has no REST endpoint for it |
+| Content Security Policy | `Settings` `global.contentSecurityPolicy` | Its services don't send GeoServer's policy header; the web UI sends its own |
+| CORS | `Settings` `global.cors` | Its gateway answers CORS: set the gateway's instead (above) |
 
-Some settings take effect only when GeoServer's services restart, and `apply` says so: the tile caching defaults. A few live in the Helm chart rather than the project files: which services run, logging, WPS and GeoServer ACL.
+Some settings take effect only when GeoServer's services restart, and `apply` says so: the tile caching defaults, and on standard GeoServer CORS and the disk quota's store. A few live in the Helm chart rather than the project files: which services run, logging, WPS and GeoServer ACL.
 
 ## How it fits together
 

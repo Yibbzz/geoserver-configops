@@ -21,7 +21,7 @@ configops = "configops.cli:main"
 packages = ["configops", "configops.sources"]
 
 [tool.setuptools.package-data]
-configops = ["schema/*.json", "security_defaults.json"]
+configops = ["schema/*.json", "security_defaults.json", "csp_default.xml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

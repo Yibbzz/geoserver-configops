@@ -242,6 +242,12 @@ def check_groups(project: Project) -> list[Problem]:
             if member and member not in layers and member not in groups:
                 problems.append(Problem(group.file, group.line(("spec", "layers", i)),
                                         f"spec.layers[{i}]: no Layer or LayerGroup named {member!r}", group.label))
+        for s, style in enumerate(group.spec.get("styles") or []):
+            for i, entry in enumerate(style.get("layers") or [] if isinstance(style, dict) else []):
+                member = entry if isinstance(entry, str) else (entry or {}).get("layer")
+                if member and member not in layers and member not in groups:
+                    problems.append(Problem(group.file, group.line(("spec", "styles", s, "layers", i)),
+                                            f"spec.styles[{s}].layers[{i}]: no Layer or LayerGroup named {member!r}", group.label))
         root = group.spec.get("rootLayer")
         if (group.spec.get("mode") == "eo") != bool(root):
             problems.append(Problem(group.file, group.line(("spec",)), "spec.rootLayer: an eo group needs one, and only an eo group has one",
@@ -400,7 +406,7 @@ def check_stores(project: Project) -> list[Problem]:
             continue
         if kind == "pmtiles" and bool(s.spec.get("path")) == bool(s.spec.get("url")):
             problems.append(Problem(s.file, s.line(("spec",)), "a pmtiles store needs spec.path (on the data volume) or spec.url, not both", s.label))
-        if kind in ("postgis", "sqlserver"):
+        if kind in ("postgis", "sqlserver", "oracle"):
             missing = [k for k in ("host", "database") if k not in (s.spec.get("connection") or {})]
             if missing:
                 problems.append(Problem(s.file, s.line(("spec",)), f"spec.connection: a {kind} store needs {', '.join(missing)}", s.label))
