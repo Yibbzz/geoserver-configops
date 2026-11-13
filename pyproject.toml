@@ -3,10 +3,10 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "configops"
+name = "geoserver-configops"
 version = "0.1.0"
 description = "GeoServer ConfigOps: GeoServer configuration and open GIS data as code, with plan, apply and drift detection"
-readme = "docs/spec/datasets.md"
+readme = "README.md"
 license = { text = "BSD-2-Clause" }
 requires-python = ">=3.10"
 dependencies = ["pyyaml>=6", "jsonschema>=4.18", "requests>=2.28", "psycopg2-binary>=2.9"]

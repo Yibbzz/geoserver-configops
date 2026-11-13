@@ -6,7 +6,7 @@ back at the end.
 LDAP needs the directory tests/e2e/up.sh starts (E2E_LDAP_URL, as GeoServer reaches it); the
 JDBC test makes its tables in the e2e database (E2E_DB_HOST_IN_GEOSERVER, as GeoServer reaches it).
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_LDAP_URL=ldap://ldap:389 pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_LDAP_URL=ldap://ldap:389 pytest -m e2e
 """
 
 import os

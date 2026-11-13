@@ -1,16 +1,17 @@
 # The smallest real project: one dataset from data.gov.uk, published as one layer.
-# Loads in about a minute. See the README's quick start; examples/uk-basemap is the full example.
+# Loads in about a minute. See the README's quick start (compose.yaml starts a GeoServer and a
+# database for it); examples/uk-basemap is the full example.
 apiVersion: configops/v1alpha1
 kind: Project
 metadata:
   name: quickstart
 spec:
   geoserver:
-    url: http://geoserver-gsc-gateway:8080/geoserver-cloud
+    url: http://localhost:8080/geoserver
     credentials: { secret: geoserver-admin }       # GeoServer's admin login
   database:
-    jndi: java:comp/env/jdbc/mypostgis              # the chart's datasource
-    connection: { secret: geoserver-pgconfig-secret }
+    jndi: java:comp/env/jdbc/mypostgis              # how GeoServer reaches the database
+    connection: { secret: database }               # how configops reaches it
   workspace: quickstart
   crs: EPSG:27700
 ---

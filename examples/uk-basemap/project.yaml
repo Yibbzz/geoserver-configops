@@ -5,11 +5,11 @@ metadata:
   name: uk-basemap
 spec:
   geoserver:
-    url: http://geoserver-gsc-gateway:8080/geoserver-cloud
+    url: http://localhost:8080/geoserver
     credentials: { secret: geoserver-admin }
   database:
     jndi: java:comp/env/jdbc/mypostgis
-    connection: { secret: geoserver-pgconfig-secret }
+    connection: { secret: database }
     schemas: { live: data_layers, staging: staging, backup: backup }
   workspace: uk
   crs: EPSG:27700

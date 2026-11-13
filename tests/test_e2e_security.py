@@ -2,7 +2,7 @@
 
 Start it with tests/e2e/up.sh, then:
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 pytest -m e2e
 
 What the test makes is removed at the end, and the access rules put back as they were.
 Run it against a GeoServer of its own: the prune test removes every user, group and

@@ -1,10 +1,10 @@
 """An app-schema store (complex features) against the real GeoServer Cloud REST service: a mapping
 on the shared data volume from a PostGIS table to a feature type of our own schema, published,
 then import and a clean plan; with E2E_SERVICES_URL (the gateway), its features read through WFS.
-tests/e2e/up.sh switches the extension on, as values-app-schema.yaml does in the chart. The files go
+tests/e2e/up.sh switches the extension on. The files go
 on the data volume: E2E_DATA_DIR, or E2E_DATA_POD (see tests/conftest.py).
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data pytest -m e2e
 """
 
 import os

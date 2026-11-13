@@ -1,5 +1,5 @@
-# The real GeoServer Cloud REST service, wired the way the Helm chart wires it:
-# same images and tags, same pgconfig settings and the chart's rendered jndi.yml.
+# GeoServer Cloud (profile cloud): its gateway, REST, WMS, WFS, WCS and tile cache services on
+# one pgconfig catalog, kept in step through RabbitMQ, as its own Kubernetes deployments run them.
 # Or (profile standard) the official GeoServer of the version GeoServer Cloud is built on,
 # with the extensions GeoServer Cloud ships. Started by tests/e2e/up.sh [standard].
 name: gscloud-e2e
@@ -11,6 +11,31 @@ x-pgconfig: &pgconfig
   PGCONFIG_USERNAME: postgres
   PGCONFIG_PASSWORD: postgres
   PGCONFIG_INITIALIZE: "true"
+# What every GeoServer Cloud service shares: the catalog, the bus, the JNDI datasource and /data
+x-cloud: &cloud
+  profiles: [cloud]
+  mem_limit: 768m  # the heap is half of it (MaxRAMPercentage); without a limit each service sizes it from the whole machine
+  restart: on-failure  # as Kubernetes restarts a pod
+  depends_on: {db: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+  environment: &cloud-env
+    <<: *pgconfig
+    SPRING_PROFILES_ACTIVE: standalone,pgconfig
+    SPRING_CONFIG_ADDITIONAL_LOCATION: file:/etc/geoserver/jndi.yml
+    GEOSERVER_BASE_PATH: /geoserver-cloud
+    SPRING_RABBITMQ_HOST: rabbitmq
+    SPRING_RABBITMQ_PORT: "5672"
+    SPRING_RABBITMQ_USERNAME: user
+    SPRING_RABBITMQ_PASSWORD: guest
+    JAVA_OPTS: -DALLOW_ENV_PARAMETRIZATION=true -XX:MaxRAMPercentage=50
+    GEOSERVER_EXTENSION_APPSCHEMA_ENABLED: "true"
+    GEOTOOLS_HTTPCLIENT_PROXY_ENABLED: "false"  # the proxy HTTP client can't do without connection pooling
+    LOGGING_LEVEL_ORG_GEOSERVER_FILTERS: INFO  # request logging (Settings global.requestLogging) logs at INFO
+  volumes: ["./jndi.yml:/etc/geoserver/jndi.yml:ro", "./data:/data"]  # data: file stores' files, shared by every service
+  healthcheck:
+    test: ["CMD", "curl", "-fs", "http://localhost:8081/actuator/health/readiness"]
+    interval: 5s
+    retries: 60
+    start_period: 30s
 services:
   db:
     image: ${POSTGIS_IMAGE}
@@ -41,29 +66,39 @@ services:
       interval: 3s
       retries: 40
   rest:
-    profiles: [cloud]
+    <<: *cloud
     image: geoservercloud/geoserver-cloud-rest:${GEOSERVER_TAG}
-    depends_on: {db: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+    mem_limit: 1g  # it reads every store it makes (GeoParquet through DuckDB, outside the heap)
+    ports: ["${E2E_REST_PORT:-59093}:8080"]  # reached directly, without the gateway
+  wms:
+    <<: *cloud
+    image: geoservercloud/geoserver-cloud-wms:${GEOSERVER_TAG}
+    mem_limit: 1536m  # draws the raster tests' maps and tiles (a reprojected Sentinel-2 image)
+  wfs:
+    <<: *cloud
+    image: geoservercloud/geoserver-cloud-wfs:${GEOSERVER_TAG}
+  wcs:
+    <<: *cloud
+    image: geoservercloud/geoserver-cloud-wcs:${GEOSERVER_TAG}
+  gwc:
+    <<: *cloud
+    image: geoservercloud/geoserver-cloud-gwc:${GEOSERVER_TAG}
+    mem_limit: 1536m  # draws the raster tests' maps and tiles (a reprojected Sentinel-2 image)
+  gateway:
+    <<: *cloud
+    image: geoservercloud/geoserver-cloud-gateway:${GEOSERVER_TAG}
+    depends_on: {rest: {condition: service_healthy}, wms: {condition: service_healthy}, wfs: {condition: service_healthy},
+                 wcs: {condition: service_healthy}, gwc: {condition: service_healthy}}
     environment:
-      <<: *pgconfig
-      SPRING_PROFILES_ACTIVE: standalone,pgconfig
-      SPRING_CONFIG_ADDITIONAL_LOCATION: file:/etc/geoserver/jndi.yml
-      GEOSERVER_BASE_PATH: /geoserver-cloud
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: "5672"
-      SPRING_RABBITMQ_USERNAME: user
-      SPRING_RABBITMQ_PASSWORD: guest
-      JAVA_OPTS: -DALLOW_ENV_PARAMETRIZATION=true -XX:MaxRAMPercentage=50
-      GEOSERVER_EXTENSION_APPSCHEMA_ENABLED: "true"  # as values-app-schema.yaml turns it on
-      GEOTOOLS_HTTPCLIENT_PROXY_ENABLED: "false"  # as the chart sets it: the proxy client can't do without connection pooling
-    # data: the shared data volume, as the chart mounts it; test_e2e_file_stores.py writes its files there
-    volumes: ["./jndi.yml:/etc/geoserver/jndi.yml:ro", "./data:/data"]
-    ports: ["${E2E_REST_PORT:-59090}:8080"]
-    healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8081/actuator/health/readiness"]
-      interval: 5s
-      retries: 60
-      start_period: 30s
+      <<: *cloud-env
+      TARGETS_REST: http://rest:8080
+      TARGETS_WMS: http://wms:8080
+      TARGETS_WFS: http://wfs:8080
+      TARGETS_WCS: http://wcs:8080
+      TARGETS_GWC: http://gwc:8080
+      TARGETS_WEBUI: http://webui:8080  # not started
+      TARGETS_WPS: http://wps:8080
+    ports: ["${E2E_GATEWAY_PORT:-59090}:8080"]
   # Standard GeoServer: the version GeoServer Cloud is built on, with the extensions GeoServer Cloud ships
   # (downloaded once into standard-libs/), the same JNDI PostGIS datasource and the shared data folder
   geoserver:

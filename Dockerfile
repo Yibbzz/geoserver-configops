@@ -1,4 +1,4 @@
-# configops: the nightly `configops sync` job (and the CLI, for one-off runs in the cluster).
+# configops: ghcr.io/yibbzz/geoserver-configops. docs/kubernetes.md runs it as Jobs and CronJobs.
 FROM python:3.14-slim
 
 # GDAL's command-line tools (ogr2ogr, ogrinfo) do the reading and loading
@@ -11,7 +11,7 @@ COPY pyproject.toml ./
 COPY configops/ configops/
 RUN pip install --no-cache-dir . && rm -rf /app
 
-# The Helm chart mounts the project files here and the Secrets under /etc/configops/secrets
+# The project files go here (docs/kubernetes/Dockerfile copies them in), the Secrets under /etc/configops/secrets
 WORKDIR /project
 ENV CONFIGOPS_SECRETS_DIR=/etc/configops/secrets
 USER 65534

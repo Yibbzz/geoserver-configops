@@ -1,0 +1,99 @@
+# configops in Kubernetes, beside a GeoServer you already run (docs/kubernetes.md explains it).
+# The image is configops with your project folder copied in (docs/kubernetes/Dockerfile); the
+# Secrets the project names are mounted under /etc/configops/secrets/<secret>/<key>.
+#
+#   apply:  kubectl apply -f configops.yaml   (to apply again: kubectl delete job configops-apply first)
+#   drift:  the configops-drift CronJob fails when GeoServer no longer matches the files
+#   sync:   the configops-sync CronJob loads new versions of your Datasets
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: configops-apply
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 604800  # a week
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext: { runAsNonRoot: true, runAsUser: 65534 }
+      containers:
+        - name: configops
+          image: registry.example.org/my-project-configops:1  # docs/kubernetes/Dockerfile
+          args: ["apply", "-C", "/project", "--wait", "900"]  # --wait: GeoServer may still be starting
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            - { name: work, mountPath: /tmp }  # downloads are unpacked here
+            - { name: geoserver-admin, mountPath: /etc/configops/secrets/geoserver-admin, readOnly: true }
+            - { name: database, mountPath: /etc/configops/secrets/database, readOnly: true }
+      volumes:
+        - { name: work, emptyDir: {} }
+        # one volume per Secret the project names (credentials: { secret: ... })
+        - { name: geoserver-admin, secret: { secretName: geoserver-admin } }  # keys username, password
+        - { name: database, secret: { secretName: database } }  # keys host, port, database, username, password
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: configops-drift
+spec:
+  schedule: "30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext: { runAsNonRoot: true, runAsUser: 65534 }
+          containers:
+            - name: configops
+              image: registry.example.org/my-project-configops:1
+              # plan exits 2 on drift and 1 when it can't run; 3 (only ! lines) isn't drift
+              command: ["sh", "-c", "configops plan -C /project; rc=$?; [ $rc -eq 3 ] && exit 0; exit $rc"]
+              resources:
+                requests: { cpu: 250m, memory: 512Mi }
+                limits: { memory: 2Gi }
+              volumeMounts:
+                - { name: work, mountPath: /tmp }
+                - { name: geoserver-admin, mountPath: /etc/configops/secrets/geoserver-admin, readOnly: true }
+                - { name: database, mountPath: /etc/configops/secrets/database, readOnly: true }
+          volumes:
+            - { name: work, emptyDir: {} }
+            - { name: geoserver-admin, secret: { secretName: geoserver-admin } }
+            - { name: database, secret: { secretName: database } }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: configops-sync
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid  # never two loads at once
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0  # a failed dataset is retried by the next run
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext: { runAsNonRoot: true, runAsUser: 65534 }
+          containers:
+            - name: configops
+              image: registry.example.org/my-project-configops:1
+              args: ["sync", "-C", "/project"]
+              resources:
+                requests: { cpu: 250m, memory: 512Mi }
+                limits: { memory: 2Gi }
+              volumeMounts:
+                - { name: work, mountPath: /tmp }
+                - { name: geoserver-admin, mountPath: /etc/configops/secrets/geoserver-admin, readOnly: true }
+                - { name: database, mountPath: /etc/configops/secrets/database, readOnly: true }
+          volumes:
+            - { name: work, emptyDir: {} }
+            - { name: geoserver-admin, secret: { secretName: geoserver-admin } }
+            - { name: database, secret: { secretName: database } }

@@ -2,8 +2,10 @@
 URLCheck allows and fetches one that is allowed; the global switch turns the checks off; with
 request logging on, WMS writes each request (and its headers) to its log.
 
-Needs the whole chart, reached through its gateway (the kind test, or the dev cluster), and
-E2E_DATA_POD (<namespace>/<pod>) for the namespace whose WMS logs to read.
+Needs GeoServer's OGC services as well as REST (tests/e2e/up.sh starts them all), and the WMS service's log (E2E_WMS_CONTAINER, or E2E_DATA_POD on Kubernetes):
+
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_SERVICES_URL=http://localhost:59090/geoserver-cloud \\
+      E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data E2E_REST_CONTAINER=gscloud-e2e-rest-1 E2E_WMS_CONTAINER=gscloud-e2e-wms-1 pytest -m e2e
 """
 
 import os
@@ -144,12 +146,13 @@ def imported_global(folder) -> dict:
 
 
 def wms_log(since: str = "3m") -> str:
-    pod, container = os.environ.get("E2E_DATA_POD"), os.environ.get("E2E_REST_CONTAINER")
-    if not pod and container:  # one GeoServer in Docker: its log is the container's
+    pod = os.environ.get("E2E_DATA_POD")
+    container = os.environ.get("E2E_WMS_CONTAINER") or os.environ.get("E2E_REST_CONTAINER")  # standard GeoServer: one container
+    if not pod and container:  # GeoServer in Docker: the log is the container's
         run = subprocess.run(["docker", "logs", f"--since={since}", container], capture_output=True, text=True, check=True)
         return run.stdout + run.stderr
     if not pod:
-        pytest.skip("E2E_DATA_POD or E2E_REST_CONTAINER not set: no WMS log to read")
+        pytest.skip("E2E_DATA_POD, E2E_WMS_CONTAINER or E2E_REST_CONTAINER not set: no WMS log to read")
     namespace = pod.split("/")[0]
     return subprocess.run(["kubectl", "-n", namespace, "logs", "-l", "app.kubernetes.io/component=wms", f"--since={since}",
                            "--tail=-1"], capture_output=True, text=True, check=True).stdout

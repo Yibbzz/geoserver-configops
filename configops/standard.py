@@ -23,7 +23,7 @@ from .geoserver import GeoServerError
 # (kind, path in the spec, why GeoServer Cloud can't set it)
 CLOUD_CANT = [
     ("LayerGroup", ("styles",), "its catalog database doesn't keep a group style's layers, and the group breaks after a restart"),
-    ("Settings", ("global", "cors"), "its gateway answers CORS requests: set the chart's gateway CORS instead (README)"),
+    ("Settings", ("global", "cors"), "its gateway answers CORS requests: set the gateway's CORS instead (README)"),
     ("Settings", ("global", "contentSecurityPolicy"), "its services don't send the header"),
     ("Settings", ("global", "diskQuota"), "it turns GeoWebCache's disk quota off"),
 ]

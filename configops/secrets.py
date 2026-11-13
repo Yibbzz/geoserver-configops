@@ -7,8 +7,8 @@ project:
     os-api:
       apiKey: ...
 
-In Kubernetes, each Secret is mounted as a folder of files (the Helm chart
-does this): $CONFIGOPS_SECRETS_DIR/<secret>/<key>. The environment still wins,
+In Kubernetes, each Secret is mounted as a folder of files
+(docs/kubernetes.md): $CONFIGOPS_SECRETS_DIR/<secret>/<key>. The environment still wins,
 so a value can be overridden.
 """
 

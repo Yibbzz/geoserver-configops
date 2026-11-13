@@ -2,7 +2,7 @@
 
 Start it with tests/e2e/up.sh, then:
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 pytest -m e2e
 
 The project's workspace (configops_apply) and tables are removed at the end.
 """
@@ -231,9 +231,8 @@ def test_status(project, capsys):
 def test_import_round_trip(project, tmp_path, monkeypatch, capsys):
     """Import the workspace apply made: the files it writes need no changes."""
     for key, value in {"GEOSERVER_ADMIN_USERNAME": "admin", "GEOSERVER_ADMIN_PASSWORD": PASSWORD,
-                       "GEOSERVER_PGCONFIG_SECRET_HOST": DB["host"], "GEOSERVER_PGCONFIG_SECRET_PORT": str(DB["port"]),
-                       "GEOSERVER_PGCONFIG_SECRET_DATABASE": DB["dbname"], "GEOSERVER_PGCONFIG_SECRET_USERNAME": DB["user"],
-                       "GEOSERVER_PGCONFIG_SECRET_PASSWORD": DB["password"]}.items():
+                       "DATABASE_HOST": DB["host"], "DATABASE_PORT": str(DB["port"]), "DATABASE_DATABASE": DB["dbname"],
+                       "DATABASE_USERNAME": DB["user"], "DATABASE_PASSWORD": DB["password"]}.items():
         monkeypatch.setenv(f"CONFIGOPS_{key}", value)
     target = tmp_path / "imported"
     code, out = configops(capsys, "import", WS, "-C", str(target), "--geoserver", URL.removesuffix("/rest"))

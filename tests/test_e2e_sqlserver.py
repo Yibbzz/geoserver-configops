@@ -4,7 +4,7 @@ wants 2 GB); start one on the e2e network with a table, then point the test at i
     docker run -d --name mssql --network gscloud-e2e_default -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=... \\
       mcr.microsoft.com/mssql/server:2022-latest
     # CREATE DATABASE gis; CREATE TABLE dbo.sites (id int IDENTITY PRIMARY KEY, name nvarchar(50), geom geometry)
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_SQLSERVER_HOST=mssql E2E_SQLSERVER_PASSWORD=... pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_SQLSERVER_HOST=mssql E2E_SQLSERVER_PASSWORD=... pytest -m e2e
 """
 
 import os

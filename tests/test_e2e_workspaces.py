@@ -2,7 +2,7 @@
 GeoServer Cloud REST service; then import back to a clean plan. (The default workspace is left
 alone: it's global, and other tests rely on it.)
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 pytest -m e2e
 """
 
 import os
