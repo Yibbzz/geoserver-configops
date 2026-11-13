@@ -2,7 +2,7 @@
 
 import copy
 
-from configops import ingest
+from configops.database import Database
 from configops.loader import load
 from configops.plan import Planner, ordered
 from configops.validate import validate
@@ -118,7 +118,7 @@ class FakeGeoServer:
 
 def plan(tmp_path, gs, extra=STORES):
     (tmp_path / "project.yaml").write_text(PROJECT + "---\n" + extra)
-    return ordered(Planner(load(tmp_path), tmp_path, gs, None, ingest.Database("h", 5432, "d", "u", "p")).plan())
+    return ordered(Planner(load(tmp_path), tmp_path, gs, None, Database("h", 5432, "d", "u", "p")).plan())
 
 
 def lines(changes):

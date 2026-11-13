@@ -1,6 +1,6 @@
-# Rasters: OS Terrain 50 (heights of Great Britain on a 50 m grid) made into one
-# Cloud-Optimised GeoTIFF in GeoServer's /data folder, and published with a colour ramp.
-# configops writes the file, so it needs the same folder: run it where /data is GeoServer's (CONFIGOPS_DATA_DIR).
+# Rasters: OS Terrain 50 (heights of Great Britain on a 50 m grid), one Cloud-Optimised GeoTIFF
+# in GeoServer's /data folder, published with a colour ramp. geodata-sync's examples/terrain
+# makes the file from the OS download and keeps it up to date.
 apiVersion: configops/v1alpha1
 kind: Project
 metadata:
@@ -9,33 +9,8 @@ spec:
   geoserver:
     url: http://localhost:8080/geoserver
     credentials: { secret: geoserver-admin }
-  database:                                    # the ingest log lives here
-    jndi: java:comp/env/jdbc/mypostgis
-    connection: { secret: database }
   workspace: terrain
   crs: EPSG:27700
-  backups: 1
----
-apiVersion: configops/v1alpha1
-kind: Source
-metadata:
-  name: os
-spec:
-  type: os-downloads
----
-# The ASCII Grid download: about 2,800 tiles in zips inside a zip, mosaicked into one file
-apiVersion: configops/v1alpha1
-kind: Dataset
-metadata:
-  name: terrain-50
-spec:
-  source: os
-  product: Terrain50
-  update: monthly
-  raster:
-    path: rasters/os-terrain-50.tif
-    crs: EPSG:27700                            # the grids carry no CRS of their own
-    nodata: -9999                              # where no tile covers: the sea around the coast
 ---
 apiVersion: configops/v1alpha1
 kind: Store
@@ -43,7 +18,7 @@ metadata:
   name: terrain-50
 spec:
   type: geotiff
-  dataset: terrain-50                          # the Dataset's file
+  path: rasters/os-terrain-50.tif              # under /data: geodata-sync's examples/terrain makes it
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -52,5 +27,6 @@ metadata:
 spec:
   store: terrain-50
   title: Heights of Great Britain (OS Terrain 50)
+  attribution: Contains OS data © Crown copyright and database right 2026   # OS OpenData's licence asks for it
   style: elevation
   cache: true

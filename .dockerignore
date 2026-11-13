@@ -1,5 +1,6 @@
-# Only pyproject.toml and configops/ go into the image
+# Only what the package needs goes into the image
 *
 !pyproject.toml
+!README.md
 !configops/
 **/__pycache__

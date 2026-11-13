@@ -2,7 +2,8 @@
 
 import copy
 
-from configops import ingest, server
+from configops import server
+from configops.database import Database
 from configops.loader import load
 from configops.plan import Planner, ordered
 
@@ -82,7 +83,7 @@ class FakeGeoServer:
 
 def plan(tmp_path, gs, extra=SERVER):
     (tmp_path / "project.yaml").write_text(PROJECT + "---\n" + extra)
-    return ordered(Planner(load(tmp_path), tmp_path, gs, None, ingest.Database("h", 5432, "d", "u", "p")).plan())
+    return ordered(Planner(load(tmp_path), tmp_path, gs, None, Database("h", 5432, "d", "u", "p")).plan())
 
 
 def test_only_the_fields_the_files_set_are_compared(tmp_path):

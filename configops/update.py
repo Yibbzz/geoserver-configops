@@ -30,9 +30,9 @@ from .validate import geoserver_name
 
 WHEN_MISSING = ("attributes",)  # kept only when import couldn't read them (without the project's database)
 KEPT_FROM_FILES = {  # fields import can't read back, kept as the files have them
-    "Layer": ("attributes", "dataset", "table"),
+    "Layer": ("attributes", "table"),
     "User": ("password",),
-    "Store": ("credentials", "dataset"),
+    "Store": ("credentials",),
     "BlobStore": ("credentials",),
 }
 DEFAULTS = {  # what import leaves out; a file that spells them out means the same

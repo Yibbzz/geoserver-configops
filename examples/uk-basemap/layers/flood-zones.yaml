@@ -1,0 +1,8 @@
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata:
+  name: flood-zones
+spec:
+  table: flood_zones                 # loaded by geodata-sync (examples/uk-basemap there)
+  title: Flood zones 2 and 3, rivers and sea (Environment Agency)
+  style: polygon

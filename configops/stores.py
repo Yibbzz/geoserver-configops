@@ -12,6 +12,8 @@ GeoServer keeps them encrypted, so they're set but never compared.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from urllib.parse import urlparse
 
 from . import keywords, secrets
@@ -45,6 +47,7 @@ TYPES = {
     "oracle": ("data", "Oracle NG"),  # standard GeoServer with its oracle extension (standard.CLOUD_STORE_TYPES)
 }
 DATA = "/data"  # the folder file stores read from, shared by every GeoServer service
+DATA_ENV = "CONFIGOPS_DATA_DIR"  # where that folder is where configops runs, if not /data
 FILE_PARAMS = {"geopackage": "database", "shapefile": "url", "shapefiles": "url", "flatgeobuf": "url", "pmtiles": "pmtiles",
                "geoparquet": "uri", "property": "directory", "csv": "file", "appschema": "url"}
 DBTYPES = {"postgis": "postgis", "geopackage": "geopkg", "geoparquet": "geoparquet", "appschema": "app-schema", "sqlserver": "sqlserver",
@@ -186,15 +189,10 @@ def plan(planner) -> None:
     """Stores, then the layers published from them."""
     gs, add = planner.gs, planner.add
     stores = planner.files.named("Store")
-    datasets = planner.files.named("Dataset")
     for store in stores.values():
         ws = planner.workspace_of(store)
         path, collection = store_path(ws, store)
         spec = dict(store.spec)
-        if spec.get("dataset"):  # a raster Dataset's file: loaded first if it never has been
-            dataset = datasets[spec["dataset"]]
-            spec["path"] = dataset.spec["raster"]["path"]
-            first_raster(planner, dataset)
         body, wanted = wanted_store(store, planner.root, spec)
         body["workspace"] = {"name": ws}  # coverage stores won't be made without it
         key = family(store)["key"]
@@ -222,23 +220,9 @@ def plan(planner) -> None:
 def schema_cache(path: str) -> None:
     """App-schema downloads the schemas a mapping names into an app-schema-cache folder beside it, if there is one:
     GeoServer Cloud has no data directory for its own. Made when the data volume is mounted here."""
-    from .raster import data_root
-
-    folder = data_root() / path
+    folder = Path(os.environ.get(DATA_ENV, DATA)) / path
     if folder.parent.is_dir():
         (folder.parent / "app-schema-cache").mkdir(exist_ok=True)
-
-
-def first_raster(planner, dataset: Resource) -> None:
-    """A raster Dataset that has never loaded is loaded before the store on its file is made."""
-    from . import ingest
-
-    path = dataset.spec["raster"]["path"]
-    last = ingest.last_load(planner.conn, dataset.name) if planner.conn is not None else None
-    if (last is None or last.tables != [path]) and dataset.name not in planner.synced:
-        planner.synced.add(dataset.name)
-        planner.add("+", "raster", f"{DATA}/{path}", note=f"first sync of dataset {dataset.name}",
-                    run=lambda d=dataset.name: planner.first_sync(d))
 
 
 def available(gs, ws: str, store: Resource) -> list[str]:

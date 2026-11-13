@@ -1,4 +1,4 @@
-"""`configops plan` and `apply` against the real GeoServer Cloud REST service and its PostGIS.
+"""`configops plan`, `apply`, `refresh`, `status` and `import` against the real GeoServer and its PostGIS.
 
 Start it with tests/e2e/up.sh, then:
 
@@ -7,14 +7,8 @@ Start it with tests/e2e/up.sh, then:
 The project's workspace (configops_apply) and tables are removed at the end.
 """
 
-import functools
-import http.server
 import json
 import os
-import shutil
-import subprocess
-import threading
-import zipfile
 
 import psycopg2
 import pytest
@@ -27,8 +21,6 @@ pytestmark = pytest.mark.e2e
 URL = os.environ.get("E2E_GEOSERVER_URL")
 if not URL:
     pytest.skip("E2E_GEOSERVER_URL not set", allow_module_level=True)
-if shutil.which("ogr2ogr") is None:
-    pytest.skip("ogr2ogr not installed", allow_module_level=True)
 
 WS = "configops_apply"
 DB = dict(host=os.environ.get("E2E_DB_HOST", "localhost"), port=int(os.environ.get("E2E_DB_PORT", 55433)),
@@ -49,32 +41,12 @@ def sql(statement):
 
 
 @pytest.fixture(scope="module")
-def served(tmp_path_factory):
-    """A zipped GeoPackage with one polygon layer, `areas`, served over HTTP."""
-    root = tmp_path_factory.mktemp("www")
-    src = root / "areas.geojson"
-    src.write_text(json.dumps({"type": "FeatureCollection", "features": [
-        {"type": "Feature", "properties": {"name": "square"},
-         "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 10], [10, 10], [10, 0], [0, 0]]]}}]}))
-    subprocess.run(["ogr2ogr", "-f", "GPKG", str(root / "areas.gpkg"), str(src), "-nln", "areas", "-a_srs", "EPSG:27700"],
-                   check=True, capture_output=True)
-    with zipfile.ZipFile(root / "areas.zip", "w") as z:
-        z.write(root / "areas.gpkg", "areas.gpkg")
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
-    handler.log_message = lambda *a: None
-    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{httpd.server_address[1]}/areas.zip"
-    httpd.shutdown()
-
-
-@pytest.fixture(scope="module")
 def gs():
     return GeoServer(URL.removesuffix("/rest"), "admin", PASSWORD, gwc_url=os.environ.get("E2E_GWC_URL"))
 
 
 @pytest.fixture(scope="module")
-def project(tmp_path_factory, served, gs):
+def project(tmp_path_factory, gs):
     root = tmp_path_factory.mktemp("project")
     (root / "styles").mkdir()
     (root / "styles" / "areas.sld").write_text(SLD)
@@ -84,23 +56,13 @@ kind: Project
 metadata: {{ name: e2e }}
 spec:
   geoserver: {{ url: {URL.removesuffix("/rest")}, credentials: {{ secret: e2egs }} }}
-  database: {{ jndi: java:comp/env/jdbc/mypostgis, connection: {{ secret: e2edb }} }}
+  database: {{ jndi: java:comp/env/jdbc/mypostgis, connection: {{ secret: e2edb }}, schema: data_layers }}
   workspace: {WS}
----
-apiVersion: configops/v1alpha1
-kind: Source
-metadata: {{ name: web }}
-spec: {{ type: url }}
----
-apiVersion: configops/v1alpha1
-kind: Dataset
-metadata: {{ name: e2e-areas }}
-spec: {{ source: web, url: "{served}", tables: {{ areas: {{ name: e2e_areas }} }} }}
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
 metadata: {{ name: areas }}
-spec: {{ dataset: e2e-areas, table: areas, title: Areas, style: areas, attribution: Test data, cache: {{ gridsets: [EPSG:900913], seed: {{ zoom: [0, 3] }} }} }}
+spec: {{ table: e2e_areas, title: Areas, style: areas, attribution: Test data, cache: {{ gridsets: [EPSG:900913], seed: {{ zoom: [0, 3] }} }} }}
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -115,16 +77,13 @@ spec: {{ title: Everything, mode: named, layers: [areas, sites] }}
     sql("CREATE EXTENSION IF NOT EXISTS postgis; DROP SCHEMA IF EXISTS e2e_field CASCADE; CREATE SCHEMA e2e_field;"
         "CREATE TABLE e2e_field.sites (id serial PRIMARY KEY, geom geometry(Point, 27700));"
         "INSERT INTO e2e_field.sites (geom) VALUES (ST_SetSRID(ST_MakePoint(5, 5), 27700));"
-        "DROP TABLE IF EXISTS data_layers.e2e_areas")
+        "CREATE SCHEMA IF NOT EXISTS data_layers; DROP TABLE IF EXISTS data_layers.e2e_areas;"
+        "CREATE TABLE data_layers.e2e_areas (id serial PRIMARY KEY, name text, geom geometry(Polygon, 27700));"
+        "INSERT INTO data_layers.e2e_areas (name, geom) VALUES ('square', ST_MakeEnvelope(0, 0, 10, 10, 27700))")
     gs.delete_workspace(WS)
     yield root
     gs.delete_workspace(WS)
-    sql("DROP SCHEMA IF EXISTS e2e_field CASCADE; DROP TABLE IF EXISTS data_layers.e2e_areas;"
-        "DELETE FROM public.os_ingest_log WHERE dataset_id = 'e2e-areas';"
-        # the backups the forced sync left
-        "DO $$ DECLARE t text; BEGIN FOR t IN SELECT table_name FROM information_schema.tables "
-        "WHERE table_schema = 'backup' AND table_name LIKE 'e2e_areas_%' LOOP "
-        "EXECUTE format('DROP TABLE backup.%I', t); END LOOP; END $$")
+    sql("DROP SCHEMA IF EXISTS e2e_field CASCADE; DROP TABLE IF EXISTS data_layers.e2e_areas")
 
 
 @pytest.fixture(autouse=True)
@@ -146,11 +105,10 @@ def configops(capsys, *args):
 def test_apply_from_nothing_then_nothing_to_do(project, gs, capsys):
     code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 2, out
-    assert "+ table data_layers.e2e_areas" in out and f"+ group {WS}:everything" in out
+    assert f"+ layer {WS}:areas" in out and f"+ group {WS}:everything" in out
 
     code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0, out
-    assert "e2e-areas: loaded" in out
 
     code, out = configops(capsys, "plan", "-C", str(project))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files.")
@@ -168,19 +126,26 @@ def test_apply_from_nothing_then_nothing_to_do(project, gs, capsys):
     assert gs.tile_layer(f"{WS}:everything") is None
 
 
-def test_sync_refreshes_geoserver_after_a_load(project, capsys):
-    code, out = configops(capsys, "sync", "-C", str(project), "e2e-areas", "--force")
+def test_refresh_after_new_data(project, gs, tmp_path, capsys):
+    """New rows reach further: refresh works the bounds out again and clears (and seeds again) the cached tiles."""
+    sql("INSERT INTO data_layers.e2e_areas (name, geom) VALUES ('far', ST_MakeEnvelope(100, 100, 200, 200, 27700))")
+    (tmp_path / "loaded.txt").write_text("data_layers.e2e_areas\n")  # as geodata sync --loaded writes it
+    code, out = configops(capsys, "refresh", "-C", str(project), "--from", str(tmp_path / "loaded.txt"))
     assert code == 0, out
-    assert "GeoServer: bounds of 1 layer(s) worked out again, cached tiles of 1 layer(s) or group(s) cleared; seeding 1 again" in out
+    assert "bounds of 1 layer(s) worked out again, cached tiles of 1 layer(s) or group(s) cleared; seeding 1 again" in out
+    assert gs.featuretype(WS, "data_layers", "areas")["featureType"]["nativeBoundingBox"]["maxx"] == 200
+    code, out = configops(capsys, "refresh", "-C", str(project), "other.table")
+    assert (code, out.strip()) == (0, "Refreshed: nothing published on other.table")
+    assert configops(capsys, "plan", "-C", str(project))[0] == 0
 
 
 def test_tiles_are_seeded_again_after_a_load(project, gs, capsys):
-    """After the load clears the tiles, the seed the file asks for runs again; with the tile cache service, a tile is there."""
+    """After refresh clears the tiles, the seed the file asks for runs again; with the tile cache service, a tile is there."""
     import time
 
     import requests
 
-    assert configops(capsys, "sync", "-C", str(project), "e2e-areas", "--force")[0] == 0
+    assert configops(capsys, "refresh", "-C", str(project), "data_layers.e2e_areas")[0] == 0
     end = time.time() + 120
     while gs.gwc_request("GET", f"seed/{WS}:areas.json").json().get("long-array-array") and time.time() < end:
         time.sleep(2)
@@ -220,8 +185,6 @@ def test_status(project, capsys):
     code, out = configops(capsys, "status", "-C", str(project), "--format", "json")
     assert code == 0, out
     report = json.loads(out)
-    [dataset] = report["datasets"]
-    assert dataset["dataset"] == "e2e-areas" and dataset["version"] and dataset["tables"] == ["e2e_areas"]
     layers = {x["name"]: x for x in report["layers"]}
     assert layers[f"{WS}:areas"] == {"kind": "layer", "name": f"{WS}:areas", "published": True, "drifted": [],
                                      "cached": True, "problem": None}

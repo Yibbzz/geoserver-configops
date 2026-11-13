@@ -1,24 +1,8 @@
-"""`configops status` and `configops import` without a GeoServer: the pieces that decide what they show and write."""
-
-from datetime import datetime, timedelta
+"""`configops import` without a GeoServer: the pieces that decide what it writes."""
 
 import pytest
 
 from configops.importer import Importer, cache_setting, default_style, dump, resource_name
-from configops.schedule import next_check
-
-NOW = datetime(2026, 11, 10, 2, 0)
-
-
-@pytest.mark.parametrize("update, last, expected", [
-    ("manual", NOW, None),
-    ("daily", None, NOW),  # never checked: due now
-    ("weekly", NOW - timedelta(days=1), NOW - timedelta(days=1) + timedelta(days=7) - timedelta(hours=1)),
-    ("weekly", NOW - timedelta(days=8), NOW),
-    ("0 3 * * *", NOW - timedelta(minutes=30), datetime(2026, 11, 10, 3, 0)),
-])
-def test_next_check(update, last, expected):
-    assert next_check(update, last, NOW) == expected
 
 
 @pytest.mark.parametrize("gs_name, expected", [
@@ -88,11 +72,11 @@ class FakeGeoServer:
 
 
 def test_import_writes_only_what_differs_from_the_defaults():
-    imp = Importer(FakeGeoServer(), "uk", "uk", "data_layers", {"roads_road_link": ("roads", "road_link")})
+    imp = Importer(FakeGeoServer(), "uk", "uk", "data_layers")
     stores = imp.stores()
     [layer] = imp.layers(stores)
     assert layer == {"apiVersion": "configops/v1alpha1", "kind": "Layer", "metadata": {"name": "road-links"}, "spec": {
-        "dataset": "roads", "table": "road_link",  # the project's Dataset loads this table
+        "table": "roads_road_link",  # in the project's database schema: named alone
         "style": "roads", "styles": ["line"], "advertised": False, "attribution": "Contains OS data"}}
     [group] = imp.groups()
     assert group["spec"] == {"title": "Base", "mode": "opaque", "layers": [{"layer": "road-links", "style": "line"}]}
@@ -102,10 +86,10 @@ def test_import_writes_only_what_differs_from_the_defaults():
 
 
 def test_import_in_another_workspace_names_it_and_its_own_tables():
-    imp = Importer(FakeGeoServer(), "uk", "elsewhere", "data_layers", {})
+    imp = Importer(FakeGeoServer(), "uk", "elsewhere", "data_layers")
     [layer] = imp.layers(imp.stores())
     assert layer["spec"]["workspace"] == "uk"
-    assert layer["spec"]["table"] == {"schema": "data_layers", "name": "roads_road_link"}
+    assert layer["spec"]["table"] == "roads_road_link"  # the project's schema
 
 
 def test_dumped_files_are_yaml_documents():

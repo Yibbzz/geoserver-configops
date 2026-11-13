@@ -1,13 +1,8 @@
-# configops: ghcr.io/yibbzz/geoserver-configops. docs/kubernetes.md runs it as Jobs and CronJobs.
+# configops: ghcr.io/yibbzz/geoserver-configops. docs/kubernetes.md runs it as a Job and a CronJob.
 FROM python:3.14-slim
 
-# GDAL's command-line tools (ogr2ogr, ogrinfo) do the reading and loading
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gdal-bin \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 COPY configops/ configops/
 RUN pip install --no-cache-dir . && rm -rf /app
 
@@ -16,4 +11,4 @@ WORKDIR /project
 ENV CONFIGOPS_SECRETS_DIR=/etc/configops/secrets
 USER 65534
 ENTRYPOINT ["configops"]
-CMD ["sync", "-C", "/project"]
+CMD ["plan", "-C", "/project"]

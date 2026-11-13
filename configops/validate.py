@@ -18,12 +18,10 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import best_match
 
-from .loader import Problem, Project, Resource, default_table
+from .loader import Problem, Project, Resource
 
 BUILT_IN_STYLES = {"generic", "line", "point", "polygon", "raster"}
 STYLE_SUFFIXES = {".sld", ".mbstyle", ".css"}
-SOURCES_WITH_PRODUCTS = {"os-downloads", "ckan", "ogc-api-features", "wfs"}
-SOURCES_WITH_ADDRESSES = {"ckan", "ogc-api-features", "wfs"}  # need the Source's spec.url
 
 
 def schema() -> dict:
@@ -38,16 +36,14 @@ def validate(project: Project) -> list[Problem]:
     problems = list(project.problems)
     problems += check_schema(project)
     problems += check_project(project)
-    problems += check_references(project)
     problems += check_styles(project)
     problems += check_templates(project)
     problems += check_groups(project)
     problems += check_names(project)
-    problems += check_unused(project)
     problems += check_settings(project)
     problems += check_security(project)
     problems += check_stores(project)
-    problems += check_rasters(project)
+    problems += check_database(project)
     problems += check_workspaces_and_styles(project)
     problems += check_blob_stores(project)
     problems += check_auth(project)
@@ -119,7 +115,7 @@ def check_project(project: Project) -> list[Problem]:
     for extra in projects[1:]:
         problems.append(Problem(extra.file, extra.line(), "a second Project: every directory has exactly one", extra.label))
 
-    for kind in ("Project", "Source", "Dataset", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store", "Workspace", "Gridset", "BlobStore",
+    for kind in ("Project", "Layer", "LayerGroup", "Style", "Settings", "Service", "Role", "Group", "User", "AccessRule", "Store", "Workspace", "Gridset", "BlobStore",
                  "PasswordPolicy", "AuthFilter", "AuthProvider", "UserGroupService", "RoleService", "URLCheck",
                  "MasterPasswordProvider"):
         first: dict[str, Resource] = {}
@@ -129,49 +125,6 @@ def check_project(project: Project) -> list[Problem]:
                 problems.append(Problem(r.file, r.line(("metadata", "name")),
                                         f"{kind} name already used in {other.file.name}:{other.line()}", r.label))
             first.setdefault(r.name, r)
-    return problems
-
-
-def check_references(project: Project) -> list[Problem]:
-    problems = []
-    sources, datasets = project.named("Source"), project.named("Dataset")
-
-    for s in project.of_kind("Source"):
-        kind = s.spec.get("type")
-        if kind in SOURCES_WITH_ADDRESSES and not s.spec.get("url"):
-            problems.append(Problem(s.file, s.line(("spec",)), f"spec.url: a {kind} source needs its address, e.g. https://data.gov.uk", s.label))
-        if kind not in SOURCES_WITH_ADDRESSES and s.spec.get("url"):
-            problems.append(Problem(s.file, s.line(("spec", "url")), f"spec.url: not used by a {kind} source", s.label))
-
-    for d in project.of_kind("Dataset"):
-        source = sources.get(d.spec.get("source"))
-        if d.spec.get("source") and not source:
-            problems.append(Problem(d.file, d.line(("spec", "source")), f"spec.source: no Source named {d.spec['source']!r}{known(sources)}", d.label))
-        if not source:
-            continue
-        kind = source.spec.get("type")
-        if kind in SOURCES_WITH_PRODUCTS and not d.spec.get("product"):
-            problems.append(Problem(d.file, d.line(("spec",)), f"spec.product: required for a {kind} source", d.label))
-        if kind == "url" and not d.spec.get("url"):
-            problems.append(Problem(d.file, d.line(("spec",)), "spec.url: required for a url source", d.label))
-        if kind != "url" and d.spec.get("url"):
-            problems.append(Problem(d.file, d.line(("spec", "url")), f"spec.url: only used with a url source, not {kind}", d.label))
-        if kind != "ckan" and d.spec.get("resource"):
-            problems.append(Problem(d.file, d.line(("spec", "resource")), f"spec.resource: only used with a ckan source, not {kind}", d.label))
-
-    for layer in project.of_kind("Layer"):
-        name = layer.spec.get("dataset")
-        if not name:
-            continue
-        dataset = datasets.get(name)
-        if not dataset:
-            problems.append(Problem(layer.file, layer.line(("spec", "dataset")), f"spec.dataset: no Dataset named {name!r}{known(datasets)}", layer.label))
-            continue
-        tables = dataset.spec.get("tables")
-        table = layer.spec.get("table")
-        if tables and isinstance(table, str) and table not in tables:
-            problems.append(Problem(layer.file, layer.line(("spec", "table")),
-                                    f"spec.table: dataset {name} has no table {table!r} (its tables: {', '.join(tables)})", layer.label))
     return problems
 
 
@@ -287,29 +240,6 @@ def check_names(project: Project) -> list[Problem]:
                                     f"GeoServer name {key[0]}:{key[1]} is also used by {other.label} ({other.file.name}:{other.line()})", r.label))
         published.setdefault(key, r)
 
-    tables: dict[str, Resource] = {}
-    for d in project.of_kind("Dataset"):
-        for key, options in (d.spec.get("tables") or {}).items():
-            table = (options or {}).get("name") or default_table(d.name or "", key)
-            if table in tables and tables[table] is not d:
-                other = tables[table]
-                problems.append(Problem(d.file, d.line(("spec", "tables", key)),
-                                        f"spec.tables.{key}: table {table} is also loaded by {other.label}", d.label))
-            tables.setdefault(table, d)
-    return problems
-
-
-def check_unused(project: Project) -> list[Problem]:
-    """Warnings: things declared but never used."""
-    problems = []
-    used_sources = {d.spec.get("source") for d in project.of_kind("Dataset")}
-    for s in project.of_kind("Source"):
-        if s.name not in used_sources:
-            problems.append(Problem(s.file, s.line(), "no Dataset uses this source", s.label, "warning"))
-    published = {layer.spec.get("dataset") for layer in project.of_kind("Layer")} | {s.spec.get("dataset") for s in project.of_kind("Store")}
-    for d in project.of_kind("Dataset"):
-        if d.name not in published:
-            problems.append(Problem(d.file, d.line(), "loaded but no Layer publishes it", d.label, "warning"))
     return problems
 
 
@@ -388,22 +318,10 @@ def check_stores(project: Project) -> list[Problem]:
             problems.append(Problem(s.file, s.line(("spec",)), f"spec.url: a {kind} store needs its address", s.label))
         if kind in STORES_WITH_ADDRESSES and s.spec.get("path"):
             problems.append(Problem(s.file, s.line(("spec", "path")), f"spec.path: a {kind} store is read from spec.url", s.label))
-        if kind in STORES_WITH_PATHS and not s.spec.get("path") and not s.spec.get("dataset"):
+        if kind in STORES_WITH_PATHS and not s.spec.get("path"):
             problems.append(Problem(s.file, s.line(("spec",)), f"spec.path: a {kind} store needs its file's path on the data volume, e.g. rasters/surrey.tif", s.label))
         if kind in STORES_WITH_PATHS and s.spec.get("url"):
             problems.append(Problem(s.file, s.line(("spec", "url")), f"spec.url: a {kind} store reads a file on the data volume: use spec.path", s.label))
-        if s.spec.get("dataset"):
-            dataset = project.named("Dataset").get(s.spec["dataset"])
-            if dataset is None:
-                problems.append(Problem(s.file, s.line(("spec", "dataset")), f"spec.dataset: no Dataset named {s.spec['dataset']!r}{known(project.named('Dataset'))}", s.label))
-            elif "raster" not in dataset.spec:
-                problems.append(Problem(s.file, s.line(("spec", "dataset")), f"spec.dataset: {dataset.name} loads tables, not a raster: publish its tables with Layers", s.label))
-            if kind != "geotiff":
-                problems.append(Problem(s.file, s.line(("spec", "type")), "spec.type: a store on a raster Dataset is a geotiff", s.label))
-            for key in ("path", "url"):
-                if key in s.spec:
-                    problems.append(Problem(s.file, s.line(("spec", key)), f"spec.{key}: a store on a raster Dataset reads the Dataset's file", s.label))
-            continue
         if kind == "pmtiles" and bool(s.spec.get("path")) == bool(s.spec.get("url")):
             problems.append(Problem(s.file, s.line(("spec",)), "a pmtiles store needs spec.path (on the data volume) or spec.url, not both", s.label))
         if kind in ("postgis", "sqlserver", "oracle"):
@@ -423,30 +341,24 @@ def check_stores(project: Project) -> list[Problem]:
         elif stores[name].spec.get("type") == "appschema" and "resource" not in layer.spec:
             problems.append(Problem(layer.file, layer.line(("spec",)), "spec.resource: a layer on an appschema store names its feature type, "
                                     "e.g. Site (GeoServer can't list them)", layer.label))
-        for key in ("dataset", "table"):
-            if key in layer.spec:
-                problems.append(Problem(layer.file, layer.line(("spec", key)), f"spec.{key}: a layer on a store doesn't take a {key}", layer.label))
+        if "table" in layer.spec:
+            problems.append(Problem(layer.file, layer.line(("spec", "table")), "spec.table: a layer on a store doesn't take a table", layer.label))
     for layer in project.of_kind("Layer"):
         if "sql" in layer.spec:
-            for key in ("dataset", "table", "store"):
+            for key in ("table", "store"):
                 if key in layer.spec:
                     problems.append(Problem(layer.file, layer.line(("spec", key)), f"spec.{key}: a SQL view doesn't take a {key}", layer.label))
     return problems
 
 
-def check_rasters(project: Project) -> list[Problem]:
-    """A Dataset loads tables or a raster, not both; no two raster Datasets write one file."""
-    problems, paths = [], {}
-    for d in project.of_kind("Dataset"):
-        if "raster" not in d.spec:
-            continue
-        if "tables" in d.spec:
-            problems.append(Problem(d.file, d.line(("spec", "raster")), "spec.raster: a Dataset loads tables or a raster, not both", d.label))
-        path = d.spec["raster"].get("path")
-        if path in paths:
-            problems.append(Problem(d.file, d.line(("spec", "raster", "path")), f"spec.raster.path: {path} is also written by {paths[path].label}", d.label))
-        paths.setdefault(path, d)
-    return problems
+def check_database(project: Project) -> list[Problem]:
+    """Layers on tables and SQL views need the Project's database: GeoServer reaches it through its JNDI datasource."""
+    projects = project.of_kind("Project")
+    if not projects or projects[0].spec.get("database"):
+        return []
+    return [Problem(layer.file, layer.line(("spec", "table" if "table" in layer.spec else "sql")),
+                    "a layer on a table needs the Project's database (spec.database: jndi and connection)", layer.label)
+            for layer in project.of_kind("Layer") if "table" in layer.spec or "sql" in layer.spec]
 
 
 def check_workspaces_and_styles(project: Project) -> list[Problem]:

@@ -10,15 +10,15 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import date
 from pathlib import Path
 
 import yaml
 
 from . import assets, details, secrets, stores
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
-from .loader import default_table, load
-from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, SOURCE_ATTRIBUTION, PlanError, as_list, names_of
+from .database import DEFAULT_SCHEMA, database, schema_of
+from .loader import load
+from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, PlanError, as_list, names_of
 from .keywords import to_entries
 from .stores import DATA
 from .validate import BUILT_IN_STYLES
@@ -100,6 +100,10 @@ def attribute_entry(a: dict):
     return entry if len(entry) > 1 else name
 
 
+# The built-in gridsets' whole extent: bounds that say nothing
+WHOLE_GRIDSET = {"EPSG:4326": [-180.0, -90.0, 180.0, 90.0], "EPSG:900913": [-20037508.34, -20037508.34, 20037508.34, 20037508.34]}
+
+
 def cache_setting(tile_layer: dict | None, filters: dict | None = None):
     if not tile_layer or not tile_layer.get("enabled", True):
         return None
@@ -133,13 +137,11 @@ def resource(kind: str, name: str, spec: dict) -> dict:
 
 
 class Importer:
-    def __init__(self, gs: GeoServer, ws: str, project_ws: str | None, live_schema: str, dataset_tables: dict,
-                 attributions: dict | None = None, project_crs: str | None = None, full: bool = False, columns=None):
-        self.gs, self.ws, self.project_ws, self.live_schema = gs, ws, project_ws, live_schema
+    def __init__(self, gs: GeoServer, ws: str, project_ws: str | None, schema: str,
+                 project_crs: str | None = None, full: bool = False, columns=None):
+        self.gs, self.ws, self.project_ws, self.schema = gs, ws, project_ws, schema  # schema: the Project's database schema
         self.project_crs = project_crs  # a declared CRS that's the project's is left out when the native one is unknown
         self.full = full  # write a layer's style even when it's the default for its geometry (updating files that name it)
-        self.dataset_tables = dataset_tables  # table -> (dataset, key), from the project's Datasets
-        self.attributions = attributions or {}  # dataset -> the attribution its source gives by itself
         self.columns = columns  # (schema, table) -> the table's columns, less its key; None without the database
         self.notes: list[str] = []
         self.names: dict[str, str] = {}  # GeoServer name -> resource name, for group members
@@ -153,10 +155,27 @@ class Importer:
         tile_layer = self.gs.tile_layer(name)
         setting = cache_setting(tile_layer, self.gs.parameter_filters(name) if tile_layer else None)
         extras = self.gs.tile_layer_extras(name) if tile_layer else {}
+        levels = {}
+        for gridset, entry in (extras.get("levels") or {}).items():
+            if entry.get("bounds") == WHOLE_GRIDSET.get(gridset):
+                entry = {k: v for k, v in entry.items() if k != "bounds"}  # standard GeoServer spells out the whole gridset
+            if entry:
+                levels[gridset] = entry
+        extras = {k: v for k, v in {**extras, "levels": levels}.items() if v}
         if setting and extras:
             setting = {"gridsets": sorted(DEFAULT_GRIDSETS), "formats": sorted(DEFAULT_FORMATS)} if setting is True else setting
             setting.update(extras)
         return setting
+
+    def store_items(self, store: str) -> list[str]:
+        """What a store offers, by native name (a cascaded WMS lists the remote's layers)."""
+        from types import SimpleNamespace
+
+        r = self.store_resources[store]
+        try:
+            return stores.available(self.gs, self.ws, SimpleNamespace(spec=r["spec"], name=r["metadata"]["name"]))
+        except GeoServerError:  # GeoServer can't list some (app-schema): name the resource
+            return []
 
     def style(self, ref: str | None) -> str | None:
         """A live style reference as the files write it, or None if it can't be."""
@@ -312,11 +331,18 @@ class Importer:
         if view:
             defaults = {"envelope": "intersection", "resolution": "best", "resolutionIndex": -1, "fillMissingBands": False}
             spec["view"] = {k: v for k, v in view.items() if defaults.get(k, object()) != v}
-        else:
-            spec["resource"] = item.get("nativeCoverageName") or item.get("nativeName")
+        own = {}  # what import leaves out, which a file may still spell out
+        if not view:
+            native = item.get("nativeCoverageName") or item.get("nativeName")
+            if self.store_items(store) == [native]:
+                own["resource"] = native  # the store's only one needs no name
+            else:
+                spec["resource"] = native
         if item.get("title") and item["title"] != gs_name:
             spec["title"] = item["title"]
-        if item.get("abstract"):
+        if item.get("abstract") and self.store_resources[store]["spec"]["type"] in ("wms", "wmts"):
+            own["abstract"] = item["abstract"]  # a cascaded layer's is the remote server's, copied when it was made
+        elif item.get("abstract"):
             spec["abstract"] = item["abstract"]
         keywords = names_of((item.get("keywords") or {}).get("string"))
         if keywords and not (len(keywords) == 2 and "features" in keywords):  # GeoServer's own: features and the name
@@ -343,7 +369,10 @@ class Importer:
                       if v not in (None, "", [], {}, False) and not (k == "format" and v == "image/png")}
             if remote:
                 spec["remote"] = remote
-        return resource("Layer", name, spec)
+        doc = resource("Layer", name, spec)
+        if own and self.full:
+            doc[DEFAULTS_KEY] = own
+        return doc
 
     def layers(self, stores: dict[str, dict]) -> list[dict]:
         out = []
@@ -377,11 +406,7 @@ class Importer:
                 spec["name"] = explicit
             if self.ws != self.project_ws:
                 spec["workspace"] = self.ws
-            linked = self.dataset_tables.get(table) if schema == self.live_schema else None
-            if linked:
-                spec["dataset"], spec["table"] = linked
-            else:
-                spec["table"] = {"schema": schema, "name": table}
+            spec["table"] = table if schema == self.schema else {"schema": schema, "name": table}
             if ft.get("title") and ft["title"] != gs_name:
                 spec["title"] = ft["title"]
             if ft.get("abstract"):
@@ -400,7 +425,7 @@ class Importer:
                 if live is False:
                     spec[flag] = False
             title = (layer.get("attribution") or {}).get("title")
-            if title and title != self.attributions.get(linked[0] if linked else None):
+            if title:
                 spec["attribution"] = title
             cache = self.cache(f"{self.ws}:{gs_name}")
             if cache:
@@ -599,7 +624,8 @@ class Importer:
             spec["namespace"] = ns["uri"]
         if ((self.gs.get(f"workspaces/{self.ws}") or {}).get("workspace") or {}).get("isolated"):
             spec["isolated"] = True
-        if ((self.gs.get("workspaces/default") or {}).get("workspace") or {}).get("name") == self.ws:
+        if ((self.gs.get("workspaces/default") or {}).get("workspace") or {}).get("name") == self.ws \
+                and self.gs.names("workspaces", "workspace") != [self.ws]:  # GeoServer makes the first workspace the default itself
             spec["default"] = True
         if not spec:
             return []
@@ -674,7 +700,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
         except MissingCredentials as e:
             raise PlanError(str(e)) from None
         project_ws = project.spec.get("workspace")
-        live = ((project.spec.get("database") or {}).get("schemas") or {}).get("live", "data_layers")
+        schema = schema_of(project)
     else:
         if not geoserver_url:
             raise PlanError("no Project in this directory: give GeoServer's address with --geoserver")
@@ -685,22 +711,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             raise PlanError(f"GeoServer's login: set ${secrets.env_name(SECRET, 'username')} and "
                             f"${secrets.env_name(SECRET, 'password')}, or add them to secrets.yaml")
         gs = GeoServer(geoserver_url, user, password, gwc_url=os.environ.get("CONFIGOPS_GWC_URL"))
-        project_ws, live = ws, "data_layers"
-
-    dataset_tables, attributions = {}, {}
-    sources = existing.named("Source")
-    for name, d in existing.named("Dataset").items():
-        for key, options in (d.spec.get("tables") or {}).items():
-            dataset_tables[(options or {}).get("name") or default_table(name, key)] = (name, key)
-        source = sources.get(d.spec.get("source") or "")
-        text = SOURCE_ATTRIBUTION.get(source.spec.get("type")) if source else None
-        if text:
-            attributions[name] = text.format(year=date.today().year)
-    for layer in existing.of_kind("Layer"):  # a Dataset's tables that only its Layers name
-        dataset, key = layer.spec.get("dataset"), layer.spec.get("table")
-        if dataset in existing.named("Dataset") and isinstance(key, str):
-            options = (existing.named("Dataset")[dataset].spec.get("tables") or {}).get(key) or {}
-            dataset_tables.setdefault(options.get("name") or default_table(dataset, key), (dataset, key))
+        project_ws, schema = ws, DEFAULT_SCHEMA
 
     from .import_config import USERS_SECRET, security_resources, settings_resources
 
@@ -712,7 +723,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
         if ws:
             if gs.workspace(ws) is None:
                 raise PlanError(f"GeoServer has no workspace {ws}", code=1)
-            imp = Importer(gs, ws, project_ws, live, dataset_tables, attributions,
+            imp = Importer(gs, ws, project_ws, schema,
                            project_crs=project.spec.get("crs") if project else None, full=project is not None and not force,
                            columns=table_columns(project, target) if project else None)
             stores = imp.stores()
@@ -730,8 +741,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
                                            + imp.gridsets(layers + groups) + imp.blob_stores(layers + groups))
             for name, (suffix, text) in imp.styles.items():
                 files[target / "styles" / f"{name}{suffix}"] = text if text.endswith("\n") else text + "\n"
-            linked = sum(1 for r in layers if "dataset" in r["spec"])
-            report.append(f"{ws}.yaml: {len(imp.store_resources)} store(s), {len(layers)} layer(s) ({linked} on a Dataset's table), "
+            report.append(f"{ws}.yaml: {len(imp.store_resources)} store(s), {len(layers)} layer(s), "
                           f"{len(groups)} group(s); {len(imp.styles)} style(s) in styles/")
             notes += imp.notes
             asset_files, more = assets.download(gs, ws, {r["spec"].get("name") or r["metadata"]["name"].replace("-", "_"): r["metadata"]["name"]
@@ -772,13 +782,13 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
         found = [{k: v for k, v in r.items() if k != DEFAULTS_KEY} for r in found]
         files[path] = dump(found) if found else "# As a fresh GeoServer install has it\n"
     if project is None:
-        jndi = next((e["jndiReferenceName"] for e in stores.values() if e.get("jndiReferenceName")), "java:comp/env/jdbc/mypostgis")
+        jndi = next((e["jndiReferenceName"] for e in stores.values() if e.get("jndiReferenceName")), None)
         report.append("project.yaml")
-        files[target / "project.yaml"] = dump([resource("Project", resource_name(ws)[0], {
-            "geoserver": {"url": geoserver_url, "credentials": {"secret": SECRET}},
-            "database": {"jndi": jndi, "connection": {"secret": "database"}},
-            "workspace": ws,
-        })])
+        spec = {"geoserver": {"url": geoserver_url, "credentials": {"secret": SECRET}}}
+        if jndi:  # layers on tables through GeoServer's JNDI datasource: configops reads the same database
+            spec["database"] = {"jndi": jndi, "connection": {"secret": "database"}}
+        spec["workspace"] = ws
+        files[target / "project.yaml"] = dump([resource("Project", resource_name(ws)[0], spec)])
     clashes = [p for p in files if p.exists()]
     if clashes and not force:
         raise PlanError(f"{', '.join(str(p) for p in clashes)} already exist; --force replaces them")
@@ -809,8 +819,6 @@ def native_code(ft: dict) -> str | None:
 def table_columns(project, root: Path):
     """A lookup of a table's full attribute lists, with its key and without (a store may expose keys or not),
     or None if the database can't be reached."""
-    from .sync import database
-
     try:
         conn = database(project, root).connect()
     except Exception:  # import works without the database; it just can't tell narrowed attributes

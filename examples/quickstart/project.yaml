@@ -1,47 +1,71 @@
-# The smallest real project: one dataset from data.gov.uk, published as one layer.
-# Loads in about a minute. See the README's quick start (compose.yaml starts a GeoServer and a
-# database for it); examples/uk-basemap is the full example.
+# The quick start (README): one GeoServer, configured from this one file. Nothing to load:
+# the imagery is read where it is on the web. examples/compose.yaml starts a GeoServer for it.
 apiVersion: configops/v1alpha1
 kind: Project
-metadata:
-  name: quickstart
+metadata: { name: quickstart }
 spec:
   geoserver:
-    url: http://localhost:8080/geoserver
-    credentials: { secret: geoserver-admin }       # GeoServer's admin login
-  database:
-    jndi: java:comp/env/jdbc/mypostgis              # how GeoServer reaches the database
-    connection: { secret: database }               # how configops reaches it
-  workspace: quickstart
-  crs: EPSG:27700
+    url: http://localhost:8080/geoserver           # or https://<host>/geoserver-cloud
+    credentials: { secret: geoserver-admin }       # keys username, password: secrets.yaml, env or a Kubernetes Secret
+  workspace: demo
+---
+# Who runs this GeoServer, as its capabilities documents say
+apiVersion: configops/v1alpha1
+kind: Settings
+metadata: { name: global }
+spec:
+  contact: { contactPerson: Map Team, contactOrganization: Example Council, contactEmail: maps@example.org }
 ---
 apiVersion: configops/v1alpha1
-kind: Source
-metadata:
-  name: data-gov-uk
-spec:
-  type: ckan
-  url: https://data.gov.uk
+kind: Service
+metadata: { name: wms }
+spec: { title: Example Council maps, maxRenderingTime: 60 }
 ---
-# Surrey Heath conservation areas: `configops discover data-gov-uk conservation-areas125`
-# shows the package, its files and the layer inside.
+# A Sentinel-2 image, a Cloud-Optimised GeoTIFF read in place on AWS
 apiVersion: configops/v1alpha1
-kind: Dataset
-metadata:
-  name: conservation-areas
+kind: Store
+metadata: { name: sentinel-2 }
 spec:
-  source: data-gov-uk
-  product: conservation-areas125
-  update: monthly
-  tables:
-    conservation_areas: {}
+  type: cog
+  url: https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/30/U/XC/2025/8/S2C_30UXC_20250825_0_L2A/TCI.tif
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
-metadata:
-  name: conservation-areas
+metadata: { name: imagery }
+spec: { store: sentinel-2, title: Sentinel-2 true colour, style: imagery }   # styles/imagery.sld
+---
+# EOX's cloudless mosaic, cascaded from their WMS
+apiVersion: configops/v1alpha1
+kind: Store
+metadata: { name: eox }
+spec: { type: wms, url: "https://tiles.maps.eox.at/wms?service=WMS&request=GetCapabilities" }
+---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: cloudless }
+spec: { store: eox, resource: s2cloudless-2024, title: Sentinel-2 cloudless (EOX) }
+---
+# Both as one map, its tiles cached
+apiVersion: configops/v1alpha1
+kind: LayerGroup
+metadata: { name: basemap }
 spec:
-  dataset: conservation-areas
-  table: conservation_areas
-  title: Conservation areas (Surrey Heath)
-  style: polygon
+  title: Basemap
+  layers: [cloudless, imagery]                   # drawn bottom first
+  cache: true
+---
+# An editor, and what only editors may do
+apiVersion: configops/v1alpha1
+kind: Role
+metadata: { name: editor }                       # GeoServer role EDITOR
+spec: {}
+---
+apiVersion: configops/v1alpha1
+kind: User
+metadata: { name: alice }
+spec: { password: { secret: geoserver-users, key: alice }, roles: [EDITOR] }
+---
+apiVersion: configops/v1alpha1
+kind: AccessRule
+metadata: { name: demo-write }
+spec: { layer: { workspace: demo, layer: "*", access: write }, roles: [EDITOR] }

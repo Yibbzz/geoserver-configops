@@ -16,19 +16,18 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date
 from pathlib import Path
 
 import psycopg2
 
-from . import assets, auth, keywords, details, discover, ingest, remote, security, server, standard, stores, sync, tiles, urlchecks
+from . import assets, auth, keywords, details, security, server, standard, stores, tiles, urlchecks
+from .database import Database, DatabaseError, database, tables_exist
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
-from .loader import Project, Resource, default_table, load
-from .sources import SourceError
+from .loader import Project, Resource, load
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "settings", "service", "security", "security settings", "url check", "role", "user group", "user", "raster", "store", "file", "style", "blobstore", "gridset", "table", "layer", "template", "group", "rule"]
+ORDER = ["workspace", "settings", "service", "security", "security settings", "url check", "role", "user group", "user", "store", "file", "style", "blobstore", "gridset", "layer", "template", "group", "rule"]
 DELETE_ORDER = ["url check", "rule", "user", "user group", "role", "group", "template", "layer", "style", "file", "store"]
 
 # Every kind of store a workspace can hold: (REST collection, JSON key)
@@ -37,10 +36,6 @@ STORE_COLLECTIONS = [("datastores", "dataStore"), ("coveragestores", "coverageSt
 # `cache: true`: what GeoServer itself would cache
 DEFAULT_GRIDSETS = ["EPSG:4326", "EPSG:900913"]
 DEFAULT_FORMATS = ["image/png"]
-
-# Attribution a source's licence asks for, when a layer's file gives none
-SOURCE_ATTRIBUTION = {"os-downloads": "Contains OS data © Crown copyright and database right {year}"}
-
 
 @dataclass
 class Change:
@@ -304,17 +299,15 @@ def diff(pairs: list[tuple[str, object, object]]) -> list[tuple[str, object, obj
 
 
 class Planner:
-    def __init__(self, files: Project, root: Path, gs: GeoServer, conn, db: ingest.Database, prune: bool = False):
+    def __init__(self, files: Project, root: Path, gs: GeoServer, conn, db: Database | None, prune: bool = False):
         self.files, self.root, self.gs, self.conn, self.db, self.prune = files, root, gs, conn, db, prune
         self.project = files.of_kind("Project")[0]
         self.ws = self.project.spec["workspace"]
-        self.jndi = self.project.spec["database"]["jndi"]
-        self.datasets = files.named("Dataset")
+        self.jndi = (self.project.spec.get("database") or {}).get("jndi")
         self.layers = files.named("Layer")
         self.groups = files.named("LayerGroup")
         self.styles = self.style_files()
         self.changes: list[Change] = []
-        self.synced: set[str] = set()
         self.unpublished: set[str] = set()  # layers and groups that can't be published yet ("!")
         standard.leave_out_on_cloud(self)  # what only standard GeoServer can set: "!" on GeoServer Cloud
 
@@ -342,26 +335,20 @@ class Planner:
         ws = self.styles[name][1]
         return f"{ws}:{name}" if ws else name  # a global style is named without a workspace
 
-    def table_of(self, layer: Resource) -> tuple[str, str, str | None]:
-        """(schema, table, dataset) a layer publishes; a SQL view is named after the layer."""
+    def table_of(self, layer: Resource) -> tuple[str, str]:
+        """(schema, table) a layer publishes; a SQL view is named after the layer. A table given by name
+        alone is in the Project's database schema."""
         if "sql" in layer.spec:
-            return layer.spec["sql"]["schema"], geoserver_name(layer), None
+            return layer.spec["sql"]["schema"], geoserver_name(layer)
         table = layer.spec["table"]
         if isinstance(table, dict):
-            return table["schema"], table["name"], None
-        dataset = self.datasets[layer.spec["dataset"]]
-        options = (dataset.spec.get("tables") or {}).get(table) or {}
-        return self.db.live, options.get("name") or default_table(dataset.name, table), dataset.name
+            return table["schema"], table["name"]
+        return self.db.schema, table
 
     def attribution(self, layer: Resource) -> str | None:
-        """The layer's own attribution, else what its dataset's source asks for."""
-        if "attribution" in layer.spec:
-            text = layer.spec["attribution"]
-            return None if isinstance(text, dict) else text  # an attribution with a link or logo: details.py
-        dataset = self.datasets.get(layer.spec.get("dataset") or "")
-        source = self.files.named("Source").get(dataset.spec["source"]) if dataset else None
-        text = SOURCE_ATTRIBUTION.get(source.spec.get("type")) if source else None
-        return text.format(year=date.today().year) if text else None
+        """The layer's attribution text (one with a link or logo: details.py)."""
+        text = layer.spec.get("attribution")
+        return None if isinstance(text, dict) else text
 
     def published(self, name: str) -> tuple[str, str]:
         """("layer" or "layerGroup", ws:name) for a group member."""
@@ -486,18 +473,13 @@ class Planner:
             if "store" in layer.spec:
                 continue  # stores.plan publishes it
             ws, name, spec = self.workspace_of(layer), geoserver_name(layer), layer.spec
-            schema, table, dataset = self.table_of(layer)
+            schema, table = self.table_of(layer)
             target = f"{ws}:{name}"
             view = virtual_table(name, spec["sql"]) if "sql" in spec else None
-            if view is None and not ingest.tables_exist(self.conn, schema, [table]):
-                if dataset is None:
-                    self.add("!", "layer", target, note=f"table {schema}.{table} doesn't exist; configops only publishes it")
-                    self.unpublished.add(layer.name)
-                    continue
-                if dataset not in self.synced:
-                    self.synced.add(dataset)
-                    self.add("+", "table", f"{schema}.{table}", note=f"first sync of dataset {dataset}",
-                             run=lambda d=dataset: self.first_sync(d))
+            if view is None and not tables_exist(self.conn, schema, [table]):
+                self.add("!", "layer", target, note=f"table {schema}.{table} doesn't exist yet; configops only publishes it")
+                self.unpublished.add(layer.name)
+                continue
 
             title = spec.get("title") or name
             wanted_ft = [("title", title), ("enabled", spec.get("enabled", True)), ("advertised", spec.get("advertised", True)),
@@ -738,11 +720,6 @@ class Planner:
 
     # --- applying
 
-    def first_sync(self, dataset: str) -> None:
-        ingest.bootstrap(self.conn)  # the ingest log, on a database nothing has loaded into yet
-        message, _ = sync.sync_dataset(self.conn, self.db, self.root, self.project, self.datasets[dataset], force=False)
-        print("    " + message.replace("\n", "\n    "), flush=True)
-
 
 def ordered(changes: list[Change]) -> list[Change]:
     def key(c: Change):
@@ -796,11 +773,16 @@ def connect(root: Path, geoserver_url: str | None, wait: float = 0):
         gs = for_project(project, root, geoserver_url)
     except MissingCredentials as e:
         raise PlanError(str(e)) from None
-    db = sync.database(project, root)
+    try:
+        db = database(project, root)
+    except DatabaseError as e:
+        raise PlanError(str(e)) from None
     deadline = time.monotonic() + wait
     if wait:
-        print(f"Waiting up to {wait:.0f}s for the database at {db.host}:{db.port} and GeoServer at {gs.url}...", flush=True)
-    while True:
+        where = f"the database at {db.host}:{db.port} and " if db else ""
+        print(f"Waiting up to {wait:.0f}s for {where}GeoServer at {gs.url}...", flush=True)
+    conn = None
+    while db is not None:
         try:
             conn = db.connect()
             break
@@ -813,7 +795,8 @@ def connect(root: Path, geoserver_url: str | None, wait: float = 0):
         try:
             gs.wait(max(deadline - time.monotonic(), 0))
         except GeoServerError as e:
-            conn.close()
+            if conn is not None:
+                conn.close()
             raise PlanError(str(e), code=1) from None
     return files, gs, conn, db
 
@@ -829,7 +812,7 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
         blocked = any(c.action == "!" for c in changes)
         todo = [c for c in changes if c.run is not None]
         if not apply:
-            # 1 is kept for errors; 3 says only "!" lines are left: layers waiting for your own tables, settings GeoServer Cloud can't take
+            # 1 is kept for errors; 3 says only "!" lines are left: layers waiting for their tables, settings GeoServer Cloud can't take
             return 2 if todo else (3 if blocked else 0)
         if todo:
             print("\nApplying:")
@@ -837,17 +820,17 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
             print(f"  {c.action} {c.kind} {c.target}", flush=True)
             try:
                 c.run()
-            except (GeoServerError, ingest.LoadError, SourceError, remote.RemoteError, discover.DiscoverError,
-                    psycopg2.Error, OSError) as e:
+            except (GeoServerError, psycopg2.Error, OSError) as e:
                 print(f"configops apply: {c.kind} {c.target} failed: {e}", file=sys.stderr)
                 print("Nothing after it was applied; fix the cause and run apply again.", file=sys.stderr)
                 return 1
         if todo:
             print(f"\nApplied {len(todo)} change(s).")
         if blocked:
-            # Not a failure: the tables are yours to load, often after the deploy. plan exits 3 for them.
-            print("Left out: the lines marked ! (layers waiting for tables you load yourself: apply again once they exist; "
+            # Not a failure: the tables are loaded separately, often after the deploy. plan exits 3 for them.
+            print("Left out: the lines marked ! (layers waiting for their tables: apply again once they exist; "
                   "settings GeoServer Cloud can't take)")
         return 0
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()

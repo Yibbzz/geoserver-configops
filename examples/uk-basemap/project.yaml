@@ -10,7 +10,6 @@ spec:
   database:
     jndi: java:comp/env/jdbc/mypostgis
     connection: { secret: database }
-    schemas: { live: data_layers, staging: staging, backup: backup }
+    schema: data_layers                            # where the layers' tables are (geodata-sync loads them)
   workspace: uk
   crs: EPSG:27700
-  backups: 3

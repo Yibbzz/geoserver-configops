@@ -219,7 +219,7 @@ pages:
       metadata: *id002
       store:
         status: 'yes'
-        spec: layer.store, layer.dataset
+        spec: layer.store
         test: test_e2e_details.py::test_apply_then_nothing_to_do
       serviceConfiguration:
         status: 'yes'

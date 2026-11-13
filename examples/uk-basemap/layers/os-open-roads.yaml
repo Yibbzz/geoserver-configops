@@ -1,0 +1,21 @@
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata:
+  name: road-links
+spec:
+  table: os_open_roads_road_link                 # loaded by geodata-sync (examples/uk-basemap there)
+  title: OS Open Roads, road links
+  attribution: Contains OS data © Crown copyright and database right 2026   # OS OpenData's licence asks for it
+  style: os-road-link
+  cache:
+    gridsets: [EPSG:900913, british-national-grid]   # web maps, and British National Grid (layer-groups.yaml)
+---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata:
+  name: road-nodes
+spec:
+  table: os_open_roads_road_node                 # loaded by geodata-sync (examples/uk-basemap there)
+  title: OS Open Roads, junctions
+  attribution: Contains OS data © Crown copyright and database right 2026   # OS OpenData's licence asks for it
+  style: os-road-node
