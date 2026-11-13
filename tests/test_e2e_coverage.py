@@ -77,11 +77,21 @@ def evidence():
 
 
 def test_versions_are_the_ones_read():
+    """The field list is read from the GeoServer GeoServer Cloud is built on: GeoServer Cloud must be that version;
+    standard GeoServer, which can be a newer release, the same series (fields are only added between series, and
+    test_every_field_geoserver_shows_is_listed catches any that weren't)."""
     manifest = coverage.load()
     about = {r["@name"]: str(r.get("Version")) for r in get("/about/version")["about"]["resource"]}
-    assert about["GeoServer"].removesuffix("-CLOUD") == manifest["versions"]["geoserver"], \
-        "GeoServer changed: set versions in docs/geoserver-fields.yaml, then python tests/geoserver_coverage.py refresh"
-    assert about["GeoWebCache"] == manifest["versions"]["geowebcache"]
+    geoserver, gwc = about["GeoServer"], about["GeoWebCache"]
+    if target() == "cloud":
+        assert geoserver.removesuffix("-CLOUD") == manifest["versions"]["geoserver"], \
+            "GeoServer changed: python tests/versions.py update (or set versions in docs/geoserver-fields.yaml, then refresh)"
+        assert gwc == manifest["versions"]["geowebcache"]
+    else:
+        series = lambda v: v.split(".")[:2]  # noqa: E731
+        assert series(geoserver) == series(manifest["versions"]["geoserver"]), \
+            f"standard GeoServer {geoserver} is a new series: sort its fields (python tests/geoserver_coverage.py)"
+        assert series(gwc) == series(manifest["versions"]["geowebcache"])
 
 
 def test_every_field_geoserver_shows_is_listed(evidence):
