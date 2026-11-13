@@ -256,7 +256,7 @@ spec:
 | `oracle` | (none: `connection`) | A table | Standard GeoServer only, with its `oracle` extension (Oracle's JDBC driver is in it). As `postgis`; `database` is the SID, or `/<service name>` (`/FREEPDB1`) |
 | `appschema` | (none: `path`) | A complex feature type the mapping file defines | The mapping and its schema on the data volume; the layer names its feature type in `resource`. GeoServer Cloud ships the extension off: set `GEOSERVER_EXTENSION_APPSCHEMA_ENABLED=true` on its services. `apply` makes an `app-schema-cache` folder beside the mapping (when the data volume is mounted where it runs), where GeoServer keeps the schemas it downloads; the workspace's namespace URI must be the mapping's target namespace (`Workspace` `namespace`) |
 
-**Files** are read from GeoServer's `/data` folder: a volume mounted there in every GeoServer service. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you, or a raster Dataset makes them (above); `configops import` writes stores whose files are under `/data`.
+**Files** are read from GeoServer's `/data` folder: a volume mounted there in every GeoServer service. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you (geodata-sync makes raster files from downloads); `configops import` writes stores whose files are under `/data`.
 
 | `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
 | `description`, `enabled` | none; `true` | |
@@ -757,7 +757,7 @@ Plan: 1 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
   ! group uk:basemap   (GeoServer Cloud can't set styles: its catalog database doesn't keep a group style's layers, ...)
 ```
 
-Run `plan` on a schedule to catch drift: [docs/kubernetes.md](../kubernetes.md) has an hourly CronJob whose Job fails when GeoServer has drifted from the files, say a layer edited or deleted in the web UI, or when `plan` can't run; `!` lines alone don't fail it. The log shows what differs, and `apply` puts it back. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere: another environment, or a port-forward.
+Run `plan` on a schedule to catch drift: [docs/kubernetes.md](kubernetes.md) has an hourly CronJob whose Job fails when GeoServer has drifted from the files, say a layer edited or deleted in the web UI, or when `plan` can't run; `!` lines alone don't fail it. The log shows what differs, and `apply` puts it back. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere: another environment, or a port-forward.
 
 Each layer gets a PostGIS store in its workspace for the schema its table is in, named after the schema and reaching the database through the Project's JNDI datasource, so no password goes into GeoServer. Bounding boxes are worked out from the table whenever a layer is published or changed.
 

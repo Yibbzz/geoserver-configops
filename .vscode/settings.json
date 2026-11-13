@@ -1,5 +1,5 @@
 {
   "yaml.schemas": {
-    "./configops/schema/v1alpha1.json": ["examples/**/*.yaml", "!examples/**/secrets.yaml"]
+    "./configops/schema/v1alpha1.json": ["examples/*/**/*.yaml", "!examples/**/secrets.yaml"]
   }
 }
