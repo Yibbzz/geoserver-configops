@@ -2174,6 +2174,63 @@
         },
         "internationalAbstract": {
           "$ref": "#/$defs/translations"
+        },
+        "styles": {
+          "type": "array",
+          "description": "Standard GeoServer only: on GeoServer Cloud plan shows it as ! and leaves it out. Named styles of the group, each its own layers in their own styles (WMS STYLES=<name>)",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "layers"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string"
+              },
+              "abstract": {
+                "type": "string"
+              },
+              "internationalTitle": {
+                "$ref": "#/$defs/translations"
+              },
+              "internationalAbstract": {
+                "$ref": "#/$defs/translations"
+              },
+              "layers": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/$defs/resourceName"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "layer"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "layer": {
+                          "$ref": "#/$defs/resourceName"
+                        },
+                        "style": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2797,6 +2854,219 @@
                 },
                 "revealEmailAtClick": {
                   "type": "boolean"
+                }
+              }
+            },
+            "cors": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Standard GeoServer only: on GeoServer Cloud plan shows it as ! and leaves it out. Cross-origin requests. GeoServer reads them when it starts: restart it after a change",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "allowedOriginPatterns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "origins allowed, e.g. https://maps.example.org; default [*]"
+                },
+                "allowedMethods": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "allowedHeaders": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "maxAge": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "seconds a browser may keep the answer; default 3600"
+                },
+                "supportsCredentials": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "contentSecurityPolicy": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Standard GeoServer only: on GeoServer Cloud plan shows it as ! and leaves it out. The Content-Security-Policy header (security/csp.xml)",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "reportOnly": {
+                  "type": "boolean"
+                },
+                "allowOverride": {
+                  "type": "boolean"
+                },
+                "injectProxyBase": {
+                  "type": "boolean"
+                },
+                "remoteResources": {
+                  "type": "string",
+                  "description": "sources allowed for remote scripts, styles and images"
+                },
+                "formAction": {
+                  "type": "string"
+                },
+                "frameAncestors": {
+                  "type": "string",
+                  "description": "pages allowed to frame GeoServer"
+                },
+                "policies": {
+                  "type": "array",
+                  "description": "replace GeoServer's policies: each the first of its rules that matches a request",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "rules": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false,
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "filter": {
+                              "type": "string",
+                              "description": "which requests it applies to, e.g. PATH(^/www/.*$)"
+                            },
+                            "directives": {
+                              "type": "string",
+                              "description": "the header's value; empty sends none"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "diskQuota": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Standard GeoServer only: on GeoServer Cloud plan shows it as ! and leaves it out. GeoWebCache's disk quota: drops the least used tiles once the cache is too big",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "quotaStore": {
+                  "enum": [
+                    "HSQL",
+                    "JDBC"
+                  ],
+                  "description": "where tile use is counted; read when GeoServer starts. JDBC also needs gwc/geowebcache-diskquota-jdbc.xml"
+                },
+                "globalQuota": {
+                  "oneOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^ *[0-9.]+ *([KMGT]iB|B) *$"
+                    }
+                  ],
+                  "description": "bytes, or a size such as 2 GiB (B, KiB, MiB, GiB, TiB)"
+                },
+                "globalExpirationPolicyName": {
+                  "enum": [
+                    "LFU",
+                    "LRU"
+                  ],
+                  "description": "which tiles go first: least frequently or least recently used"
+                },
+                "cacheCleanUpFrequency": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "cacheCleanUpUnits": {
+                  "enum": [
+                    "SECONDS",
+                    "MINUTES",
+                    "HOURS",
+                    "DAYS"
+                  ]
+                },
+                "maxConcurrentCleanUps": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "layerQuotas": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "layer",
+                      "quota"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "layer": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "the tile layer: workspace:name"
+                      },
+                      "quota": {
+                        "oneOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^ *[0-9.]+ *([KMGT]iB|B) *$"
+                          }
+                        ],
+                        "description": "bytes, or a size such as 2 GiB (B, KiB, MiB, GiB, TiB)"
+                      },
+                      "expirationPolicyName": {
+                        "enum": [
+                          "LFU",
+                          "LRU"
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -3809,8 +4079,10 @@
             "property",
             "csv",
             "appschema",
-            "sqlserver"
-          ]
+            "sqlserver",
+            "oracle"
+          ],
+          "description": "oracle: standard GeoServer only, with its oracle extension"
         },
         "url": {
           "type": "string",

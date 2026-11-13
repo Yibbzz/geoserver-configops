@@ -204,6 +204,11 @@ def plan_settings(planner, gs, r: Resource) -> None:
     rest_options = {REST_OPTIONS[k]: spec.pop(k) for k in list(spec) if k in REST_OPTIONS}
     logging = top_spec.pop("requestLogging", None)
     url_checks = top_spec.pop("urlChecks", None)
+    only_standard = {k: top_spec.pop(k) for k in ("cors", "contentSecurityPolicy", "diskQuota") if k in top_spec}
+    if only_standard:
+        from . import standard
+
+        standard.plan(planner, only_standard)
     top = to_geoserver(top_spec)
     settings = to_geoserver(spec)
     path, key = settings_paths(ws)

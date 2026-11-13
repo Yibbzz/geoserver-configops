@@ -192,7 +192,7 @@ class Importer:
                 found[name] = entries
                 if entries.get("schema") and name != entries["schema"]:
                     self.notes.append(f"store {name}: apply moves its layers to a store named after their schema ({entries['schema']})")
-            elif entries.get("dbtype") in ("postgis", "sqlserver"):
+            elif entries.get("dbtype") in ("postgis", "sqlserver", "oracle"):
                 connection = {k: entries[k] for k in ("host", "port", "database", "schema") if entries.get(k)}
                 secret = f"{resource_name(name)[0]}-credentials"
                 self.secrets.append(secret)
@@ -472,6 +472,9 @@ class Importer:
             spec.update({k: as_layer[k] for k in ("attribution", "authorityURLs", "identifiers") if k in as_layer})
             if g.get("queryDisabled"):
                 spec["queryable"] = False
+            group_styles = self.group_styles(gs_name, g)
+            if group_styles:
+                spec["styles"] = group_styles
             root = (g.get("rootLayer") or {}).get("name")
             if root:
                 short = root.split(":", 1)[-1]
@@ -485,6 +488,24 @@ class Importer:
                     self.notes.append(f"group {gs_name}: root layer {root} isn't in {self.ws}'s imported layers; left out")
             found.append(resource("LayerGroup", name, spec))
         return found
+
+    def group_styles(self, gs_name: str, g: dict) -> list[dict]:
+        """A group's named styles (standard GeoServer only), in the files' form."""
+        from .plan import live_group_styles
+
+        out = []
+        for s in live_group_styles(g):
+            layers = []
+            for (_, member), style in zip(s["layers"], s["styles"]):
+                ws, _, short = member.rpartition(":")
+                if ws not in ("", self.ws) or short not in self.names:
+                    self.notes.append(f"group {gs_name}: style {s['name']}'s member {member} isn't in {self.ws}'s imported layers; left out")
+                    continue
+                style = self.style(style)
+                layers.append({"layer": self.names[short], "style": style} if style else self.names[short])
+            if layers:
+                out.append({"name": s["name"], **{k: s[k] for k in ("title", "abstract", *details.TRANSLATED) if s[k]}, "layers": layers})
+        return out
 
     def gridsets(self, resources: list[dict]) -> list[dict]:
         """Gridset resources for the gridsets the imported layers are cached in that aren't GeoWebCache's own."""

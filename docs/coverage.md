@@ -2,14 +2,14 @@
 
 Every page of GeoServer's web UI, and whether `configops` can define it in files and apply it with `plan`/`apply`. The aim is everything that can be configured, as code. Update this page in the same PR as any change to what's covered.
 
-This page is the overview, for GeoServer Cloud; configops works with standard GeoServer too, where the "Can't"s below are possible (not built yet). [geoserver-fields.yaml](geoserver-fields.yaml) goes field by field: every field of GeoServer's configuration, read from GeoServer's and GeoWebCache's source at the versions GeoServer Cloud runs, sorted as here, with `cloud:` or `standard:` where the two differ. [geoserver-tested.txt](geoserver-tested.txt) (GeoServer Cloud) and [geoserver-tested-standard.txt](geoserver-tested-standard.txt) (standard GeoServer) list the fields the e2e tests have proved on each: configops changed the field and GeoServer then showed the new value. The README's figures count only those, out of every setting GeoServer has, so what one can't set counts against it. `tests/geoserver_coverage.py` explains how; `refresh` after a GeoServer Cloud upgrade brings in new fields, and the tests fail until each is sorted.
+This page is the overview, for GeoServer Cloud; configops works with standard GeoServer too, which can also take the "Standard only" rows below (on GeoServer Cloud `plan` shows them as `!` with the reason, and leaves them out). [geoserver-fields.yaml](geoserver-fields.yaml) goes field by field: every field of GeoServer's configuration, read from GeoServer's and GeoWebCache's source at the versions GeoServer Cloud runs, sorted as here, with `cloud:` or `standard:` where the two differ. [geoserver-tested.txt](geoserver-tested.txt) (GeoServer Cloud) and [geoserver-tested-standard.txt](geoserver-tested-standard.txt) (standard GeoServer) list the fields the e2e tests have proved on each: configops changed the field and GeoServer then showed the new value. The README's figures count only those, out of every setting GeoServer has, so what one can't set counts against it. `tests/geoserver_coverage.py` explains how; `refresh` after a GeoServer Cloud upgrade brings in new fields, and the tests fail until each is sorted.
 
 | Status | Meaning |
 | --- | --- |
 | **Yes** | In the files: `plan` shows drift, `apply` sets it, `import` writes it |
 | **Partly** | Some of it; the notes say what's missing |
 | **Not yet** | Possible through GeoServer's REST API; not built |
-| **Can't** | GeoServer Cloud has no way to set it (standard GeoServer may) |
+| **Standard only** | GeoServer Cloud has no way to set it; on standard GeoServer configops does |
 | **Chart** | Set in the Helm chart's `values.yaml`, not in the project files |
 | — | Not configuration (a tool or a view of the data) |
 
@@ -36,9 +36,9 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | PostGIS through the JNDI datasource | Yes | Made for you: one store per schema the layers use |
 | PostGIS with a password | Yes | `Store` `type: postgis`, login from a Secret |
 | SQL Server | Yes | `Store` `type: sqlserver` (tested by hand against SQL Server 2022; not in CI) |
-| Oracle | Can't | GeoServer Cloud's images don't ship Oracle's JDBC driver |
+| Oracle | Standard only | `Store` `type: oracle`, with standard GeoServer's `oracle` extension. GeoServer Cloud's images don't ship Oracle's JDBC driver |
 | GeoPackage, Shapefile, directory of shapefiles, FlatGeobuf, PMTiles | Yes | `Store` with `path:` on the shared data volume (`values-data-volume.yaml`); PMTiles also over `url:` |
-| GeoParquet, property files, CSV | Yes | `Store` `type: geoparquet`, `property`, `csv` |
+| GeoParquet, property files, CSV | Yes | `Store` `type: geoparquet`, `property`, `csv` (standard GeoServer: add GeoTools' `gt-csv` and `opencsv` jars) |
 | Remote WFS (cascaded) | Yes | `Store` `type: wfs` |
 | Remote WMS, WMTS (cascaded) | Yes | `Store` `type: wms`, `wmts`; connections, timeouts, an HTTP header, an authentication key |
 | Cascaded WMS layer options | Yes | A Layer's `remote`: remote styles and formats, scale range, vendor parameters |
@@ -99,7 +99,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Tile caching | Yes | |
 | Enabled, advertised, metadata links | Yes | |
 | Queryable, attribution, authority URLs and identifiers | Yes | `queryable`, `attribution`, `authorityURLs`, `identifiers` |
-| Group styles (other named sets of members and styles) | Can't | GeoServer Cloud's catalog database doesn't keep their members: after a restart the group can't be read, and WMS never draws them (docs/geoserver-cloud-notes.md) |
+| Group styles (other named sets of members and styles) | Standard only | `LayerGroup` `styles`. GeoServer Cloud's catalog database doesn't keep their members: after a restart the group can't be read, and WMS never draws them (docs/geoserver-cloud-notes.md) |
 | Earth observation groups (root layer) | Yes | `mode: eo`, `rootLayer`, `rootStyle` |
 
 ### Styles
@@ -141,7 +141,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Global | Yes | `Settings`: proxy address, decimals, charset, verbose, error handling, web UI mode and the rest |
 | Contact information | Yes | `Settings` `contact:` |
 | Translations (titles, abstracts, contact details in other languages) | Yes | `internationalTitle`, `internationalAbstract` on layers, groups and services; `contact.international*` |
-| JAI, coverage access | Yes | `Settings` `global.jai`, `global.coverageAccess` |
+| JAI, coverage access | Yes | `Settings` `global.jai`, `global.coverageAccess`. Not JAI's *Image I/O caching*: GeoServer 3.0 keeps it but nothing reads it, and its web UI no longer shows it |
 | Image processing | Yes | As JAI |
 | REST: upload folder, quiet on not found | Yes | `Settings` `restUploadRoot`, `restQuietOnNotFound` |
 | How the web UI shows users | Yes | `Settings` `global.userDetailsDisplaySettingsInfo` |
@@ -152,10 +152,10 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 
 | Page | Status | Notes |
 | --- | --- | --- |
-| Tile layers | Yes | Each layer's and group's `cache:` |
+| Tile layers | Yes | Each layer's and group's `cache:`. Not format modifiers: GeoServer keeps them, but its tile layers never use them |
 | Caching defaults | Yes | `Settings` `global.tileCaching`, with multi-layer caching, metatiling and seeding threads; GeoServer reads them when its services start |
 | Gridsets (your own) | Yes | `Gridset`, e.g. British National Grid; description, level names, pixel size, axis order |
-| Disk quota | Can't | GeoServer Cloud switches it off (`GWC_DISKQUOTA_DISABLED`), has no REST endpoint for it (404), and would read its settings from each pod's own folder |
+| Disk quota | Standard only | `Settings` `global.diskQuota`. GeoServer Cloud switches it off (`GWC_DISKQUOTA_DISABLED`), has no REST endpoint for it (404), and would read its settings from each pod's own folder |
 | Blob stores: a folder, S3 | Yes | `BlobStore` `type: file` (on the data volume) or `s3`; `cache.blobStore` |
 | Blob stores: Azure, Google Cloud Storage | Yes | `BlobStore` `type: azure`, `gcs` |
 | Blob store options: TMS layout, proxies, quota project | Yes | `layout`, `proxy`, `quotaProject` |
@@ -178,8 +178,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Remember-me | Yes | `Settings` `global.security.rememberMe` |
 | Password policies | Yes | `PasswordPolicy` |
 | URL checks | Yes | `URLCheck` (a regular expression a URL may match), `Settings` `global.urlChecks` for the switch. GeoServer Cloud has them on with no checks, so every external URL (a remote style, graphic) is refused until a check allows it |
-| Content Security Policy | Can't | GeoServer Cloud's services don't send the header from GeoServer's policy (`security/csp.xml`): changing it changes nothing. The web UI sends its own |
-| CORS | Chart | The gateway answers it; see the README |
+| Content Security Policy | Standard only | `Settings` `global.contentSecurityPolicy`. GeoServer Cloud's services don't send the header from GeoServer's policy (`security/csp.xml`): changing it changes nothing. The web UI sends its own |
+| CORS | Chart; standard: Yes | GeoServer Cloud's gateway answers it (README). Standard GeoServer: `Settings` `global.cors`, used after a restart |
 | GeoServer ACL | Chart | Off in the chart (`geoserver.services.acl.enabled`) |
 
 ## Workflow

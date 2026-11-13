@@ -73,7 +73,9 @@ pages:
         note: set for a cog store's range reader
         extra: true
       type=Oracle:
-        status: 'no'
+        status: 'yes'
+        spec: store.type
+        test: test_e2e_oracle.py::test_apply_import_and_nothing_to_do
         note: GeoServer Cloud's images don't ship Oracle's JDBC driver
         extra: true
         cloud: cant
@@ -81,8 +83,7 @@ pages:
         status: 'yes'
         spec: store.type
         test: test_e2e_file_stores.py::test_every_file_store_then_nothing_to_do
-        standard: cant
-        note: standard GeoServer has no CSV store (GeoServer Cloud ships one)
+        note: standard GeoServer needs GeoTools' gt-csv and opencsv jars (GeoServer Cloud ships them)
         extra: true
     DataStoreInfoImpl: {}
     CoverageStoreInfoImpl:
@@ -717,44 +718,60 @@ pages:
       dateModified: *id001
       modifiedBy: *id001
       layerGroupStyles:
-        status: 'no'
+        status: 'yes'
+        spec: layerGroup.styles
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
           breaks the group'
         cloud: cant
     LayerGroupStyleImpl:
       id: *id003
       name:
-        status: 'no'
+        status: 'yes'
+        spec: layerGroup.styles.name
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
           breaks the group'
         cloud: cant
       title:
-        status: 'no'
+        status: 'yes'
+        spec: layerGroup.styles.title
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
           breaks the group'
         cloud: cant
       internationalTitle:
-        status: 'no'
+        status: 'yes'
+        spec: layerGroup.styles.internationalTitle
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
           breaks the group'
         cloud: cant
       abstractTxt:
-        status: 'no'
+        status: 'yes'
+        spec: layerGroup.styles.abstract
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
           breaks the group'
         cloud: cant
       internationalAbstract:
-        status: 'no'
+        status: 'yes'
+        spec: layerGroup.styles.internationalAbstract
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
           breaks the group'
         cloud: cant
       layers:
-        status: 'no'
+        status: 'yes'
+        spec: layerGroup.styles.layers
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
           breaks the group'
         cloud: cant
       styles:
-        status: 'no'
+        status: 'yes'
+        spec: layerGroup.styles.layers
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer Cloud''s catalog database doesn''t keep a group style''s members: after a restart the group can''t be read (500 Unexpected item null) and WMS never draws the style; setting them
           breaks the group'
         cloud: cant
@@ -1318,7 +1335,9 @@ pages:
         status: 'yes'
         spec: settings.useHeadersProxyURL
       metadata.corsConfigurationSettings:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.cors
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         extra: true
         cloud: cant
@@ -1440,9 +1459,8 @@ pages:
         status: 'yes'
         spec: settings.global.jai.memoryThreshold
       imageIOCache:
-        status: 'no'
-        note: GeoServer Cloud doesn't keep it
-        cloud: cant
+        status: none
+        note: 'not configuration: GeoServer 3.0 keeps it, but nothing reads it and its web UI doesn''t show it (ImageProcessingInfoImpl only)'
       pngEncoderType:
         status: 'yes'
         spec: settings.global.jai.pngEncoderType
@@ -1551,9 +1569,8 @@ pages:
         status: 'yes'
         spec: cache.formats
       formatModifiers:
-        status: 'no'
-        note: 'GeoServer Cloud''s GeoWebCache REST API drops them: an XML PUT answers 200 but doesn''t keep them, a JSON PUT answers 500'
-        cloud: cant
+        status: none
+        note: 'not configuration: GeoServer keeps them, but its tile layers never use them (GeoServerTileLayer.getFormatModifiers() returns none)'
       gridSubsets:
         status: 'yes'
         spec: cache.gridsets
@@ -1841,48 +1858,70 @@ pages:
         spec: blobStore.defaultCredentials
     DiskQuotaConfig:
       enabled:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.enabled
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       cacheCleanUpFrequency:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.cacheCleanUpFrequency
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       cacheCleanUpUnits:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.cacheCleanUpUnits
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       maxConcurrentCleanUps:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.maxConcurrentCleanUps
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       globalExpirationPolicyName:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.globalExpirationPolicyName
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       globalQuota:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.globalQuota
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       layerQuotas:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.layerQuotas
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       quotaStore:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.quotaStore
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
     LayerQuota:
       layer:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.layerQuotas.layer
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       expirationPolicyName:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.layerQuotas.expirationPolicyName
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
       quota:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.diskQuota.layerQuotas.quota
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: GeoServer Cloud switches disk quota off (GWC_DISKQUOTA_DISABLED) and has no REST endpoint for it
         cloud: cant
   Security:
@@ -2291,98 +2330,144 @@ pages:
         spec: securityObject.config
     CORSConfiguration:
       enabled:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.cors.enabled
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         cloud: cant
       allowedOriginPatterns:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.cors.allowedOriginPatterns
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         cloud: cant
       allowedMethods:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.cors.allowedMethods
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         cloud: cant
       allowedHeaders:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.cors.allowedHeaders
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         cloud: cant
       maxAge:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.cors.maxAge
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         cloud: cant
       supportsCredentials:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.cors.supportsCredentials
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
         cloud: cant
     CSPConfiguration:
       enabled:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.enabled
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       reportOnly:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.reportOnly
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       allowOverride:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.allowOverride
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       injectProxyBase:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.injectProxyBase
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       remoteResources:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.remoteResources
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       formAction:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.formAction
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       frameAncestors:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.frameAncestors
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       policies:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
     CSPPolicy:
       name:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.name
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       description:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.description
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       enabled:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.enabled
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       rules:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.rules
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
     CSPRule:
       name:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.rules.name
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       description:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.rules.description
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       enabled:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.rules.enabled
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       filter:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.rules.filter
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
       directives:
-        status: 'no'
+        status: 'yes'
+        spec: settings.global.contentSecurityPolicy.policies.rules.directives
+        test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
         note: 'Content Security Policy (security/csp.xml): GeoServer Cloud''s services don''t send its header'
         cloud: cant
     AbstractURLCheck:

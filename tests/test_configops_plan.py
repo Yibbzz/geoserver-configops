@@ -216,7 +216,7 @@ def test_apply_succeeds_when_only_your_own_tables_are_missing(project, tables, m
     monkeypatch.setattr(plan_module, "connect", lambda root, url, wait: (load(root), gs, Conn(), ingest.Database("h", 5432, "d", "u", "p")))
     assert plan_module.run(project) == 3
     assert plan_module.run(project, apply=True) == 0
-    assert "Left for later: the layers marked ! wait for tables you load yourself" in capsys.readouterr().out
+    assert "Left out: the lines marked ! (layers waiting for tables you load yourself" in capsys.readouterr().out
     gs.layers[("uk", "road_links")]["layer"]["queryable"] = True  # drift as well: plan says 2, as CI expects
     assert plan_module.run(project) == 2
 
