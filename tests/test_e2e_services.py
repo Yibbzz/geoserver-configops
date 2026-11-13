@@ -3,10 +3,10 @@
 settings, tiles kept apart by a parameter filter, and for a raster: interpolation in maps, the
 formats WCS allows, and band details in DescribeCoverage.
 
-Needs the whole chart, reached through its gateway (the kind test, or the dev cluster):
+Needs GeoServer's OGC services as well as REST (tests/e2e/up.sh starts them all):
 
-    E2E_GEOSERVER_URL=http://localhost:18080/geoserver-cloud/rest E2E_SERVICES_URL=http://localhost:18080/geoserver-cloud \\
-      E2E_DB_PORT=15432 E2E_DB_PASSWORD=... E2E_DATA_POD=gscloud/<a GeoServer pod> pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_SERVICES_URL=http://localhost:59090/geoserver-cloud \
+      E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data E2E_REST_CONTAINER=gscloud-e2e-rest-1 E2E_WMS_CONTAINER=gscloud-e2e-wms-1 pytest -m e2e
 """
 
 import os

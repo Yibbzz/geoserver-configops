@@ -2,7 +2,7 @@
 
 Start it with tests/e2e/up.sh, then:
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 pytest -m e2e
 
 Uses its own workspace (configops_e2e) and table, removed at the end.
 """

@@ -26,7 +26,7 @@ TYPES = {
     "wmts": ("wmts", "WMTS"),
     "wfs": ("data", "Web Feature Server (NG)"),
     "postgis": ("data", "PostGIS"),
-    # files on the shared data volume (values-data-volume.yaml), by path under it
+    # files in GeoServer's /data folder, by path under it
     "geopackage": ("data", "GeoPackage"),
     "shapefile": ("data", "Shapefile"),
     "shapefiles": ("data", "Directory of spatial files (shapefiles)"),
@@ -40,11 +40,11 @@ TYPES = {
     "geoparquet": ("data", "GeoParquet"),
     "property": ("data", "Properties"),
     "csv": ("data", "CSV"),
-    "appschema": ("data", "Application Schema DataAccess"),  # needs values-app-schema.yaml
+    "appschema": ("data", "Application Schema DataAccess"),  # GeoServer Cloud: GEOSERVER_EXTENSION_APPSCHEMA_ENABLED=true
     "sqlserver": ("data", "Microsoft SQL Server"),
     "oracle": ("data", "Oracle NG"),  # standard GeoServer with its oracle extension (standard.CLOUD_STORE_TYPES)
 }
-DATA = "/data"  # where values-data-volume.yaml mounts the shared volume
+DATA = "/data"  # the folder file stores read from, shared by every GeoServer service
 FILE_PARAMS = {"geopackage": "database", "shapefile": "url", "shapefiles": "url", "flatgeobuf": "url", "pmtiles": "pmtiles",
                "geoparquet": "uri", "property": "directory", "csv": "file", "appschema": "url"}
 DBTYPES = {"postgis": "postgis", "geopackage": "geopkg", "geoparquet": "geoparquet", "appschema": "app-schema", "sqlserver": "sqlserver",

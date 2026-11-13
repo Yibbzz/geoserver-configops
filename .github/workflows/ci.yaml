@@ -13,20 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
-        with:
-          version: v4.3.1
-      - name: Helm lint
-        run: helm lint .
-      - name: Validate manifests against Kubernetes schemas
+      - name: Check the Kubernetes example against Kubernetes's schemas
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
-          for extra in "" "-f values-data-volume.yaml" "--set configops.sync.enabled=false --set configops.apply.enabled=false --set configops.drift.enabled=false"; do
-            echo "== helm template $extra"
-            helm template geoserver . -f values.yaml $extra | ./kubeconform -strict -summary -kubernetes-version 1.37.0 -
-          done
+          ./kubeconform -strict -summary -kubernetes-version 1.37.0 docs/kubernetes/configops.yaml
       - name: Shellcheck
-        run: shellcheck tests/e2e/*.sh tests/kind/*.sh tests/ci/*.sh
+        run: shellcheck tests/e2e/*.sh tests/ci/*.sh
 
   test:
     runs-on: ubuntu-latest
@@ -45,9 +37,6 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
-        with:
-          version: v4.3.1
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -78,15 +67,11 @@ jobs:
           docker run --rm --entrypoint ogr2ogr configops:ci --version
           docker run --rm -v "$PWD/examples/uk-basemap:/project:ro" configops:ci validate /project
 
-  # The real GeoServer Cloud REST service (same images and jndi.yml as the chart) in Docker,
-  # then the e2e tests against it.
-  e2e-rest:
+  # GeoServer Cloud in Docker (gateway, REST, WMS, WFS, WCS and the tile cache), then the e2e tests against it
+  e2e-cloud:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
-        with:
-          version: v4.3.1
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -94,20 +79,23 @@ jobs:
         run: tests/ci/install-gdal.sh
       - name: Install Python dependencies
         run: pip install -e '.[dev]'
-      - name: Start GeoServer Cloud REST, PostGIS and RabbitMQ
+      - name: Start GeoServer Cloud, PostGIS and RabbitMQ
         run: tests/e2e/up.sh
       - name: e2e tests
         env:
-          E2E_GEOSERVER_URL: http://localhost:59090/rest
+          E2E_GEOSERVER_URL: http://localhost:59090/geoserver-cloud/rest
+          E2E_SERVICES_URL: http://localhost:59090/geoserver-cloud
           E2E_DB_PORT: '55433'
-          E2E_GWC_URL: http://localhost:59090/geoserver-cloud/gwc/rest  # REST service reached without its gateway
-          E2E_DATA_DIR: tests/e2e/data  # mounted at /data in the REST service
+          E2E_DB_HOST_IN_GEOSERVER: db
+          E2E_DATA_DIR: tests/e2e/data  # mounted at /data in every GeoServer service
           E2E_LDAP_URL: ldap://ldap:389  # the directory up.sh starts, as GeoServer reaches it
           E2E_REST_CONTAINER: gscloud-e2e-rest-1  # restarted by the caching defaults test
+          E2E_WMS_CONTAINER: gscloud-e2e-wms-1  # its log shows request logging
         run: pytest -m e2e -v
       - name: Logs on failure
         if: failure()
-        run: docker logs gscloud-e2e-rest-1 2>&1 | grep -v accesslog | tail -300  # compose would need up.sh's image variables
+        run: |
+          for s in rest wms gateway; do echo "== $s"; docker logs gscloud-e2e-$s-1 2>&1 | grep -v accesslog | tail -150; done
 
   # The same e2e tests against standard GeoServer: the version GeoServer Cloud is built on, with the
   # extensions GeoServer Cloud ships, one process serving REST, the OGC services and the tile cache.
@@ -115,9 +103,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
-        with:
-          version: v4.3.1
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -141,26 +126,3 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker logs gscloud-e2e-geoserver-1 2>&1 | tail -300
-
-  # The whole chart on a throwaway kind cluster: every pod ready, OGC services through
-  # the gateway, the e2e tests against the deployment, and examples/smoke drawn with WMS.
-  kind-deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v5
-        with:
-          version: v4.3.1
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-      - name: Install Python dependencies
-        run: pip install -e '.[dev]'
-      - name: Install GDAL (plan/apply load a dataset)
-        run: tests/ci/install-gdal.sh
-      - uses: helm/kind-action@v1.15.2
-        with:
-          cluster_name: gscloud
-      - name: Deploy and test
-        run: tests/kind/deploy-test.sh

@@ -3,7 +3,7 @@ write, each field set to something other than GeoServer's default: apply, then p
 nothing to do and GeoServer's files hold each value. None is put in a filter chain or made
 active, so logins aren't touched (test_e2e_logins.py checks the ones that log people in).
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest pytest -m e2e
 """
 
 import os

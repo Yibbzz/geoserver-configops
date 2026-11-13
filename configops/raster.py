@@ -6,7 +6,7 @@ with overviews. It's written beside the live file, checked, then renamed over it
 so GeoServer never reads half a file; the file it replaces goes to
 .configops-backups/ beside the data, and the newest `backups` copies are kept.
 
-The data volume is /data, as the chart mounts it; CONFIGOPS_DATA_DIR points
+The data folder is /data, where GeoServer's file stores read; CONFIGOPS_DATA_DIR points
 elsewhere (a laptop, the e2e tests).
 """
 
@@ -118,7 +118,7 @@ def install(new: Path, path: str, keep: int) -> None:
 def load(download: Path, work: Path, path: str, crs: str | None, fallback: str | None, keep: int, nodata: float | None = None) -> int:
     """Make the download into the COG at `path` on the data volume; returns its size in pixels."""
     if not data_root().is_dir():
-        raise LoadError(f"no data volume at {data_root()}: deploy with values-data-volume.yaml (or set {DATA_ENV})")
+        raise LoadError(f"no data volume at {data_root()}: mount GeoServer's data folder there (or set {DATA_ENV})")
     live = live_path(path)
     live.parent.mkdir(parents=True, exist_ok=True)
     rasters = unpack(download, work)

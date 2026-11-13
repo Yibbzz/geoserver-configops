@@ -1,6 +1,5 @@
 *.tar.gz
 *.tgz
-**/Chart.lock
 /tests/*actual.yaml
 */__pycache__/*
 .venv/
@@ -23,7 +22,6 @@ datadir/
 
 # Test caches
 .pytest_cache/
-tests/e2e/jndi.yml
 tests/e2e/data/
 tests/e2e/gcs/
 tests/e2e/standard-libs/

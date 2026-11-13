@@ -580,8 +580,7 @@ class Importer:
                 if any(k in live for k in KEYS[kind]):
                     secret = f"{meta}-credentials"
                     spec["credentials"] = {"secret": secret}
-                    self.notes.append(f"blob store {name}: put its keys in Secret {secret} (keys: {', '.join(KEYS[kind])}), "
-                                      "and add it to configops.secrets")
+                    self.notes.append(f"blob store {name}: put its keys in Secret {secret} (keys: {', '.join(KEYS[kind])})")
             else:
                 self.notes.append(f"blob store {name}: its type isn't one the files have; left out")
                 continue
@@ -742,7 +741,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
                 report.append(f"{len(asset_files)} image(s) and template(s) in styles/ and templates/")
             for secret in imp.secrets:
                 notes.append(f"store passwords can't be read from GeoServer: put the login in Secret {secret} "
-                             "(keys: username, password), and add it to configops.secrets")
+                             "(keys: username, password)")
         if settings:
             found, more = settings_resources(gs)
             docs[target / "server.yaml"] = found
@@ -758,7 +757,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
             notes += more
             if keys:
                 notes.append(f"passwords can't be read from GeoServer: put each user's in Secret {USERS_SECRET} "
-                             f"(keys: {', '.join(keys)}), and add it to configops.secrets; plan stops until it's there")
+                             f"(keys: {', '.join(keys)}); plan stops until it's there")
     except GeoServerError as e:
         raise PlanError(str(e), code=1) from None
 
@@ -777,7 +776,7 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
         report.append("project.yaml")
         files[target / "project.yaml"] = dump([resource("Project", resource_name(ws)[0], {
             "geoserver": {"url": geoserver_url, "credentials": {"secret": SECRET}},
-            "database": {"jndi": jndi, "connection": {"secret": "geoserver-pgconfig-secret"}},
+            "database": {"jndi": jndi, "connection": {"secret": "database"}},
             "workspace": ws,
         })])
     clashes = [p for p in files if p.exists()]

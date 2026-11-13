@@ -1,0 +1,29 @@
+# A GeoServer and a PostGIS database to try the examples on (README, quick start): standard GeoServer, with
+# the database as its JNDI datasource jdbc/mypostgis, as the examples expect.
+#   docker compose -f examples/compose.yaml up -d --wait     (GeoServer takes a minute or two)
+#   docker compose -f examples/compose.yaml down -v
+name: configops-examples
+services:
+  db:
+    image: postgis/postgis:18-3.7
+    environment: {POSTGRES_DB: postgres, POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres}
+    ports: ["5433:5432"]
+    healthcheck: {test: ["CMD", "pg_isready", "-U", "postgres"], interval: 3s, retries: 40}
+  geoserver:
+    image: docker.osgeo.org/geoserver:3.0.2
+    depends_on: {db: {condition: service_healthy}}
+    environment:
+      SKIP_DEMO_DATA: "true"
+      POSTGRES_JNDI_ENABLED: "true"
+      POSTGRES_JNDI_RESOURCE_NAME: jdbc/mypostgis
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: postgres
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+    ports: ["8080:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-u", "admin:geoserver", "http://localhost:8080/geoserver/rest/about/version.json"]
+      interval: 5s
+      retries: 60
+      start_period: 30s

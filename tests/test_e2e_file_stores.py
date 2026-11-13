@@ -2,12 +2,11 @@
 GeoPackage, Shapefile, a directory of shapefiles, FlatGeobuf, PMTiles, GeoParquet, property files,
 CSV, GeoTIFF, ArcGrid, an image mosaic and an image pyramid; then import and a clean plan.
 
-tests/e2e/up.sh mounts tests/e2e/data at /data in the REST service, as the chart's
-values-data-volume.yaml does. The test makes its files with GDAL (ogr2ogr, gdal_translate,
+tests/e2e/up.sh mounts tests/e2e/data at /data in every GeoServer service. The test makes its files with GDAL (ogr2ogr, gdal_translate,
 gdal_retile.py) and puts them there: E2E_DATA_DIR is that folder, or E2E_DATA_POD a GeoServer
 pod that mounts the volume. With E2E_SERVICES_URL (the gateway), each layer is drawn through WMS.
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data pytest -m e2e
 """
 
 import json

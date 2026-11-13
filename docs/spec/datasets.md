@@ -73,11 +73,11 @@ metadata:
   name: uk-basemap
 spec:
   geoserver:
-    url: http://geoserver-gsc-gateway:8080/geoserver-cloud
+    url: http://localhost:8080/geoserver           # or https://<host>/geoserver-cloud
     credentials: { secret: geoserver-admin }       # keys: username, password
   database:
-    jndi: java:comp/env/jdbc/mypostgis             # how GeoServer reaches PostGIS (from the Helm chart)
-    connection: { secret: geoserver-pgconfig-secret }   # how configops itself reaches it, for loading data
+    jndi: java:comp/env/jdbc/mypostgis             # how GeoServer reaches PostGIS (its JNDI datasource)
+    connection: { secret: database }               # how configops itself reaches it, for loading data
     schemas: { live: data_layers, staging: staging, backup: backup }
   workspace: uk                                    # default workspace for layers and styles
   crs: EPSG:27700                                  # default CRS for tables that don't say
@@ -175,7 +175,7 @@ A product is a *version* at the source (OS publishes `2026-10`, for example). `s
 
 #### Raster Datasets
 
-With `raster:` instead of `tables:`, the download becomes one Cloud-Optimised GeoTIFF on the shared data volume (`-f values-data-volume.yaml`), and a `Store` with `dataset:` publishes it:
+With `raster:` instead of `tables:`, the download becomes one Cloud-Optimised GeoTIFF in GeoServer's `/data` folder, and a `Store` with `dataset:` publishes it:
 
 ```yaml
 apiVersion: configops/v1alpha1
@@ -373,9 +373,9 @@ spec:
 | `csv` | (none: `path`) | The file's rows as features | `connection: { strategy: specify, latField, lngField }`, `{ strategy: wkt, wktField }`, or `{ strategy: guess }` (columns named lat and lon); points in EPSG:4326. Standard GeoServer has no extension for it: add GeoTools' `gt-csv` and `opencsv` jars (`tests/e2e/standard-start.sh` does) |
 | `sqlserver` | (none: `connection`) | A table | As `postgis`; `credentials` for the login |
 | `oracle` | (none: `connection`) | A table | Standard GeoServer only, with its `oracle` extension (Oracle's JDBC driver is in it). As `postgis`; `database` is the SID, or `/<service name>` (`/FREEPDB1`) |
-| `appschema` | (none: `path`) | A complex feature type the mapping file defines | The mapping and its schema on the data volume; the layer names its feature type in `resource`. GeoServer Cloud ships the extension off: install with `-f values-app-schema.yaml`. `apply` makes an `app-schema-cache` folder beside the mapping (when the data volume is mounted where it runs), where GeoServer keeps the schemas it downloads; the workspace's namespace URI must be the mapping's target namespace (`Workspace` `namespace`) |
+| `appschema` | (none: `path`) | A complex feature type the mapping file defines | The mapping and its schema on the data volume; the layer names its feature type in `resource`. GeoServer Cloud ships the extension off: set `GEOSERVER_EXTENSION_APPSCHEMA_ENABLED=true` on its services. `apply` makes an `app-schema-cache` folder beside the mapping (when the data volume is mounted where it runs), where GeoServer keeps the schemas it downloads; the workspace's namespace URI must be the mapping's target namespace (`Workspace` `namespace`) |
 
-**Files** are read from the shared data volume, which the chart mounts at `/data` in every GeoServer service with `-f values-data-volume.yaml`. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you, or a raster Dataset makes them (above); `configops import` writes stores whose files are under `/data`.
+**Files** are read from GeoServer's `/data` folder: a volume mounted there in every GeoServer service. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you, or a raster Dataset makes them (above); `configops import` writes stores whose files are under `/data`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -554,7 +554,7 @@ spec:
   prefix: gscloud
   endpoint: https://s3.eu-west-2.amazonaws.com   # the region's address, or any S3-compatible service; http:// turns HTTPS off
   access: private                          # or public: GeoWebCache makes the tiles readable by anyone
-  credentials: { secret: tiles-s3 }        # keys accessKey and secretKey; add the Secret to configops.secrets
+  credentials: { secret: tiles-s3 }        # keys accessKey and secretKey
 ```
 
 ```yaml
@@ -728,7 +728,7 @@ spec:
 | | `roles` | none | Roles every member has |
 | | `enabled` | `true` | A group turned off gives its members none of its roles |
 | `User` | `name` | `metadata.name` | The user name, for names `metadata.name` can't hold (`alice@example.org`) |
-| | `password` | required | `{ secret, key }`: the Secret and key holding it. In the chart, add the Secret to `configops.secrets` |
+| | `password` | required | `{ secret, key }`: the Secret and key holding it |
 | | `groups`, `roles` | none | Groups the user is in, and roles of their own |
 | | `enabled` | `true` | A disabled user can't log in |
 | | `properties` | none | User attributes, `{ name: value }` |
@@ -941,9 +941,9 @@ After a load, `sync` works out again the bounding boxes of the published layers 
 
 Every check (loaded, up to date, failed) is written to the ingest log in `public.os_ingest_log`, which is how the next run knows the version and when the dataset is next due. A failed check doesn't count, so the next run tries again. Schedules allow an hour's slack, so a daily dataset checked a little after 02:00 yesterday is due at 02:00 today; a cron expression is due when it has named a minute since the last check.
 
-The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `CONFIGOPS_GEOSERVER_PGCONFIG_SECRET_HOST=localhost` and so on, or `secrets.yaml`.
+The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `CONFIGOPS_DATABASE_HOST=localhost` and so on, or `secrets.yaml`.
 
-In Kubernetes, the Helm chart runs it nightly as the `configops-sync` CronJob, and runs `configops apply --wait` as a `configops-apply-<revision>` Job after every install and upgrade (a plain Job, not a hook, since a first apply loads data and Helm would block on it). It builds the `configops-project` ConfigMap from the project directory (`configops.project`: YAML, style files and the images and fonts beside them, templates; never `secrets.yaml`), mounts it at `/project`, and mounts each Secret in `configops.secrets` (the database's, `geoserver-admin` for the refresh after loads, and source keys) as files under `$CONFIGOPS_SECRETS_DIR/<secret>/<key>`, where `configops` looks after the environment.
+In Kubernetes, run it nightly as a CronJob ([docs/kubernetes.md](../kubernetes.md)).
 
 Known gaps:
 
@@ -969,7 +969,7 @@ $ configops plan
 Plan: 2 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
 ```
 
-`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done, such as a layer on a table configops doesn't load and which doesn't exist. Groups leave such a layer out until it can be published. `plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables you load yourself, often after the deploy, so the chart's apply Job doesn't fail for them, or are settings only standard GeoServer can take (below). It exits 1 when a change fails.
+`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done, such as a layer on a table configops doesn't load and which doesn't exist. Groups leave such a layer out until it can be published. `plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables you load yourself, often after the deploy, so an apply Job doesn't fail for them, or are settings only standard GeoServer can take (below). It exits 1 when a change fails.
 
 **GeoServer Cloud or standard GeoServer.** The same files work on both. A few settings only standard GeoServer can take: a group's `styles`, `oracle` stores, and the global `cors`, `contentSecurityPolicy` and `diskQuota`. When the files set any of them, `plan` asks GeoServer which it is (GeoServer Cloud's version ends in `-CLOUD`) and, on GeoServer Cloud, shows each as `!` with the reason and leaves it out; a layer on an `oracle` store goes with it:
 
@@ -977,7 +977,7 @@ Plan: 2 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
   ! group uk:basemap   (GeoServer Cloud can't set styles: its catalog database doesn't keep a group style's layers, ...)
 ```
 
-The chart also runs `plan` hourly as the `configops-drift` CronJob (`configops.drift` in `values.yaml`). Its Job fails when GeoServer has drifted from the files, say a layer edited or deleted in the web UI, or when `plan` can't run; `!` lines alone don't fail it. The log shows what differs, and `apply` (or the next `helm upgrade`) puts it back. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere, through a port-forward for example.
+Run `plan` on a schedule to catch drift: [docs/kubernetes.md](../kubernetes.md) has an hourly CronJob whose Job fails when GeoServer has drifted from the files, say a layer edited or deleted in the web UI, or when `plan` can't run; `!` lines alone don't fail it. The log shows what differs, and `apply` puts it back. Both commands read GeoServer's address and the `credentials` secret (keys `username`, `password`) from the Project; `--geoserver http://localhost:8080/geoserver-cloud` points them elsewhere: another environment, or a port-forward.
 
 Each layer gets a PostGIS store in its workspace for the schema its table is in, named after the schema and reaching the database through the Project's JNDI datasource, so no password goes into GeoServer. Bounding boxes are worked out from the table whenever a layer is published or changed.
 
@@ -1039,7 +1039,7 @@ The notes say what couldn't be carried over as it is: a store not named after it
 ```
 $ configops import --settings --security -C my-project
 Wrote server.yaml: 1 Settings, 2 Service(s); security.yaml: 2 role(s), 1 group(s), 2 user(s), 3 rule(s)
-  note: passwords can't be read from GeoServer: put each user's in Secret geoserver-users (keys: alice, bob), and add it to configops.secrets; plan stops until it's there
+  note: passwords can't be read from GeoServer: put each user's in Secret geoserver-users (keys: alice, bob); plan stops until it's there
 ```
 
 `server.yaml` holds the global `Settings`, a `Settings` for each workspace with settings of its own, and a `Service` for each service, with only the fields that differ from a fresh GeoServer Cloud. `security.yaml` holds every role, group, user and access rule that isn't GeoServer's own unchanged default, and every URL check. Fields outside the schema aren't imported. Passwords can't be read back, so each user's comes from Secret `geoserver-users`, under a key named after the user; until it holds them, `plan` stops and says which is missing. With them there, `plan` on the imported files has nothing to do.

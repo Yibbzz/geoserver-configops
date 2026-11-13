@@ -1,7 +1,7 @@
 """SQL views, a declared CRS, the attributes published and a style's legend against the real
 GeoServer Cloud REST service; then drift, and import back to a clean plan.
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 pytest -m e2e
 """
 
 import os

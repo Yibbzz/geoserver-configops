@@ -1,8 +1,8 @@
 """Tile caching against the real GeoServer Cloud REST service and its GeoWebCache: a gridset of
 our own, and a layer cached in it with metatiling, gutter and expiry; then import to a clean plan.
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 \
-      E2E_GWC_URL=http://localhost:59090/geoserver-cloud/gwc/rest pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 \
+      pytest -m e2e
 """
 
 import os

@@ -10,7 +10,7 @@ This page is the overview, for GeoServer Cloud; configops works with standard Ge
 | **Partly** | Some of it; the notes say what's missing |
 | **Not yet** | Possible through GeoServer's REST API; not built |
 | **Standard only** | GeoServer Cloud has no way to set it; on standard GeoServer configops does |
-| **Chart** | Set in the Helm chart's `values.yaml`, not in the project files |
+| **Deployment** | Set where GeoServer is deployed (its environment, which services run), not in the project files |
 | — | Not configuration (a tool or a view of the data) |
 
 What the GeoServer Cloud 3.0 images include decides what's possible: the vector stores (PostGIS, GeoPackage, Shapefile, FlatGeobuf, GeoParquet, PMTiles, property files, Oracle, SQL Server, app-schema), raster formats (GeoTIFF and Cloud-Optimised GeoTIFF over HTTP, S3, Azure and Google Cloud Storage, image mosaics and pyramids, world images, ArcGrid), cascading of remote WFS, WMS and WMTS, CSS and MBStyle styles, vector tiles, OGC API Features, and LDAP, JDBC, auth-key and gateway-shared authentication.
@@ -37,7 +37,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | PostGIS with a password | Yes | `Store` `type: postgis`, login from a Secret |
 | SQL Server | Yes | `Store` `type: sqlserver` (tested by hand against SQL Server 2022; not in CI) |
 | Oracle | Standard only | `Store` `type: oracle`, with standard GeoServer's `oracle` extension. GeoServer Cloud's images don't ship Oracle's JDBC driver |
-| GeoPackage, Shapefile, directory of shapefiles, FlatGeobuf, PMTiles | Yes | `Store` with `path:` on the shared data volume (`values-data-volume.yaml`); PMTiles also over `url:` |
+| GeoPackage, Shapefile, directory of shapefiles, FlatGeobuf, PMTiles | Yes | `Store` with `path:` in GeoServer's `/data` folder; PMTiles also over `url:` |
 | GeoParquet, property files, CSV | Yes | `Store` `type: geoparquet`, `property`, `csv` (standard GeoServer: add GeoTools' `gt-csv` and `opencsv` jars) |
 | Remote WFS (cascaded) | Yes | `Store` `type: wfs` |
 | Remote WMS, WMTS (cascaded) | Yes | `Store` `type: wms`, `wmts`; connections, timeouts, an HTTP header, an authentication key |
@@ -47,7 +47,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | GeoTIFF on disk | Yes | `Store` `type: geotiff` with `path:` |
 | Image mosaic, world image, ArcGrid | Yes | `Store` `type: imagemosaic`, `worldimage`, `arcgrid` |
 | Image pyramid | Yes | `Store` `type: imagepyramid` |
-| App-schema (complex features) | Yes | `Store` `type: appschema`; the extension is off in GeoServer Cloud: `-f values-app-schema.yaml` |
+| App-schema (complex features) | Yes | `Store` `type: appschema`; the extension is off in GeoServer Cloud: `GEOSERVER_EXTENSION_APPSCHEMA_ENABLED=true` |
 | Store description, enabled | Yes | For `Store`s; the JNDI PostGIS stores have none |
 
 ### Layers
@@ -128,11 +128,11 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Page | Status | Notes |
 | --- | --- | --- |
 | WMS, WFS, WCS, WMTS | Yes | `Service`: every field on the page, plus `geoserver:` for others |
-| WPS | Chart | Off in the chart (`geoserver.services.wps.enabled`) |
+| WPS | Deployment | GeoServer Cloud's WPS service, when deployed |
 | OGC API Features | Yes | The WFS `Service`'s `metadata.ogcapiFeatures`: which conformance classes it offers |
 | WMS options: KML, SVG, PNG/JPEG compression, projection handling, map wrapping, root layer, authority URLs | Yes | The WMS `Service`'s `metadata`, `authorityURLs`, `identifiers` |
 | GML per WFS version, allowed output formats, disabled versions, metadata link | Yes | `Service` `gml`, `getFeatureOutputTypes`, `getMapMimeTypes`, `disabledVersions`, `metadataLink` |
-| Turning a service on or off | Yes | `enabled:` in a `Service`; whether the service runs at all is `geoserver.services.<name>.enabled` in the chart |
+| Turning a service on or off | Yes | `enabled:` in a `Service`; whether GeoServer Cloud runs the service at all is up to its deployment |
 
 ## Settings
 
@@ -145,8 +145,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Image processing | Yes | As JAI |
 | REST: upload folder, quiet on not found | Yes | `Settings` `restUploadRoot`, `restQuietOnNotFound` |
 | How the web UI shows users | Yes | `Settings` `global.userDetailsDisplaySettingsInfo` |
-| Logging | Chart | GeoServer Cloud logs through Spring Boot, set in the chart's environment |
-| Request logging | Yes | `Settings` `global.requestLogging`: each request (and its headers and body) in the services' logs; the chart sets the logger it needs (`org.geoserver.filters`) to INFO |
+| Logging | Deployment | GeoServer Cloud logs through Spring Boot, set in its environment |
+| Request logging | Yes | `Settings` `global.requestLogging`: each request (and its headers and body) in the services' logs; GeoServer Cloud needs the logger (`org.geoserver.filters`) to INFO |
 
 ## Tile caching
 
@@ -179,8 +179,8 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | Password policies | Yes | `PasswordPolicy` |
 | URL checks | Yes | `URLCheck` (a regular expression a URL may match), `Settings` `global.urlChecks` for the switch. GeoServer Cloud has them on with no checks, so every external URL (a remote style, graphic) is refused until a check allows it |
 | Content Security Policy | Standard only | `Settings` `global.contentSecurityPolicy`. GeoServer Cloud's services don't send the header from GeoServer's policy (`security/csp.xml`): changing it changes nothing. The web UI sends its own |
-| CORS | Chart; standard: Yes | GeoServer Cloud's gateway answers it (README). Standard GeoServer: `Settings` `global.cors`, used after a restart |
-| GeoServer ACL | Chart | Off in the chart (`geoserver.services.acl.enabled`) |
+| CORS | Deployment; standard: Yes | GeoServer Cloud's gateway answers it (README). Standard GeoServer: `Settings` `global.cors`, used after a restart |
+| GeoServer ACL | Deployment | GeoServer Cloud's ACL service, when deployed |
 
 ## Workflow
 
@@ -188,13 +188,13 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | --- | --- | --- |
 | Export a live GeoServer to files | Yes | `configops import <workspace> --settings --security` |
 | Bring changes made in the web UI back into the files | Yes | `import` in a project folder updates only what changed, keeping names, order and comments; `--prune` removes what GeoServer no longer has |
-| Drift detection | Yes | `plan` (exit code 2), the chart's hourly `configops-drift` CronJob |
-| Promotion between environments | Yes | The same project files applied to each environment: its address with `--geoserver` (or the chart's), its logins from its own Secrets |
+| Drift detection | Yes | `plan` (exit code 2), run on a schedule (docs/kubernetes.md has an hourly CronJob) |
+| Promotion between environments | Yes | The same project files applied to each environment: its address with `--geoserver`, its logins from its own Secrets |
 
 ## Not configuration
 
 Layer preview, demos, server status, the reprojection console and the importer's web pages are tools, not settings: nothing to keep in files.
 
-## Deployment (the Helm chart)
+## Deployment
 
-Which services run, their images, memory and CPU, health checks, ingress, PostGIS and RabbitMQ, the JNDI datasource, and configops's apply Job, sync and drift CronJobs are all in `values.yaml`.
+How GeoServer itself is deployed (which services run, their images, memory, health checks, the database and the JNDI datasource) is outside configops: it manages what is in a running GeoServer. [docs/kubernetes.md](kubernetes.md) runs configops itself beside it.

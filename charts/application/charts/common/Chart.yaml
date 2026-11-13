@@ -1,6 +1,0 @@
-apiVersion: v2
-appVersion: "1.0"
-description: Camptocamp shared functions
-name: common
-type: library
-version: 2.1.2

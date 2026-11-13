@@ -2,7 +2,7 @@
 request-header authentication filter, a filter chain that uses it, brute force settings; then
 drift and import back to a clean plan. GeoServer's security files are put back at the end.
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest pytest -m e2e
 """
 
 import os

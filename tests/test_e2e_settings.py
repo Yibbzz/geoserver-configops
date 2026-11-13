@@ -3,7 +3,7 @@
 Every field the schema allows is set, so a field GeoServer ignores or renames
 shows up as a plan that never settles. Start the service with tests/e2e/up.sh, then:
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 pytest -m e2e
 
 The settings are put back as they were at the end.
 """

@@ -1,17 +1,17 @@
 # Rasters: OS Terrain 50 (heights of Great Britain on a 50 m grid) made into one
-# Cloud-Optimised GeoTIFF on the shared data volume, and published with a colour ramp.
-# Needs the data volume: deploy with -f values-data-volume.yaml.
+# Cloud-Optimised GeoTIFF in GeoServer's /data folder, and published with a colour ramp.
+# configops writes the file, so it needs the same folder: run it where /data is GeoServer's (CONFIGOPS_DATA_DIR).
 apiVersion: configops/v1alpha1
 kind: Project
 metadata:
   name: terrain
 spec:
   geoserver:
-    url: http://geoserver-gsc-gateway:8080/geoserver-cloud
+    url: http://localhost:8080/geoserver
     credentials: { secret: geoserver-admin }
   database:                                    # the ingest log lives here
     jndi: java:comp/env/jdbc/mypostgis
-    connection: { secret: geoserver-pgconfig-secret }
+    connection: { secret: database }
   workspace: terrain
   crs: EPSG:27700
   backups: 1

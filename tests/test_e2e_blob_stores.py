@@ -2,8 +2,8 @@
 shared data volume, Azure (Azurite) and Google Cloud Storage (fake-gcs-server), both started by
 tests/e2e/up.sh; layers' tiles seeded into them, drift, and import back to a clean plan.
 
-    E2E_GEOSERVER_URL=http://localhost:59090/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data \\
-      E2E_GWC_URL=http://localhost:59090/geoserver-cloud/gwc/rest pytest -m e2e
+    E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data \\
+      pytest -m e2e
 """
 
 import os

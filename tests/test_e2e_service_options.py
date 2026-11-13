@@ -2,7 +2,7 @@
 layer's authority URL and identifier show in capabilities, and the OGC API Features conformance
 classes follow the WFS settings.
 
-Needs the whole chart, reached through its gateway (the kind test, or the dev cluster).
+Needs GeoServer's OGC services as well as REST (E2E_SERVICES_URL; tests/e2e/up.sh starts them all).
 """
 
 import os
