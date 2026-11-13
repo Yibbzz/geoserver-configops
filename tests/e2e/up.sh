@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 export GEOSERVER_TAG=3.0.2.1  # GeoServer Cloud
 export POSTGIS_IMAGE=postgis/postgis:18-3.7
 export RABBITMQ_IMAGE=rabbitmq:4.4-alpine
-export STANDARD_GEOSERVER_VERSION=3.0.1  # the newest standard GeoServer; tests/versions.py keeps both up to date
+export STANDARD_GEOSERVER_VERSION=3.0.2  # the newest standard GeoServer; tests/versions.py keeps both up to date
 if [ "${1:-}" = "down" ]; then
   docker compose --profile cloud --profile standard down -v
   exit 0
