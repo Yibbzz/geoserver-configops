@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -12,14 +11,6 @@ import yaml
 
 # Holds secret values (spec: "Secrets"); never read as configuration
 SECRET_FILES = {"secrets.yaml", "secrets.yml"}
-
-
-def default_table(dataset: str, layer: str) -> str:
-    """A Dataset layer's table when `tables` doesn't name it: <dataset>_<layer>, lowercase, a-z 0-9 _ only."""
-    name = re.sub(r"[^a-z0-9]+", "_", f"{dataset}_{layer}".lower()).strip("_")
-    if not name or name[0].isdigit():
-        name = f"t_{name}"
-    return name[:63]
 
 
 @dataclass
@@ -95,7 +86,7 @@ def find_files(root: Path) -> list[Path]:
     """
     Every YAML file under `root`, hidden ones left out. Symlinked folders are
     followed: Kubernetes mounts a ConfigMap as symlinks into a hidden ..data
-    folder, so a project's datasets/ is a link to a directory there.
+    folder, so a project's styles/ is a link to a directory there.
     """
     files = []
     for folder, dirs, names in os.walk(root, followlinks=True):

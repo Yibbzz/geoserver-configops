@@ -22,38 +22,17 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    services:
-      postgis:
-        image: postgis/postgis:18-3.7
-        env:
-          POSTGRES_DB: gis
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
-      - name: Install GDAL
-        run: tests/ci/install-gdal.sh
       - name: Install Python dependencies
         run: pip install -e '.[dev]'
       - name: Run tests
-        env:
-          TEST_DB_HOST: localhost
-          TEST_DB_PORT: '5432'
-          TEST_DB_NAME: gis
-          TEST_DB_USER: postgres
-          TEST_DB_PASSWORD: postgres
         run: pytest
-      - name: Validate the example project
-        run: configops validate examples/uk-basemap
+      - name: Validate the example projects
+        run: for p in examples/*/; do configops validate "$p" || exit 1; done
 
   configops-image:
     runs-on: ubuntu-latest
@@ -64,7 +43,6 @@ jobs:
       - name: Smoke test
         run: |
           docker run --rm configops:ci --version
-          docker run --rm --entrypoint ogr2ogr configops:ci --version
           docker run --rm -v "$PWD/examples/uk-basemap:/project:ro" configops:ci validate /project
 
   # GeoServer Cloud in Docker (gateway, REST, WMS, WFS, WCS and the tile cache), then the e2e tests against it
@@ -75,7 +53,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
-      - name: Install GDAL (plan/apply load a dataset)
+      - name: Install GDAL (some e2e tests make their files with it)
         run: tests/ci/install-gdal.sh
       - name: Install Python dependencies
         run: pip install -e '.[dev]'
@@ -106,7 +84,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
-      - name: Install GDAL (plan/apply load a dataset)
+      - name: Install GDAL (some e2e tests make their files with it)
         run: tests/ci/install-gdal.sh
       - name: Install Python dependencies
         run: pip install -e '.[dev]'

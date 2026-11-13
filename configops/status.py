@@ -1,54 +1,19 @@
-"""`configops status`: how the project's datasets and layers are, live.
-
-Datasets from the ingest log (what was loaded, when, the last error, the
-next check); layers and groups from GeoServer (published, drifted from the
-files, tiles cached). Nothing is changed. Without GeoServer credentials,
-the datasets are still shown.
-"""
+"""`configops status`: the project's layers and groups as GeoServer has them: published,
+drifted from the files, tiles cached. Nothing is changed."""
 
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 
-import psycopg2
-
-from . import ingest, schedule, sync
-from .discover import table, version
-from .geoserver import GeoServerError, MissingCredentials, for_project
-from .loader import load
-from .plan import Planner, PlanError
-from .validate import geoserver_name, validate
+from .geoserver import GeoServerError, MissingCredentials
+from .plan import Planner, PlanError, connect
+from .validate import geoserver_name
 
 
-def dataset_rows(conn, files) -> list[dict]:
-    ingest.bootstrap(conn)
-    rows = []
-    with conn.cursor() as cur:
-        for name, dataset in sorted(files.named("Dataset").items()):
-            cur.execute(
-                f"SELECT version, finished_at, rows_loaded, tables FROM {ingest.LOG_TABLE} "
-                "WHERE dataset_id = %s AND status = 'success' ORDER BY finished_at DESC LIMIT 1", (name,))
-            loaded = cur.fetchone()
-            cur.execute(
-                f"SELECT status, error, started_at FROM {ingest.LOG_TABLE} WHERE dataset_id = %s "
-                "ORDER BY started_at DESC, id DESC LIMIT 1", (name,))
-            last = cur.fetchone()
-            update = dataset.spec.get("update") or "manual"
-            nxt = schedule.next_check(update, ingest.last_check(conn, name))
-            rows.append({
-                "dataset": name,
-                "update": update,
-                "version": loaded[0] if loaded else None,
-                "loadedAt": loaded[1].isoformat(timespec="minutes") if loaded and loaded[1] else None,
-                "rows": loaded[2] if loaded else None,
-                "tables": [t for t in (loaded[3] or "").split(",") if t] if loaded else [],
-                "lastCheck": last[0] if last else None,
-                "lastError": last[1] if last and last[0] == "failed" else None,
-                "nextCheck": nxt.isoformat(timespec="minutes") if nxt else None,
-            })
-    return rows
+def table(rows: list[list[str]]) -> str:
+    widths = [max(len(str(r[i])) for r in rows) for i in range(len(rows[0]))]
+    return "\n".join("  ".join(str(c).ljust(w) for c, w in zip(r, widths)).rstrip() for r in rows)
 
 
 def layer_rows(planner: Planner) -> list[dict]:
@@ -71,65 +36,32 @@ def layer_rows(planner: Planner) -> list[dict]:
     return rows
 
 
-def when(iso: str | None, now: datetime) -> str:
-    if not iso:
-        return "-"
-    t = datetime.fromisoformat(iso)
-    return "now" if t <= now else iso.replace("T", " ")
-
-
-def print_status(datasets: list[dict], layers: list[dict] | None, note: str) -> None:
-    now = datetime.now()
-    if datasets:
-        rows = [["DATASET", "UPDATE", "LOADED", "AT", "ROWS", "NEXT CHECK", "LAST CHECK"]]
-        for d in datasets:
-            last = d["lastCheck"] or "-"
-            if d["lastError"]:
-                last = f"failed: {' '.join(d['lastError'].split())[:80]}"
-            rows.append([d["dataset"], d["update"], version(d["version"]) if d["version"] else "never",
-                         (d["loadedAt"] or "-").replace("T", " "), f"{d['rows']:,}" if d["rows"] is not None else "-",
-                         when(d["nextCheck"], now) if d["update"] != "manual" else "manual", last])
-        print(table(rows))
-    if layers:
-        print()
-        rows = [["LAYER", "PUBLISHED", "DRIFTED", "TILES CACHED"]]
-        for x in layers:
-            drift = ", ".join(x["drifted"]) if x["drifted"] else "no"
-            rows.append([f"{x['name']}" + (" (group)" if x["kind"] == "group" else ""),
-                         "yes" if x["published"] else ("no: " + x["problem"] if x["problem"] else "no"),
-                         drift if x["published"] else "-", "yes" if x["cached"] else "no"])
-        print(table(rows))
-        if any(x["drifted"] or not x["published"] for x in layers):
-            print("\n`configops plan` shows the changes; `configops apply` makes them.")
-    if note:
-        print(f"\nnote: {note}")
+def print_status(layers: list[dict]) -> None:
+    if not layers:
+        print("No layers or groups.")
+        return
+    rows = [["LAYER", "PUBLISHED", "DRIFTED", "TILES CACHED"]]
+    for x in layers:
+        drift = ", ".join(x["drifted"]) if x["drifted"] else "no"
+        rows.append([f"{x['name']}" + (" (group)" if x["kind"] == "group" else ""),
+                     "yes" if x["published"] else ("no: " + x["problem"] if x["problem"] else "no"),
+                     drift if x["published"] else "-", "yes" if x["cached"] else "no"])
+    print(table(rows))
+    if any(x["drifted"] or not x["published"] for x in layers):
+        print("\n`configops plan` shows the changes; `configops apply` makes them.")
 
 
 def run(root: Path, fmt: str = "text", geoserver_url: str | None = None) -> int:
-    files = load(root)
-    errors = [p for p in validate(files) if p.severity == "error"]
-    if errors:
-        raise PlanError(f"the files have {len(errors)} error(s); `configops validate` lists them")
-    project = files.of_kind("Project")[0]
-    db = sync.database(project, root)
+    files, gs, conn, db = connect(root, geoserver_url)
     try:
-        conn = db.connect()
-    except psycopg2.OperationalError as e:
-        raise PlanError(f"can't connect to the database at {db.host}:{db.port}: {str(e).strip().splitlines()[0]}", code=1) from None
-    note, layers = "", None
-    try:
-        datasets = dataset_rows(conn, files)
-        try:
-            gs = for_project(project, root, geoserver_url)
-            layers = layer_rows(Planner(files, root, gs, conn, db))
-        except MissingCredentials as e:
-            note = f"layers not shown: {e}"
-        except GeoServerError as e:
-            note = f"layers not shown: {e}"
+        layers = layer_rows(Planner(files, root, gs, conn, db))
+    except (GeoServerError, MissingCredentials) as e:
+        raise PlanError(str(e), code=1) from None
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
     if fmt == "json":
-        print(json.dumps({"datasets": datasets, "layers": layers, "note": note or None}, indent=2, ensure_ascii=False))
+        print(json.dumps({"layers": layers}, indent=2, ensure_ascii=False))
     else:
-        print_status(datasets, layers, note)
+        print_status(layers)
     return 0

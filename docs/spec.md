@@ -1,28 +1,27 @@
-# Dataset spec (draft, `v1alpha1`)
+# GeoServer ConfigOps files (`configops/v1alpha1`)
 
-A set of YAML files that says which open datasets you want, where they come from, how often they update, and how they are published and styled in GeoServer Cloud. A small command-line tool reads the files and makes PostGIS and GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
+A set of YAML files that says what a GeoServer or GeoServer Cloud publishes and how it is set up: workspaces, stores, layers, styles, groups, tile caching, settings, services and security. `configops` reads the files and makes GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
 
-> **Status:** first draft for review, 9 Nov 2026. Every command below is built. The tool is `configops`, part of GeoServer ConfigOps, and the `apiVersion` group is `configops`.
+> **Status:** every command below is built. Loading data into PostGIS is a separate tool, [geodata-sync](https://github.com/Yibbzz/geodata-sync); configops publishes the tables, whoever loads them.
 
 ## Principles
 
 1. **The files hold what you chose, nothing else.** Anything GeoServer or the data can work out (projection definitions, bounding boxes, attribute lists, links, timestamps) is never written in the files. The tool fills it in when it applies them.
 2. **Plan, then apply.** `configops plan` shows what would change; `configops apply` makes exactly those changes, in dependency order, and running it twice changes nothing the second time.
-3. **No state file.** The live GeoServer, the PostGIS schemas and the ingest log are the state. Drift (a change made in the web UI) shows up in the next `plan`.
+3. **No state file.** The live GeoServer (and whether a layer's table exists in PostGIS) is the state. Drift (a change made in the web UI) shows up in the next `plan`.
 4. **Secrets by reference.** API keys and passwords never appear in the files, only the name of the secret that holds them.
 5. **Shaped like Kubernetes resources** (`apiVersion`, `kind`, `metadata`, `spec`), so the same files could later drive a Kubernetes operator instead of the CLI.
-6. **Build on existing tools.** GeoServer calls go through `python-geoservercloud`; data loading through GDAL.
+6. **Small.** GeoServer calls go through a thin REST client of its own; nothing else is needed but Python.
 
 ## How it fits together
 
 ```
- config files (git) ──► configops plan / apply ──► GeoServer catalog: workspaces, stores, layers, styles, tile cache
-        │
-        └────────────► configops sync (nightly) ──► PostGIS tables: download, stage, validate, back up, swap in
-                                                    └─► then refresh extents and clear cached tiles of the layers on them
+ config files (git) ──► configops plan / apply ──► GeoServer catalog: workspaces, stores, layers, styles, tile cache,
+                                                    settings, services, security
+ new data loaded (geodata sync, or your own) ──► configops refresh ──► layers' bounds worked out again, cached tiles cleared
 ```
 
-`apply` manages configuration; `sync` manages data. They are separate so that a data update never changes configuration, and a configuration change never downloads hundreds of megabytes by surprise. `apply` does run a first `sync` for a dataset whose tables don't exist yet, so a new layer has something to show.
+`apply` manages configuration only: a layer on a table that doesn't exist yet is shown as `!` and published once it does.
 
 ## Files
 
@@ -31,12 +30,9 @@ The tool reads every `*.yaml` file under one directory. A file can hold several 
 ```
 uk-basemap/
   project.yaml              # one Project
-  sources.yaml              # Sources
-  datasets/
-    os-open-roads.yaml      # a Dataset and the Layers made from it
-    boundary-line.yaml
   layers/
-    survey-sites.yaml       # Layers on tables you load yourself
+    os-open-roads.yaml      # Layers
+    survey-sites.yaml
   server.yaml               # Settings and Services: contact details, service titles, limits
   security.yaml             # Roles, Groups, Users and AccessRules
   styles/
@@ -52,19 +48,19 @@ Every resource has the same outer shape:
 
 ```yaml
 apiVersion: configops/v1alpha1
-kind: Layer                 # Project, Source, Dataset, Store, Layer, LayerGroup, Style, Settings, Service, Role, Group, User or AccessRule
+kind: Layer                 # Project, Store, Layer, LayerGroup, Style, Settings, Service, Role, Group, User, AccessRule, ...
 metadata:
   name: road-links          # unique per kind; lowercase letters, digits and dashes
 spec: {}                    # what you want; differs per kind
 ```
 
-There is no `status` in the files. Status is what `configops status` reports from the live system; writing it back would make every sync a git change.
+There is no `status` in the files. Status is what `configops status` reports from the live system.
 
 ## Kinds
 
 ### Project
 
-One per directory. Says which GeoServer and database to manage and the defaults for everything else.
+One per directory. Says which GeoServer to manage, where its layers' tables are, and the defaults for everything else.
 
 ```yaml
 apiVersion: configops/v1alpha1
@@ -77,139 +73,26 @@ spec:
     credentials: { secret: geoserver-admin }       # keys: username, password
   database:
     jndi: java:comp/env/jdbc/mypostgis             # how GeoServer reaches PostGIS (its JNDI datasource)
-    connection: { secret: database }               # how configops itself reaches it, for loading data
-    schemas: { live: data_layers, staging: staging, backup: backup }
+    connection: { secret: database }               # how configops reaches it: does a layer's table exist yet?
+    schema: data_layers                            # where `table: <name>` is
   workspace: uk                                    # default workspace for layers and styles
-  crs: EPSG:27700                                  # default CRS for tables that don't say
-  backups: 3                                       # previous loads kept per table
+  crs: EPSG:27700                                  # the CRS import leaves out when it's this
 ```
 
 | Field | Required | Default | Meaning |
 | --- | --- | --- | --- |
 | `geoserver.url` | yes | | Base URL of GeoServer (gateway) |
 | `geoserver.credentials.secret` | yes | | Secret with `username` and `password` |
-| `database.jndi` | yes | | JNDI name GeoServer uses for the data store |
-| `database.connection.secret` | yes | | Secret with `host`, `port`, `database`, `username`, `password` |
-| `database.schemas` | no | `data_layers`, `staging`, `backup` | Where live, staged and backed-up tables live |
+| `database` | for layers on tables or SQL views | | The PostGIS database GeoServer reaches through a JNDI datasource |
+| `database.jndi` | with `database` | | JNDI name GeoServer uses for the data store |
+| `database.connection.secret` | with `database` | | Secret with `host`, `port`, `database`, `username`, `password` |
+| `database.schema` | no | `public` | The schema of a layer's `table` given by name alone |
 | `workspace` | yes | | Default workspace; the tool owns it (see [Ownership](#ownership-and-pruning)) |
-| `crs` | no | `EPSG:4326` | Default CRS of tables |
-| `backups` | no | `3` | Previous versions kept per table |
-
-### Source
-
-Where data comes from. One per provider account.
-
-```yaml
-apiVersion: configops/v1alpha1
-kind: Source
-metadata:
-  name: os
-spec:
-  type: os-downloads                 # OS Downloads API
-  credentials: { secret: os-api }    # key: apiKey; optional, OpenData products need none
----
-apiVersion: configops/v1alpha1
-kind: Source
-metadata:
-  name: web
-spec:
-  type: url                          # plain file downloads, no key
----
-apiVersion: configops/v1alpha1
-kind: Source
-metadata:
-  name: data-gov-uk
-spec:
-  type: ckan                         # a CKAN portal
-  url: https://data.gov.uk
-```
-
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `type` | yes | One of the types below |
-| `url` | for `ckan`, `ogc-api-features`, `wfs` | The source's address. For CKAN, the portal (`https://data.gov.uk`); an address already inside `/api/` (such as `https://portal.example/api/3/action`) is used as given. For WFS, the service (`https://host/wfs`); request parameters copied with it (`?service=WFS&request=GetCapabilities`) are dropped, others (`?map=`) kept. For OGC API Features, the API's landing page; a collection's address is cut back to it |
-| `credentials.secret` | no | Secret with `apiKey`. For CKAN it is an API token, sent only to the portal, never to the servers its files are on. Not yet used by `wfs` or `ogc-api-features`, which work with public services only so far |
-
-| `type` | Lists products (`discover`) | Needs a key | Status |
-| --- | --- | --- | --- |
-| `os-downloads` | yes | no for OpenData products | `discover` built; loading exists in the pipeline |
-| `url` | no: you give the URL | no | `discover` built (reads the file's layers) |
-| `ckan` (data.gov.uk and many city, regional and national portals) | yes, by search | no for public data | `discover` built |
-| `wfs` (versions 1.0 to 2.0) | yes: feature types | usually no | `discover` built |
-| `ogc-api-features` | yes: feature collections | usually no | `discover` built |
-
-Each type is a plug-in with two parts: list what's available, and fetch one product with its version. Adding a provider means adding one plug-in.
-
-### Dataset
-
-One product from a source, loaded into one or more tables (or, with `raster:`, made into one Cloud-Optimised GeoTIFF), with an update schedule.
-
-```yaml
-apiVersion: configops/v1alpha1
-kind: Dataset
-metadata:
-  name: os-open-roads
-spec:
-  source: os
-  product: OpenRoads                 # the provider's product ID, as `configops discover os` lists it
-  update: weekly                     # daily | weekly | monthly | manual | a cron expression
-  tables:                            # source layer -> table; names as `configops discover os OpenRoads` lists them
-    road_link: {}                    # table os_open_roads_road_link
-    road_node: { name: road_nodes }  # table road_nodes
-```
-
-| Field | Required | Default | Meaning |
-| --- | --- | --- | --- |
-| `source` | yes | | Name of a Source |
-| `product` | for `os-downloads`, `ckan`, `wfs` | | Product, package or collection ID at the source |
-| `url` | for `url` | | File to download (zip, GeoPackage, GeoJSON, CSV, Shapefile) |
-| `resource` | no, `ckan` only | the best loadable file | Which file of the package: a resource ID or name, as `discover` lists them. Packages often hold the same data in several formats, or several files |
-| `update` | no | `manual` | When `sync` checks for a new version |
-| `tables` | no | every layer in the file | Which layers of the downloaded file to load, and as what |
-| `tables.<layer>.name` | no | `<dataset>_<layer>` with dashes as underscores | Table name in the live schema |
-| `tables.<layer>.crs` | no | from the file, else the project's `crs` | Override when the file doesn't declare its CRS |
-| `validation.dropInvalidGeometries` | no | `true` | Leave out rows whose geometry PostGIS calls invalid |
-| `validation.minRows` | no | `1` | Fail the update (keep the old table) below this count |
-
-A product is a *version* at the source (OS publishes `2026-10`, for example). `sync` loads a new version only when the source has one, and keeps the last `backups` versions of each table.
-
-#### Raster Datasets
-
-With `raster:` instead of `tables:`, the download becomes one Cloud-Optimised GeoTIFF in GeoServer's `/data` folder, and a `Store` with `dataset:` publishes it:
-
-```yaml
-apiVersion: configops/v1alpha1
-kind: Dataset
-metadata:
-  name: terrain-50
-spec:
-  source: os
-  product: Terrain50                 # OS's ASCII Grid download: ~2,800 tiles in zips inside a zip
-  update: monthly
-  raster:
-    path: rasters/os-terrain-50.tif  # under /data
-    crs: EPSG:27700                  # the grids carry no CRS of their own
----
-apiVersion: configops/v1alpha1
-kind: Store
-metadata:
-  name: terrain-50
-spec:
-  type: geotiff
-  dataset: terrain-50                # the Dataset's file
-```
-
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `raster.path` | required | Where the COG goes, under the data volume; ends in `.tif` |
-| `raster.crs` | the rasters' own, else the project's `crs` | Assigned to the result |
-| `raster.nodata` | none | The value written where no raster covers (GDAL would write 0 there), and read as "no data" in the rasters |
-
-`sync` downloads the product (for `os-downloads`, a raster format: GeoTIFF, then ASCII Grid; for `ckan`, name the file with `resource`), unpacks every raster in it, through zips inside zips, mosaics them through a GDAL VRT and writes one deflate-compressed COG with overviews. It writes beside the live file, checks GDAL can read it, then renames it over the live file, so GeoServer never reads half a file; the old one moves to `.configops-backups/` on the volume, and the newest `backups` are kept. Then it resets the GeoServer stores on the file, works their layers' bounds out again and clears their cached tiles. `plan` loads a raster Dataset that has never loaded before making its store. Outside the cluster, `CONFIGOPS_DATA_DIR` stands in for `/data`.
+| `crs` | no | | The project's usual CRS |
 
 ### Layer
 
-How data is published in GeoServer. A layer is on a dataset's table, on any table you load yourself, on a SQL view (`sql:`), or on a `Store` (below).
+How data is published in GeoServer. A layer is on a table, on a SQL view (`sql:`), or on a `Store` (below).
 
 ```yaml
 apiVersion: configops/v1alpha1
@@ -217,8 +100,7 @@ kind: Layer
 metadata:
   name: road-links
 spec:
-  dataset: os-open-roads
-  table: road_link                   # a key under the dataset's `tables`
+  table: os_open_roads_road_link     # in the Project's database schema
   title: OS Open Roads, road links
   abstract: Roads in Great Britain from OS Open Roads.
   style: os-road-link                # default style
@@ -230,7 +112,7 @@ kind: Layer
 metadata:
   name: survey-sites
 spec:
-  table: { schema: field_data, name: sites }   # a table configops doesn't load
+  table: { schema: field_data, name: sites }   # in another schema
   title: Survey sites
   style: point
 ---
@@ -251,8 +133,7 @@ spec:
 
 | Field | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `dataset` + `table` | one of the forms | | A table loaded by a Dataset |
-| `table.schema` + `table.name` | one of the forms | | Any existing table |
+| `table` | one of the forms | | A table: its name in the Project's database schema, or `{ schema, name }` |
 | `store` + `resource` | one of the forms | `resource`: the store's only one | Something a `Store` offers (below) |
 | `sql` | one of the forms | | A SQL view: `{ schema, query, key, geometry: { column, type, crs } }`, published from the schema's store |
 | `name` (in GeoServer) | no | `metadata.name` with dashes as underscores | Layer name clients use |
@@ -265,7 +146,7 @@ spec:
 | `styles` | no | none | Extra styles |
 | `enabled`, `advertised`, `queryable` | no | `true` | Publishing switches |
 | `cache` | no | `false` | `true`, or `{ gridsets, formats, metaTiles: [w, h], gutter, expireCache, expireClients }`: the gridsets (GeoWebCache's own, or a `Gridset`), image formats, tiles drawn at once, pixels drawn around each tile, how long (seconds) the cache and clients keep a tile, and `blobStore`: the `BlobStore` the tiles go in. `parameterFilters` and `seed`: see below. Only the options set are compared |
-| `attribution` | no | from the dataset's source, where known | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026"; or `{ title, link, logo: { url, width, height, type } }` |
+| `attribution` | no | none | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026"; or `{ title, link, logo: { url, width, height, type } }` |
 | `filter` | no | none | A CQL filter: only these features are published, e.g. `"flood_zone = 'FZ3'"` |
 | `wfs` | no | the WFS service's | `{ maxFeatures, decimals, skipNumberMatched, otherCRS: [EPSG:4326, …], padWithZeros, forcedDecimal, encodeMeasures }`: this layer's WFS settings (`padWithZeros` writes decimals up to `decimals`, `forcedDecimal` never writes scientific notation, `encodeMeasures` writes M values, `simpleConversion` also serves an app-schema layer as simple features) |
 | `disabledServices` | no | none | Services this layer isn't published in: `wms`, `wfs`, `wcs`, `wmts`, `wps` |
@@ -377,17 +258,13 @@ spec:
 
 **Files** are read from GeoServer's `/data` folder: a volume mounted there in every GeoServer service. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you, or a raster Dataset makes them (above); `configops import` writes stores whose files are under `/data`.
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `dataset` | none | A raster Dataset whose file this `geotiff` store reads, instead of `path` |
-| `credentials` | none | `{ secret }`: a Secret with keys `username` and `password`, for a `postgis`, `sqlserver`, `oracle` or `wfs` store or a WMS or WMTS that needs a login. In the chart, add it to `configops.secrets`. GeoServer keeps the password encrypted, so it's set but not compared |
 | `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
 | `description`, `enabled` | none; `true` | |
 | `disableOnConnectionFailure` | `false` | GeoServer turns the store off when it can't connect |
 | `maxConnections`, `readTimeout`, `connectTimeout`, `connectionPooling` | 6, 60 s, 30 s, `true` | `wms`, `wmts`: connections to the remote server at once, timeouts in seconds, reusing connections. `connectionPooling: false` needs `GEOTOOLS_HTTPCLIENT_PROXY_ENABLED=false` on the GeoServer services, as the chart sets it: GeoServer Cloud's proxy-aware HTTP client can't do without pooling, and creating a layer then fails ("Couldn't create HTTP client") |
 | `header`, `authKey` | none | `wms`, `wmts`: an HTTP header sent with every request (`{ name, value }`, or `{ name, secret, key }` for the value from a Secret) and an authentication key (text, or `{ secret, key }`). GeoServer keeps them as they are, so they're compared; `import` names Secrets for them |
 
-A `Layer` on a store takes `store` and `resource` (the name the store gives it: a coverage, remote layer or table) instead of `dataset` and `table`; `resource` can be left out when the store offers only one thing. Everything else about the layer (title, styles, cache, attribution, access rules) works as for any layer. A store the files don't name, in a workspace the project owns, is unmanaged and removed only with `--prune`.
+A `Layer` on a store takes `store` and `resource` (the name the store gives it: a coverage, remote layer or table) instead of `table`; `resource` can be left out when the store offers only one thing. Everything else about the layer (title, styles, cache, attribution, access rules) works as for any layer. A store the files don't name, in a workspace the project owns, is unmanaged and removed only with `--prune`.
 
 ### Style
 
@@ -826,7 +703,7 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 
 - Everything inside it (stores, layers, workspace styles, the images beside them, templates) is compared with the files. Anything there that the files don't mention is shown by `plan` as `unmanaged` and removed only with `apply --prune`.
 - Global styles and other workspaces are never changed or deleted, unless a resource names them. Fonts are global: added and changed, never deleted.
-- Tables: only tables a Dataset declares, in the configured schemas, are created, replaced or backed up. A Layer on someone else's table only publishes it.
+- Tables: configops never creates, changes or deletes a table; it publishes them.
 - Settings and services: only the ones a `Settings` or `Service` resource names, and only the fields it sets. They are never deleted.
 - URL checks: only when the project has a `URLCheck`; then checks it doesn't name are unmanaged, removed only with `--prune`.
 - Security: only when the project has a `Role`, `Group`, `User` or `AccessRule`; then the rest is unmanaged, as in a workspace (see above). GeoServer's own users, roles and default rules are never touched unless a file names them. GeoServer has one set of global settings, so when several projects share a GeoServer, let one of them hold the global `Settings` and the `Service`s.
@@ -836,140 +713,43 @@ The tool must never touch what it didn't create. The rule is simple: **a workspa
 | Command | Does |
 | --- | --- |
 | `configops validate` | Checks the files: schema, references between resources, style files exist. No network |
-| `configops discover <source> [product]` | Lists products a source offers, or the layers inside one product |
 | `configops plan` | Compares files with live GeoServer and PostGIS; prints what `apply` would create, change or delete. Exit code 2 when there are changes, for CI |
-| `configops apply [--prune]` | Makes the changes `plan` shows, in order: workspace, store, styles, tables (first sync), layers, layer groups, tile cache |
-| `configops sync [dataset]` | Checks sources for new versions and loads them (stage, validate, back up, swap in), then refreshes extents and clears cached tiles of the layers on them. The nightly job |
-| `configops status` | Per dataset: version loaded, when, rows, last error, next check. Per layer: published, drifted, tiles cached |
+| `configops apply [--prune]` | Makes the changes `plan` shows, in order: workspace, settings, security, stores, styles, layers, layer groups, tile cache |
+| `configops refresh [table or path]` | After new data: works the bounds of the layers on it out again, clears their cached tiles (and their groups'), seeds again what the files seed |
+| `configops status` | Per layer and group: published, drifted, tiles cached |
 | `configops import` | Reads a live GeoServer workspace and writes the files that describe it, or updates the files that do; the way in for an existing install, and for changes made in the web UI |
 
 ### `validate`, and checking files as you type
 
-`configops validate` checks every resource against the JSON Schema in [`configops/schema/v1alpha1.json`](../../configops/schema/v1alpha1.json), then the rules across files: every reference resolves, style files exist, no two layers or groups share a GeoServer name, no two datasets load the same table, and no layer group contains itself. Problems come out as `file:line`, with a non-zero exit code for CI:
+`configops validate` checks every resource against the JSON Schema in [`configops/schema/v1alpha1.json`](../configops/schema/v1alpha1.json), then the rules across files: every reference resolves, style files exist, no two layers or groups share a GeoServer name, and no layer group contains itself. Problems come out as `file:line`, with a non-zero exit code for CI:
 
 ```
 $ configops validate examples/uk-basemap
-datasets/os-open-roads.yaml:22: error: Layer road-links: spec.titel: unknown field 'titel' (did you mean 'title'?)
-datasets/os-open-roads.yaml:34: error: Layer road-nodes: spec.style: no style named 'os-road-nodes' (a file in styles/, a Style resource, or one of GeoServer's built-in styles)
+layers/os-open-roads.yaml:6: error: Layer road-links: spec.titel: unknown field 'titel' (did you mean 'title'?)
+layers/os-open-roads.yaml:20: error: Layer road-nodes: spec.style: no style named 'os-road-nodes' (a file in styles/, a Style resource, or one of GeoServer's built-in styles)
 
 2 error(s), 0 warning(s); 10 resources in 6 files
 ```
 
 Editors that understand JSON Schema check the files as you type. In VS Code, with the YAML extension, the repo's `.vscode/settings.json` already points the example files at the schema; for your own project, add the same `yaml.schemas` entry.
 
-### `discover`
-
-`configops discover <source>` lists a source's products and the format each would load as; `configops discover <source> <product>` lists its downloads, marks the one `sync` would use, and lists the layers inside it, which are the names `tables` takes. `<source>` is a Source in the project (`-C dir`, default the current directory), whose secret supplies the API key if it has one, or a source type when there is no project yet: `os-downloads`, `ckan --url <portal>`, or `url`.
-
-| Source type | `discover <source>` | `discover <source> <product>` |
-| --- | --- | --- |
-| `os-downloads` | Every OS product (`--search` narrows) | The product's formats; layers of the one `sync` uses |
-| `ckan` | Packages matching `--search`, 20 at a time (`--limit`); without a search, the latest changed | The package's resources, marked loadable or not (web pages and services aren't); layers of the best file, or of `--resource <id or name>` |
-| `url` | (nothing to list) | The product is the file's address: `configops discover url https://example.org/roads.zip` |
-| `wfs` | The service's feature types (`--search` narrows) | The feature type (with or without its namespace prefix): geometry, CRS and count, read by GDAL's WFS driver, which also loads it, so the layer name shown is the loader's |
-| `ogc-api-features` | The API's feature collections (coverages and records are left out) | The collection: the count from `numberMatched`, the geometry from the first feature, the CRS the data is stored in |
-
-On a CKAN package, a resource that is a WFS or OGC API service (recognised by its format, address or title, since portals often leave the format blank) shows the command that discovers it, and search results mark packages with only a service as `via WFS`. Many data.gov.uk datasets are published this way, the Environment Agency's among them:
-
-```
-$ configops discover ogc-api-features --url https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1 Flood_Zones_2_3_Rivers_and_Sea
-Flood Zones 2 3 Rivers And Sea (Flood_Zones_2_3_Rivers_and_Sea)
-  OGC API Features: https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1/collections/Flood_Zones_2_3_Rivers_and_Sea/items
-
-LAYER                           GEOMETRY      CRS         FEATURES
-Flood_Zones_2_3_Rivers_and_Sea  MultiPolygon  EPSG:27700  415,408
-```
-
-Services are asked directly, so nothing is cached. Requests to any source are tried again, twice, when a server drops the connection or is briefly unavailable.
-
-```
-$ configops discover data-gov-uk conservation-areas125
-Conservation Areas (conservation-areas125), version 2026-11-04
-    Shapefile: Conservation Areas, conservation_areas.zip, size unknown  [c3a73b80-a7fb-4e21-ab32-e87f514b620e]
-    GeoJSON: Conservation Areas, conservation_areas.geojson, size unknown  [5dcaa616-b91c-4e58-8b11-141fda4db7e1]
-    GML: Conservation Areas, conservation_areas.gml, size unknown  [57f9f97a-82da-4e98-b5a4-7f9d2dff75ee]
-  * GeoPackage: Conservation Areas, conservation_areas.gpkg, size unknown  [9dd40b81-62f5-4c75-b1cd-d200af101632]
-  (* the download sync uses)
-Another one: --resource <id or name>; in a Dataset, `resource: 9dd40b81-62f5-4c75-b1cd-d200af101632`
-
-LAYER               GEOMETRY  CRS         FEATURES
-conservation_areas  Geometry  EPSG:27700  11
-```
-
-Portals label formats loosely (`SHP`, `ZIP`, a media-type URL, or nothing), so the format comes from the declared format, the media type and the file name together; a zip named `roads.gpkg.zip` counts as a GeoPackage. Loadable files, best first: GeoPackage, Shapefile, GeoJSON, GML, File Geodatabase, KML, FlatGeobuf, then a zip of unknown contents.
-
-```
-$ configops discover os OpenRoads
-OS Open Roads (OpenRoads), version 2026-10
-    ESRI® Shapefile: oproad_essh_gb.zip, 585.8 MB
-    GML 3: oproad_gml3_gb.zip, 611.8 MB
-  * GeoPackage: oproad_gpkg_gb.zip, 1.0 GB
-    Vector Tiles (MBTiles): oproad_mbtiles_gb.zip, 1.4 GB
-  (* the download sync uses)
-
-LAYER              GEOMETRY    CRS         FEATURES
-motorway_junction  Point       EPSG:27700  668
-road_link          LineString  EPSG:27700  3,980,725
-road_node          Point       EPSG:27700  3,364,565
-```
-
-The layers are read from the download in place, with GDAL over HTTP range requests, so nothing is saved to disk (a server that only sends whole files has the file fetched to a temporary folder instead, up to 300 MB); the zip's file list costs a few requests, but a GeoPackage inside a compressed zip is read through, which takes a minute or two for a 1 GB product. A product version never changes (for CKAN, the package's last change; for a link, its ETag or Last-Modified), so the layers are cached (`~/.cache/configops`) and the next run is instant; `--refresh` reads them again, `--no-layers` skips them, `--format json` is for scripts. GDAL 3.7 or later (`ogrinfo`) is needed for layers.
-
-The download `sync` uses is the first of GeoPackage, Shapefile, GML, MapInfo TAB that comes as one file for the whole country; a format offered only as grid-square tiles is passed over, since each tile would become its own table.
-
-### `sync`
-
-`configops sync` loads new versions of the project's datasets into PostGIS. Run with no names (the nightly job), it checks each Dataset whose `update` schedule is due; `configops sync roads rivers` checks those two whatever their schedule, and `--force` loads even when nothing changed.
-
-```
-$ configops sync -C examples/uk-basemap
-boundary-line: not due (monthly)
-conservation-areas: loaded 2026-11-04 in 1s: data_layers.conservation_areas (10 rows)
-  note: 1 invalid geometry left out
-flood-zones: not due (monthly)
-os-open-roads: up to date (2026-10)
-```
-
-For each dataset it checks:
-
-1. **Is there a new version?** It asks the source for its current version: OS's release, a CKAN package's last change, a link's ETag. If that matches the last load, its tables still exist and `tables` hasn't changed, there's nothing to do. A source with no version is downloaded and compared by checksum. A service (WFS, OGC API) is loaded each time it is due.
-2. **Download and stage:** the file is downloaded (with OS's MD5 checked) and unzipped. Every layer `tables` names (all of them if it names none) is loaded with ogr2ogr into the staging schema. A service is loaded straight from the service. A layer whose file declares no CRS gets the project's `crs`, or the table's own `crs`.
-3. **Check:** invalid geometries are left out (unless `validation.dropInvalidGeometries: false`), and a table with fewer than `validation.minRows` rows stops the load.
-4. **Swap in:** in one transaction, each live table is renamed into the backup schema and the new one renamed into its place. Nothing is copied, and if any table fails its check, none of the dataset's live tables change. The newest `backups` backups of each table are kept.
-
-After a load, `sync` works out again the bounding boxes of the published layers on the new tables and clears their cached tiles, and those of the cached layer groups that hold them (directly or through other groups). That needs the Project's GeoServer credentials; without them, or if GeoServer can't be reached, the load still counts and a note says GeoServer wasn't refreshed. Layers not published yet are left to `apply`.
-
-Every check (loaded, up to date, failed) is written to the ingest log in `public.os_ingest_log`, which is how the next run knows the version and when the dataset is next due. A failed check doesn't count, so the next run tries again. Schedules allow an hour's slack, so a daily dataset checked a little after 02:00 yesterday is due at 02:00 today; a cron expression is due when it has named a minute since the last check.
-
-The database comes from the Project's `database.connection` secret (keys `host`, `port`, `database`, `username`, `password`), so on a laptop: `CONFIGOPS_DATABASE_HOST=localhost` and so on, or `secrets.yaml`.
-
-In Kubernetes, run it nightly as a CronJob ([docs/kubernetes.md](../kubernetes.md)).
-
-Known gaps:
-
-- Some data needs fixing in flight: a shapefile with impossible dates (`0000/00/00`) has its date columns loaded as text, with a note.
-- Some WFS servers can't serve features in pages, and fail. The BGS geology service is one: it serves complex (GeoSciML) features and asks for a sort order.
-- WFS and OGC API Features suit small and medium layers. A large one is fetched page by page, each page slower than the last on servers that skip ahead by offset, and one failed page fails the load. The EA's flood zones (415k features) took hours over its OGC API and kept failing; its 1 GB file download loads in minutes. Use the file when there is one.
-- Private CKAN files, which need the API token on the file's own server, can't be downloaded yet.
-
 ### `plan` and `apply`
 
-`configops plan` compares the files with live GeoServer, and with PostGIS for whether each layer's table exists yet. It prints what `apply` would do, with each changed field. `configops apply` makes those changes in dependency order: workspaces, stores, styles, first loads of missing tables, layers, layer groups (each after the groups it holds), then, with `--prune`, deletions, groups first. If a change fails, `apply` stops there and says so; running it again carries on, since everything already done now matches.
+`configops plan` compares the files with live GeoServer, and with PostGIS for whether each layer's table exists yet. It prints what `apply` would do, with each changed field. `configops apply` makes those changes in dependency order: workspaces, stores, styles, layers, layer groups (each after the groups it holds), then, with `--prune`, deletions, groups first. If a change fails, `apply` stops there and says so; running it again carries on, since everything already done now matches.
 
 ```
 $ configops plan
   ~ style uk:os-road-node   (styles/os-road-node.sld differs from GeoServer's copy)
   ~ layer uk:road_links
       title: "Roads (edited in UI)" -> "OS Open Roads, road links"
-  + table data_layers.os_open_roads_road_node   (first sync of dataset os-open-roads)
   + layer uk:road_nodes   (data_layers.os_open_roads_road_node)
   ? layer uk:old_test_points   (unmanaged; removed with --prune)
-  ! layer uk:survey_sites   (table field_data.sites doesn't exist; configops only publishes it)
+  ! layer uk:survey_sites   (table field_data.sites doesn't exist yet; configops only publishes it)
 
-Plan: 2 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
+Plan: 1 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
 ```
 
-`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done, such as a layer on a table configops doesn't load and which doesn't exist. Groups leave such a layer out until it can be published. `plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables you load yourself, often after the deploy, so an apply Job doesn't fail for them, or are settings only standard GeoServer can take (below). It exits 1 when a change fails.
+`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done yet, such as a layer on a table that doesn't exist yet. Groups leave such a layer out until it can be published. `plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables loaded separately, often after the deploy, so an apply Job doesn't fail for them, or are settings only standard GeoServer can take (below). It exits 1 when a change fails.
 
 **GeoServer Cloud or standard GeoServer.** The same files work on both. A few settings only standard GeoServer can take: a group's `styles`, `oracle` stores, and the global `cors`, `contentSecurityPolicy` and `diskQuota`. When the files set any of them, `plan` asks GeoServer which it is (GeoServer Cloud's version ends in `-CLOUD`) and, on GeoServer Cloud, shows each as `!` with the reason and leaves it out; a layer on an `oracle` store goes with it:
 
@@ -987,36 +767,39 @@ Only fields the files set, or whose defaults this spec defines (`title`, `enable
 
 `cache` is compared with GeoWebCache's settings for the layer or group. GeoServer Cloud caches every new layer by itself, so `cache: false` (the default) means `apply` removes that cache; `cache: true` caches in EPSG:4326 and EPSG:900913 as PNG, and `{ gridsets, formats }` sets both. GeoWebCache's REST API is at `<geoserver url>/gwc/rest` through the gateway; `CONFIGOPS_GWC_URL` points elsewhere (a GeoServer Cloud REST service reached directly serves it under `/geoserver-cloud/gwc/rest`).
 
-`attribution` is the layer's own text or, for a layer on a dataset from a source whose licence asks for one, that source's: OS data gets "Contains OS data © Crown copyright and database right <year>". Other sources have no default yet.
+## `refresh`
 
-`plan` doesn't size first loads, since it never calls the data sources.
+After new data is loaded into a table or a file, GeoServer still has the old bounding boxes, and its tile cache the old tiles. `configops refresh` names what changed (`schema.table`, or a file store's `path`, with or without `/data/`), or reads it from a file, one per line, as `geodata sync --loaded FILE` writes it:
+
+```
+$ geodata sync -C data --loaded loaded.txt && configops refresh -C publish --from loaded.txt
+Refreshed: bounds of 2 layer(s) worked out again, cached tiles of 3 layer(s) or group(s) cleared; seeding 1 again
+```
+
+For each layer on them it resets a raster store (so GeoServer reads the new file), works the bounds out again, clears the cached tiles of the layer and of the groups that hold it (directly or through other groups) and starts again the seeding the files ask for. With nothing named, it refreshes every layer on a table or file.
 
 ## `status`
 
-`configops status` shows the project as it is live, and changes nothing: each dataset from the ingest log, and each layer and group from GeoServer.
+`configops status` shows each layer and group as GeoServer has them, and changes nothing.
 
 ```
 $ configops status
-DATASET             UPDATE  LOADED      AT                ROWS  NEXT CHECK        LAST CHECK
-conservation-areas  weekly  2026-11-04  2026-11-10 13:53  10    2026-11-17 12:53  success
-os-open-roads       weekly  never       -                 -     now               failed: can't reach the OS Downloads API: …
-
 LAYER                           PUBLISHED  DRIFTED  TILES CACHED
 uk:conservation_areas           yes        no       no
 uk:road_links                   yes        title    yes
-uk:survey_sites                 no: table field_data.sites doesn't exist; configops only publishes it  -  no
+uk:survey_sites                 no: table field_data.sites doesn't exist yet; configops only publishes it  -  no
 uk:uk_basemap (group)           yes        no       yes
 ```
 
-"Drifted" lists the fields `plan` would change. Without the Project's GeoServer credentials, the datasets are still shown. `--format json` is for scripts and dashboards.
+"Drifted" lists the fields `plan` would change. `--format json` is for scripts and dashboards.
 
 ## Importing today's config
 
-`configops import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles and the images beside them in `styles/`, its templates and its layers' in `templates/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `configops plan` on the result has nothing to do. A layer on a table that one of the directory's Datasets loads is written on that Dataset. Stores the files have a kind for (Cloud-Optimised GeoTIFFs, cascaded WMS, WMTS and WFS, PostGIS with a password) are written as `Store`s with their layers; a store's password can't be read back, so it names a credentials Secret, which the import lists.
+`configops import <workspace>` reads a live GeoServer workspace and writes the files that describe it: its layers and groups in `<workspace>.yaml`, its styles and the images beside them in `styles/`, its templates and its layers' in `templates/`, and `project.yaml` if the directory has none (with `--geoserver` for the address, and the login from secret `geoserver-admin`). Only what differs from the spec's defaults is written: a title equal to the layer name, GeoServer's own keywords, the default style for the layer's geometry, and switches left on all drop out. So `configops plan` on the result has nothing to do. A layer on a table in the Project's database schema names the table alone. Stores the files have a kind for (Cloud-Optimised GeoTIFFs, cascaded WMS, WMTS and WFS, PostGIS with a password) are written as `Store`s with their layers; a store's password can't be read back, so it names a credentials Secret, which the import lists.
 
 ```
 $ configops import test -C my-project --geoserver http://localhost:8080/geoserver-cloud
-Wrote test.yaml: 4 layer(s) (0 on a Dataset's table), 0 group(s); 0 style(s) in styles/; project.yaml
+Wrote test.yaml: 0 store(s), 4 layer(s), 0 group(s); 0 style(s) in styles/; project.yaml
   note: store postgis: apply moves its layers to a store named after their schema (data_layers)
 ```
 
@@ -1058,24 +841,18 @@ Next: git diff, then configops plan -C examples/uk-basemap
 - Only the keys whose meaning changed are rewritten, in place; the rest of the file, its order and its comments are left as written. A value spelled out in a file that is GeoServer's default (`enabled: true`, a title equal to the name, the default style for the geometry) counts as the same.
 - A resource only in GeoServer is added to `<workspace>.yaml`, `server.yaml` or `security.yaml`. A style file is rewritten where the project keeps it, as GeoServer has it, when its content differs.
 - A resource only in the files is listed (`not in GeoServer`); `--prune` takes it out of the files.
-- What GeoServer can't give back stays as the files have it: passwords and keys (the Secrets they name), a layer's `dataset` and `table`, the master password, and its `attributes` when the project's database can't be reached (import compares the published attributes with the table's columns).
+- What GeoServer can't give back stays as the files have it: passwords and keys (the Secrets they name), a layer's `table` as the files spell it, the master password, and its `attributes` when the project's database can't be reached (import compares the published attributes with the table's columns).
 
 `--force` writes fresh files instead, replacing those that exist. Then `git diff` shows the change, and `plan` on the files has nothing to do.
-
-## Known problems this spec has to answer
-
-- **One table per product** (fixed in PR #4). The pipeline loaded one layer of a multi-layer file into one table, so the `openroads` layer held only road nodes, not road links. It now loads every layer into its own table. Run on its own, it names them after the provider's product ID (`openroads_road_link`); run by the tool, it gets the Dataset's name, giving the default above (`os_open_roads_road_link`).
-- **Layer-to-style links weren't in git.** The old export script (since removed) saved feature types, not GeoServer's layer records, so which style a layer used wasn't recorded. `Layer.style` covers it.
 
 ## Decided
 
 - **Scale limits** live in styles ([above](#scale-limits-live-in-styles)), 9 Nov 2026.
 - **Layer groups** are in this version as `LayerGroup`, 9 Nov 2026.
-- **Layer names inside OS products**, checked with `discover`, 10 Nov 2026: OS Open Roads (GeoPackage) holds `motorway_junction`, `road_link` and `road_node`; the example names two in `tables`, so the third isn't loaded. Boundary-Line holds 18 layers, among them `county`.
-- **OS API key** is optional: the OS Downloads API serves OpenData products without one, 10 Nov 2026.
-- **CKAN sources** take the portal's address in the Source (`url`), and a Dataset can pin one file of a package with `resource`, 10 Nov 2026.
+
+- **Data loading** is its own tool, geodata-sync; configops publishes tables and refreshes GeoServer after loads (`refresh`), 13 Nov 2026.
 
 ## Open questions
 
-1. **Dataset versions on screen:** should GeoServer's layer abstract or keywords carry the loaded version automatically?
+1. **Data versions on screen:** should a layer's abstract or keywords carry the loaded version, from geodata's ingest log?
 2. **Several projects on one GeoServer:** fine if each owns its own workspaces; anything else needed?

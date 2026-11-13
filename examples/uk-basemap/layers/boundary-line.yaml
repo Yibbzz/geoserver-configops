@@ -1,0 +1,9 @@
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata:
+  name: counties
+spec:
+  table: boundary_line_county                 # loaded by geodata-sync (examples/uk-basemap there)
+  title: Counties (OS Boundary-Line)
+  attribution: Contains OS data © Crown copyright and database right 2026   # OS OpenData's licence asks for it
+  style: polygon

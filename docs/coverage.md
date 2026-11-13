@@ -69,7 +69,7 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 | **Publishing:** default style, other styles | Yes | |
 | Queryable | Yes | |
 | Opaque | Yes | `opaque` |
-| Attribution title | Yes | From the file, or the source's licence for OS data |
+| Attribution title | Yes | `attribution:` |
 | Attribution link and logo | Yes | `attribution: { title, link, logo }` |
 | Rendering buffer, HTTP cache headers | Yes | `buffer`, `httpCache` |
 | Per-layer WFS settings (max features, decimals, other CRSs, zero padding, no scientific notation, M values) | Yes | `wfs` |
@@ -118,10 +118,10 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 
 | What | Status | Notes |
 | --- | --- | --- |
-| Vector data from Ordnance Survey, CKAN portals, WFS, OGC API Features, links | Yes | `Dataset`: staged, checked, backed up, swapped in, on a schedule |
-| Raster data | Yes | A `Dataset` with `raster:` makes one Cloud-Optimised GeoTIFF on the data volume (OS, CKAN, links), backed up and swapped in; a `Store` with `dataset:` publishes it |
-| Tables you load yourself | Yes | A Layer with `table:` and no `dataset`; it waits until the table exists |
-| The importer extension | — | `Dataset` does this job |
+| Loading open data into PostGIS (Ordnance Survey, CKAN portals, WFS, OGC API Features, links), and rasters | Separate tool | [geodata-sync](https://github.com/Yibbzz/geodata-sync): staged, checked, backed up, swapped in, on a schedule |
+| Tables loaded any other way | Yes | A Layer with `table:`; it waits until the table exists |
+| After new data: bounds and cached tiles | Yes | `configops refresh` |
+| The importer extension | — | Loading data isn't configuration: geodata-sync, or your own loads |
 
 ## Services
 

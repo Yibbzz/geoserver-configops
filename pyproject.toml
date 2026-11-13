@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "geoserver-configops"
 version = "0.1.0"
-description = "GeoServer ConfigOps: GeoServer configuration and open GIS data as code, with plan, apply and drift detection"
+description = "GeoServer ConfigOps: GeoServer and GeoServer Cloud configuration as code, with plan, apply, import and drift detection"
 readme = "README.md"
 license = { text = "BSD-2-Clause" }
 requires-python = ">=3.10"
@@ -18,7 +18,7 @@ dev = ["pytest"]
 configops = "configops.cli:main"
 
 [tool.setuptools]
-packages = ["configops", "configops.sources"]
+packages = ["configops"]
 
 [tool.setuptools.package-data]
 configops = ["schema/*.json", "security_defaults.json", "csp_default.xml"]
@@ -28,7 +28,6 @@ testpaths = ["tests"]
 norecursedirs = ["tests/e2e/data", "tests/e2e/gcs", "tests/e2e/standard-libs"]  # files GeoServer writes (owned by its user)
 pythonpath = ["."]
 markers = [
-    "integration: needs a PostGIS database (TEST_DB_* env vars) and ogr2ogr",
     "e2e: needs the real GeoServer Cloud REST service (tests/e2e/up.sh)",
     "last(order=2): runs after the other tests, lowest order first (tests/test_e2e_coverage.py checks what they saw)",
 ]

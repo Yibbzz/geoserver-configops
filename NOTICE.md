@@ -8,6 +8,6 @@ This repository started as a Helm chart for GeoServer Cloud, from Camptocamp's
 GeoServer Cloud is developed at [geoserver/geoserver-cloud](https://github.com/geoserver/geoserver-cloud),
 GeoServer at [geoserver/geoserver](https://github.com/geoserver/geoserver).
 
-Data loaded by `configops sync` keeps its own licence. Ordnance Survey OpenData is
+Data you publish keeps its own licence. Ordnance Survey OpenData is
 released under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/)
 and must be attributed: "Contains OS data © Crown copyright and database right <year>".

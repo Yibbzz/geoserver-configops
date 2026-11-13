@@ -4,7 +4,8 @@ import types
 
 import pytest
 
-from configops import ingest, security
+from configops import security
+from configops.database import Database
 from configops.geoserver import MissingCredentials
 from configops.loader import load
 from configops.plan import Planner, ordered
@@ -148,7 +149,7 @@ def gs(monkeypatch):
 
 def plan(tmp_path, gs, extra=SECURITY, prune=False):
     (tmp_path / "project.yaml").write_text(PROJECT + "---\n" + extra)
-    return ordered(Planner(load(tmp_path), tmp_path, gs, None, ingest.Database("h", 5432, "d", "u", "p"), prune).plan())
+    return ordered(Planner(load(tmp_path), tmp_path, gs, None, Database("h", 5432, "d", "u", "p"), prune).plan())
 
 
 def lines(changes):

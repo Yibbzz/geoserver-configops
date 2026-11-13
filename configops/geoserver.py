@@ -15,9 +15,10 @@ from urllib.parse import quote
 from xml.sax.saxutils import escape
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from . import secrets
-from .sources import http_session
 
 TIMEOUT = 60
 
@@ -26,6 +27,17 @@ STYLE_TYPES = {  # a style file's suffix -> the content type GeoServer reads it 
     ".mbstyle": "application/vnd.geoserver.mbstyle+json",
     ".css": "application/vnd.geoserver.geocss+css",
 }
+
+
+def http_session() -> requests.Session:
+    """A session that tries again, twice, when a server drops the connection or is briefly unavailable."""
+    session = requests.Session()
+    retry = Retry(total=2, connect=2, read=2, status=2, backoff_factor=0.5,
+                  status_forcelist=(502, 503, 504), allowed_methods=("GET", "HEAD"), raise_on_status=False)
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
 
 
 # The spec's layer group modes, as GeoServer names them

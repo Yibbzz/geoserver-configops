@@ -4,7 +4,9 @@ import textwrap
 
 import pytest
 
-from configops import assets, ingest
+from configops import assets
+from configops import plan as plan_module
+from configops.database import Database
 from configops.loader import load
 from configops.plan import Planner, ordered, print_plan
 
@@ -14,23 +16,13 @@ kind: Project
 metadata: { name: t }
 spec:
   geoserver: { url: http://gs:8080/geoserver-cloud, credentials: { secret: gs } }
-  database: { jndi: java:comp/env/jdbc/x, connection: { secret: pg } }
+  database: { jndi: java:comp/env/jdbc/x, connection: { secret: pg }, schema: data_layers }
   workspace: uk
----
-apiVersion: configops/v1alpha1
-kind: Source
-metadata: { name: web }
-spec: { type: url }
----
-apiVersion: configops/v1alpha1
-kind: Dataset
-metadata: { name: roads }
-spec: { source: web, url: "https://x/roads.zip", tables: { road_link: {} } }
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
 metadata: { name: road-links }
-spec: { dataset: roads, table: road_link, title: Roads, style: roads, styles: [line], queryable: false }
+spec: { table: roads_road_link, title: Roads, style: roads, styles: [line], queryable: false }
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
@@ -137,12 +129,12 @@ def project(tmp_path):
 @pytest.fixture
 def tables(monkeypatch):
     existing = {("field", "sites"), ("data_layers", "roads_road_link")}
-    monkeypatch.setattr(ingest, "tables_exist", lambda conn, schema, names: all((schema, n) in existing for n in names))
+    monkeypatch.setattr(plan_module, "tables_exist", lambda conn, schema, names: all((schema, n) in existing for n in names))
     return existing
 
 
 def plan(root, gs, prune=False):
-    db = ingest.Database("h", 5432, "d", "u", "p")
+    db = Database("h", 5432, "d", "u", "p", "data_layers")
     return ordered(Planner(load(root), root, gs, None, db, prune).plan())
 
 
@@ -180,12 +172,12 @@ def test_an_empty_geoserver_gets_everything_in_order(project, tables):
     ]
 
 
-def test_a_missing_dataset_table_is_a_first_sync_and_a_missing_own_table_cant_be_done(project, tables):
+def test_a_missing_table_cant_be_published_yet(project, tables):
     tables.clear()
     changes = {(c.action, c.kind, c.target): c for c in plan(project, FakeGeoServer())}
-    assert changes[("+", "table", "data_layers.roads_road_link")].note == "first sync of dataset roads"
-    blocked = changes[("!", "layer", "uk:sites")]
-    assert blocked.run is None and "field.sites doesn't exist" in blocked.note
+    for target, table in (("uk:road_links", "data_layers.roads_road_link"), ("uk:sites", "field.sites")):
+        blocked = changes[("!", "layer", target)]
+        assert blocked.run is None and f"table {table} doesn't exist yet" in blocked.note
 
 
 def test_groups_leave_out_layers_that_cant_be_published(project, tables):
@@ -199,10 +191,8 @@ def test_groups_leave_out_layers_that_cant_be_published(project, tables):
     assert changes[1].note == "none of its layers can be published yet"
 
 
-def test_apply_succeeds_when_only_your_own_tables_are_missing(project, tables, monkeypatch, capsys):
-    """plan exits 3 so CI notices (1 is for errors); apply does what it can and exits 0, since you load these tables yourself."""
-    from configops import plan as plan_module
-
+def test_apply_succeeds_when_only_tables_are_missing(project, tables, monkeypatch, capsys):
+    """plan exits 3 so CI notices (1 is for errors); apply does what it can and exits 0, since the tables are loaded separately."""
     tables.discard(("field", "sites"))
     gs = converged()  # as apply leaves it: everything but what waits for field.sites
     del gs.layers[("uk", "sites")], gs.groups[("uk", "inner")]
@@ -213,10 +203,10 @@ def test_apply_succeeds_when_only_your_own_tables_are_missing(project, tables, m
         def close(self):
             pass
 
-    monkeypatch.setattr(plan_module, "connect", lambda root, url, wait: (load(root), gs, Conn(), ingest.Database("h", 5432, "d", "u", "p")))
+    monkeypatch.setattr(plan_module, "connect", lambda root, url, wait: (load(root), gs, Conn(), Database("h", 5432, "d", "u", "p", "data_layers")))
     assert plan_module.run(project) == 3
     assert plan_module.run(project, apply=True) == 0
-    assert "Left out: the lines marked ! (layers waiting for tables you load yourself" in capsys.readouterr().out
+    assert "Left out: the lines marked ! (layers waiting for their tables" in capsys.readouterr().out
     gs.layers[("uk", "road_links")]["layer"]["queryable"] = True  # drift as well: plan says 2, as CI expects
     assert plan_module.run(project) == 2
 
@@ -321,16 +311,11 @@ def test_cache_true_and_cache_settings(project, tables):
     assert plan(project, gs) == []
 
 
-def test_attribution_from_the_file_or_the_sources_licence(project, tables, monkeypatch):
-    (project / "project.yaml").write_text(PROJECT.replace("spec: { type: url }", "spec: { type: os-downloads }").replace(
-        'spec: { source: web, url: "https://x/roads.zip", tables: { road_link: {} } }',
-        "spec: { source: web, product: OpenRoads, tables: { road_link: {} } }",
-    ).replace("spec: { table: { schema: field, name: sites } }", "spec: { table: { schema: field, name: sites }, attribution: Our survey }"))
+def test_attribution_from_the_file(project, tables, monkeypatch):
+    (project / "project.yaml").write_text(PROJECT.replace(
+        "spec: { table: { schema: field, name: sites } }", "spec: { table: { schema: field, name: sites }, attribution: Our survey }"))
     changes = {c.target: c.fields for c in plan(project, converged())}
-    [(field, live, wanted)] = changes["uk:road_links"]
-    assert field == "attribution" and live is None
-    assert wanted.startswith("Contains OS data © Crown copyright and database right 20")
-    assert changes["uk:sites"] == [("attribution", None, "Our survey")]
+    assert changes == {"uk:sites": [("attribution", None, "Our survey")]}
 
 
 def test_wait_covers_a_database_still_starting(project, monkeypatch):
@@ -350,7 +335,7 @@ def test_wait_covers_a_database_still_starting(project, monkeypatch):
             raise psycopg2.OperationalError('connection to server at "db" failed: Connection refused')
         return "conn"
 
-    monkeypatch.setattr(ingest.Database, "connect", connect)
+    monkeypatch.setattr(Database, "connect", connect)
     monkeypatch.setattr(plan_module.time, "sleep", lambda s: None)
     monkeypatch.setattr(plan_module.GeoServer, "wait", lambda self, seconds: None)
     files, gs, conn, db = plan_module.connect(project, None, wait=600)

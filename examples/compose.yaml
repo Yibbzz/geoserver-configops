@@ -1,6 +1,6 @@
 # A GeoServer and a PostGIS database to try the examples on (README, quick start): standard GeoServer, with
 # the database as its JNDI datasource jdbc/mypostgis, as the examples expect.
-#   docker compose -f examples/compose.yaml up -d --wait     (GeoServer takes a minute or two)
+#   docker compose -f examples/compose.yaml up -d --wait     (GeoServer takes a minute or two, downloading its COG extension)
 #   docker compose -f examples/compose.yaml down -v
 name: configops-examples
 services:
@@ -14,6 +14,8 @@ services:
     depends_on: {db: {condition: service_healthy}}
     environment:
       SKIP_DEMO_DATA: "true"
+      INSTALL_EXTENSIONS: "true"
+      COMMUNITY_EXTENSIONS: cog-http   # Cloud-Optimised GeoTIFFs over HTTP(S), as GeoServer Cloud has
       POSTGRES_JNDI_ENABLED: "true"
       POSTGRES_JNDI_RESOURCE_NAME: jdbc/mypostgis
       POSTGRES_HOST: db
