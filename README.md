@@ -1,6 +1,6 @@
 # GeoServer ConfigOps
 
-![GeoServer Cloud coverage](https://img.shields.io/badge/GeoServer_Cloud-93%25-brightgreen) ![GeoServer coverage](https://img.shields.io/badge/GeoServer-100%25-brightgreen) Of the 662 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (44 more it can't set) and 662 on standard GeoServer ([field by field](docs/geoserver-fields.yaml)).
+![GeoServer Cloud coverage](https://img.shields.io/badge/GeoServer_Cloud-93%25-brightgreen) ![GeoServer coverage](https://img.shields.io/badge/GeoServer-100%25-brightgreen) ![GeoServer 2.28 coverage](https://img.shields.io/badge/GeoServer_2.28-98%25-brightgreen) Of the 662 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (44 more it can't set), 662 on standard GeoServer and 653 on GeoServer 2.28 (9 more it can't set) ([field by field](docs/geoserver-fields.yaml)).
 
 GeoServer configuration as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud) and standard GeoServer. `configops` keeps what GeoServer publishes and how it is set up in YAML files, with an OpenTofu-style `plan` and `apply`:
 
@@ -12,7 +12,7 @@ Point it at a GeoServer you already run: `https://<host>/geoserver-cloud` for Ge
 
 Loading open data into PostGIS (Ordnance Survey, CKAN portals such as data.gov.uk, WFS, OGC API Features) and keeping it up to date is a separate tool, [geodata-sync](https://github.com/Yibbzz/geodata-sync); configops publishes the tables, whoever loads them.
 
-<!-- tested-on -->Tested on **GeoServer Cloud 3.0.2.1** and **GeoServer 3.0.2**: every pull request runs the e2e tests on both, and a daily job (`.github/workflows/versions.yaml`) tries each new release.<!-- /tested-on -->
+<!-- tested-on -->Tested on **GeoServer Cloud 3.0.2.1**, **GeoServer 3.0.2** and **GeoServer 2.28.6**: every pull request runs the e2e tests on all three, and a daily job (`.github/workflows/versions.yaml`) tries each new release.<!-- /tested-on -->
 
 > **Status: early.** Expect breaking changes. [docs/coverage.md](docs/coverage.md) goes through the web UI page by page; the figures above count every field of GeoServer's configuration, read from its source (`tests/geoserver_coverage.py`), and what one of them can't set counts against it.
 
@@ -295,7 +295,7 @@ Some settings take effect only when GeoServer's services restart, and `apply` sa
 
 ## Testing
 
-CI runs on every pull request and push to `main`: shellcheck and a schema check of the Kubernetes example (lint), the unit tests (test), the image build (configops-image), and the e2e tests against GeoServer Cloud in Docker, with its gateway, REST, WMS, WFS, WCS and tile cache services (e2e-cloud), and against standard GeoServer with the same extensions (e2e-standard).
+CI runs on every pull request and push to `main`: shellcheck and a schema check of the Kubernetes example (lint), the unit tests (test), the image build (configops-image), and the e2e tests against GeoServer Cloud in Docker, with its gateway, REST, WMS, WFS, WCS and tile cache services (e2e-cloud), against standard GeoServer with the same extensions (e2e-standard), and against GeoServer 2.28, the older series still maintained (e2e-standard-2).
 
 Locally (with `docker`, `curl`, and GDAL's command-line tools, which some e2e tests use to make files):
 
@@ -313,12 +313,12 @@ tests/e2e/up.sh standard              # standard GeoServer instead (downloads it
 E2E_GEOSERVER_URL=http://localhost:59091/geoserver/rest E2E_SERVICES_URL=http://localhost:59091/geoserver \
   E2E_GWC_URL=http://localhost:59091/geoserver/gwc/rest E2E_DB_PORT=55433 E2E_DB_HOST_IN_GEOSERVER=db \
   E2E_DATA_DIR=tests/e2e/data E2E_LDAP_URL=ldap://ldap:389 E2E_REST_CONTAINER=gscloud-e2e-geoserver-1 .venv/bin/pytest -m e2e
-tests/e2e/up.sh down
+tests/e2e/up.sh down                  # tests/e2e/up.sh standard-2: GeoServer 2.28 instead, with the same env
 ```
 
 ## New GeoServer versions
 
-`.github/workflows/versions.yaml` runs daily: when GeoServer Cloud or GeoServer has a new release (`python tests/versions.py` shows what's pinned and what's newest), it pins it (`tests/e2e/up.sh`, `examples/compose.yaml`, the README's "Tested on" line, and `docs/geoserver-fields.yaml`, read again from GeoServer's source when GeoServer Cloud moves to a new GeoServer), opens a pull request and runs CI on it. A green pull request can be merged; a red one says what changed, such as settings the new GeoServer added that `docs/geoserver-fields.yaml` hasn't sorted yet.
+`.github/workflows/versions.yaml` runs daily: when GeoServer Cloud or GeoServer (the newest, or the newest 2.28) has a new release (`python tests/versions.py` shows what's pinned and what's newest), it pins it (`tests/e2e/up.sh`, `examples/compose.yaml`, the README's "Tested on" line, and `docs/geoserver-fields.yaml`, read again from GeoServer's source when GeoServer Cloud moves to a new GeoServer), opens a pull request and runs CI on it. A green pull request can be merged; a red one says what changed, such as settings the new GeoServer added that `docs/geoserver-fields.yaml` hasn't sorted yet.
 
 ## Releasing
 

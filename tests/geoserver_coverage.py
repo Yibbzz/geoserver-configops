@@ -32,8 +32,11 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "docs" / "geoserver-fields.yaml"
 TESTED = ROOT / "docs" / "geoserver-tested.txt"  # GeoServer Cloud's; standard GeoServer's beside it
-TESTED_FILES = {"cloud": TESTED, "standard": ROOT / "docs" / "geoserver-tested-standard.txt"}
-TARGETS = {"cloud": "GeoServer Cloud", "standard": "GeoServer"}
+TESTED_FILES = {"cloud": TESTED, "standard": ROOT / "docs" / "geoserver-tested-standard.txt",
+                "standard-2": ROOT / "docs" / "geoserver-tested-standard-2.txt"}
+TARGETS = {"cloud": "GeoServer Cloud", "standard": "GeoServer", "standard-2": "GeoServer 2.28"}
+# Where a target's status comes from when the entry doesn't name it: GeoServer 2.28 is standard GeoServer
+FALLBACK = {"standard-2": ("standard",)}
 README = ROOT / "README.md"
 SCHEMA = ROOT / "configops" / "schema" / "v1alpha1.json"
 
@@ -333,8 +336,11 @@ def refresh() -> dict:
 # --- checks and the number ---------------------------------------------------------
 
 def status_on(entry: dict, target: str) -> str:
-    """A field's status on GeoServer Cloud or standard GeoServer: `status`, unless the entry says otherwise for that target."""
-    return entry.get(target, entry.get("status"))
+    """A field's status on a target: `status`, unless the entry says otherwise for that target (or the one it follows)."""
+    for name in (target, *FALLBACK.get(target, ())):
+        if name in entry:
+            return entry[name]
+    return entry.get("status")
 
 
 def entries(manifest: dict):
@@ -466,12 +472,12 @@ def badge(manifest: dict) -> str:
         p = percent(c)
         colour = "brightgreen" if p >= 90 else "green" if p >= 80 else "yellow" if p >= 60 else "orange"
         parts.append(f"![{title} coverage](https://img.shields.io/badge/{title.replace(' ', '_')}-{p}%25-{colour})")
-        sentences.append(f"{c['tested']} on {'standard GeoServer' if target == 'standard' else title}"
-                         + (f" ({c['cant']} more it can't set)" if c["cant"] else ""))
+        name = {"standard": "standard GeoServer"}.get(target, title)
+        sentences.append(f"{c['tested']} on {name}" + (f" ({c['cant']} more it can't set)" if c["cant"] else ""))
     total = counts(manifest, "cloud")["all"]
     settable = total["yes"] + total["no"] + total["cant"]
     return (" ".join(parts) + f" Of the {settable} settings GeoServer can configure, the e2e tests prove configops sets "
-            + " and ".join(sentences) + " ([field by field](docs/geoserver-fields.yaml)).")
+            + ", ".join(sentences[:-1]) + " and " + sentences[-1] + " ([field by field](docs/geoserver-fields.yaml)).")
 
 
 BADGE = re.compile(r"!\[GeoServer[^\]]* coverage\][^\n]*")

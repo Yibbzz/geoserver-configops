@@ -28,6 +28,11 @@ done
 # GeoServer runs
 for jar in gt-main-*.jar; do gt=${jar#gt-main-}; gt=${gt%.jar}; done
 [ -e "gt-csv-$gt.jar" ] || curl -fsSL -o "gt-csv-$gt.jar" "https://repo.osgeo.org/repository/release/org/geotools/gt-csv/$gt/gt-csv-$gt.jar"
+# The GeoParquet community extension needs GeoTools' DuckDB module, which GeoServer 3 has and 2.28 doesn't (nor
+# does the extension's zip): add it at the same GeoTools version
+if compgen -G "gt-geoparquet-*.jar" >/dev/null && ! compgen -G "gt-duckdb-*.jar" >/dev/null; then
+  curl -fsSL -o "gt-duckdb-$gt.jar" "https://repo.osgeo.org/repository/release/org/geotools/gt-duckdb/$gt/gt-duckdb-$gt.jar"
+fi
 [ -e opencsv-5.12.0.jar ] || curl -fsSL -o opencsv-5.12.0.jar https://repo1.maven.org/maven2/com/opencsv/opencsv/5.12.0/opencsv-5.12.0.jar  # GeoServer Cloud's
 # startup.sh runs the installer again: with no extensions named it installs nothing
 STABLE_EXTENSIONS="" COMMUNITY_EXTENSIONS="" exec bash /opt/startup.sh

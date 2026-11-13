@@ -131,3 +131,36 @@ def test_disk_quota_written_as_geowebcache_reads_it():
     assert "<quotaStore>HSQL</quotaStore>" in written and "<layer>uk:roads</layer>" in written
     assert "<quotaStore>" not in standard.quota_xml(live, with_store=False)
     assert standard.live_quota(written, None)["layerQuotas"] == live["layerQuotas"]
+
+
+SETTINGS_3_0 = """\
+apiVersion: configops/v1alpha1
+kind: Project
+metadata: { name: p }
+spec:
+  geoserver: { url: http://gs:8080/geoserver, credentials: { secret: gs } }
+  workspace: uk
+---
+apiVersion: configops/v1alpha1
+kind: Settings
+metadata: { name: global }
+spec:
+  contact: { contactPerson: Map Team, internationalTitle: { cy: Teitl } }
+  global: { cors: { enabled: true }, tileCaching: { seederCorePoolSize: 8, seederMaxPoolSize: 32, gutter: 10 } }
+"""
+
+
+@pytest.mark.parametrize("version, left_out", [("2.28.6", 4), ("3.0.2", 0), ("", 0)])
+def test_what_came_in_geoserver_3_is_left_out_on_2_28(tmp_path, version, left_out):
+    (tmp_path / "project.yaml").write_text(SETTINGS_3_0)
+    planner = Planner(tmp_path, cloud=False)
+    numbers = [int(n) for n in version.split(".")[:2]] if version else None
+    planner.gs = type("GS", (), {"cloud": False, "version": version, "series": tuple(numbers) if numbers else None})()
+    standard.leave_out_unsupported(planner)
+    assert len(planner.changes) == left_out
+    spec = planner.files.named("Settings")["global"].spec
+    if left_out:
+        assert "GeoServer 2.28.6 can't set global.cors: it came in GeoServer 3.0" in [c[3] for c in planner.changes]
+        assert spec == {"contact": {"contactPerson": "Map Team"}, "global": {"tileCaching": {"gutter": 10}}}
+    else:
+        assert spec["global"]["cors"] == {"enabled": True}

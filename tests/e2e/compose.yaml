@@ -100,7 +100,7 @@ services:
       TARGETS_WPS: http://wps:8080
     ports: ["${E2E_GATEWAY_PORT:-59090}:8080"]
   # Standard GeoServer: the version GeoServer Cloud is built on, with the extensions GeoServer Cloud ships
-  # (downloaded once into standard-libs/), the same JNDI PostGIS datasource and the shared data folder
+  # (downloaded once into standard-libs/<version>/), the same JNDI PostGIS datasource and the shared data folder
   geoserver:
     profiles: [standard]
     image: docker.osgeo.org/geoserver:${STANDARD_GEOSERVER_VERSION}
@@ -119,7 +119,7 @@ services:
       POSTGRES_PASSWORD: postgres
       EXTRA_JAVA_OPTS: -Xms256m -Xmx1g
     entrypoint: ["bash", "/e2e/standard-start.sh"]
-    volumes: ["./standard-libs:/opt/additional_libs", "./data:/data", "./standard-start.sh:/e2e/standard-start.sh:ro"]
+    volumes: ["./standard-libs/${STANDARD_GEOSERVER_VERSION}:/opt/additional_libs", "./data:/data", "./standard-start.sh:/e2e/standard-start.sh:ro"]
     ports: ["${E2E_STANDARD_PORT:-59091}:8080"]
     healthcheck:
       test: ["CMD", "curl", "-fs", "-u", "admin:geoserver", "http://localhost:8080/geoserver/rest/about/version.json"]

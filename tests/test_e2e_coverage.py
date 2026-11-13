@@ -16,7 +16,9 @@ its version) and updates the README's figures:
 
 import json
 import os
+import re
 import warnings
+from pathlib import Path
 
 import pytest
 import requests
@@ -83,10 +85,14 @@ def test_versions_are_the_ones_read():
     manifest = coverage.load()
     about = {r["@name"]: str(r.get("Version")) for r in get("/about/version")["about"]["resource"]}
     geoserver, gwc = about["GeoServer"], about["GeoWebCache"]
-    if target() == "cloud":
+    on = target()
+    if on == "cloud":
         assert geoserver.removesuffix("-CLOUD") == manifest["versions"]["geoserver"], \
             "GeoServer changed: python tests/versions.py update (or set versions in docs/geoserver-fields.yaml, then refresh)"
         assert gwc == manifest["versions"]["geowebcache"]
+    elif on == "standard-2":  # the list is 3.0's; what 2.28 lacks is marked standard-2: cant
+        series = lambda v: v.split(".")[:2]  # noqa: E731
+        assert series(geoserver) == series(pinned_2_28()), f"GeoServer {geoserver} isn't the 2.x series the list was checked against"
     else:
         series = lambda v: v.split(".")[:2]  # noqa: E731
         assert series(geoserver) == series(manifest["versions"]["geoserver"]), \
@@ -102,9 +108,17 @@ def test_every_field_geoserver_shows_is_listed(evidence):
 
 
 def target() -> str:
-    """"cloud" or "standard": which GeoServer this run tested, from its version."""
+    """"cloud", "standard" or "standard-2" (GeoServer 2.x): which GeoServer this run tested, from its version."""
     about = {r["@name"]: str(r.get("Version")) for r in get("/about/version")["about"]["resource"]}
-    return "cloud" if "CLOUD" in about["GeoServer"].upper() else "standard"
+    if "CLOUD" in about["GeoServer"].upper():
+        return "cloud"
+    return "standard-2" if about["GeoServer"].startswith("2.") else "standard"
+
+
+def pinned_2_28() -> str:
+    """The GeoServer 2.x the e2e stack pins (tests/e2e/up.sh)."""
+    up = (Path(__file__).parent / "e2e" / "up.sh").read_text()
+    return re.search(r"^export STANDARD_2_GEOSERVER_VERSION=(\S+)", up, re.M).group(1)
 
 
 def test_proved_fields_still_hold(evidence):

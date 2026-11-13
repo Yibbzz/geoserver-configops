@@ -8,6 +8,7 @@ Each catalog object is one REST path; `upsert` creates or updates it.
 from __future__ import annotations
 
 import os
+import re
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -475,17 +476,27 @@ class GeoServer:
             raise GeoServerError("PUT", f"gwc/gridsets/{name}", r.status_code, r.text)
 
     @property
-    def cloud(self) -> bool:
-        """Whether this is GeoServer Cloud (its version ends in -CLOUD) rather than standard GeoServer; read once.
-        A server that won't say (security rules can refuse /rest/about) counts as standard GeoServer."""
-        if getattr(self, "_cloud", None) is None:
+    def version(self) -> str:
+        """GeoServer's version, as /rest/about/version says (`3.0.2`, `3.0.2-CLOUD`, `2.28.6`); read once.
+        A server that won't say (security rules can refuse /rest/about) gives "" and counts as the newest."""
+        if getattr(self, "_version", None) is None:
             r = self.request("GET", "about/version.json", ok=(200, 401, 403, 404))
             about = (r.json() if r.status_code == 200 else {}).get("about") or {}
             resources = about.get("resource") or []
-            version = next((r.get("Version", "") for r in (resources if isinstance(resources, list) else [resources])
-                            if isinstance(r, dict) and r.get("@name") == "GeoServer"), "")
-            self._cloud = "CLOUD" in str(version).upper()
-        return self._cloud
+            self._version = next((str(r.get("Version", "")) for r in (resources if isinstance(resources, list) else [resources])
+                                  if isinstance(r, dict) and r.get("@name") == "GeoServer"), "")
+        return self._version
+
+    @property
+    def cloud(self) -> bool:
+        """Whether this is GeoServer Cloud (its version ends in -CLOUD) rather than standard GeoServer."""
+        return "CLOUD" in self.version.upper()
+
+    @property
+    def series(self) -> tuple[int, ...] | None:
+        """(major, minor) of GeoServer's version, or None if it won't say."""
+        numbers = re.findall(r"\d+", self.version)
+        return tuple(int(n) for n in numbers[:2]) if len(numbers) >= 2 else None
 
     def default_meta_tiles(self) -> list[int]:
         """The caching defaults' metatiling (gwc-gs.xml), read once; 4 x 4 if it can't be read."""

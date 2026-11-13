@@ -1440,6 +1440,8 @@ pages:
       internationalTitle:
         status: 'yes'
         spec: settings.contact.internationalTitle
+        note: 'Not in GeoServer 2.28: it came in 3.0'
+        standard-2: cant
     ImageProcessingInfoImpl:
       allowInterpolation:
         status: 'yes'
@@ -1531,9 +1533,13 @@ pages:
       seederCorePoolSize:
         status: 'yes'
         spec: settings.global.tileCaching.seederCorePoolSize
+        note: 'Not in GeoServer 2.28: it came in 3.0'
+        standard-2: cant
       seederMaxPoolSize:
         status: 'yes'
         spec: settings.global.tileCaching.seederMaxPoolSize
+        note: 'Not in GeoServer 2.28: it came in 3.0'
+        standard-2: cant
       gutter:
         status: 'yes'
         spec: settings.global.tileCaching.gutter
@@ -2334,38 +2340,44 @@ pages:
         status: 'yes'
         spec: settings.global.cors.enabled
         test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
-        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS). Not in GeoServer 2.28: it came in 3.0'
         cloud: cant
+        standard-2: cant
       allowedOriginPatterns:
         status: 'yes'
         spec: settings.global.cors.allowedOriginPatterns
         test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
-        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS). Not in GeoServer 2.28: it came in 3.0'
         cloud: cant
+        standard-2: cant
       allowedMethods:
         status: 'yes'
         spec: settings.global.cors.allowedMethods
         test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
-        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS). Not in GeoServer 2.28: it came in 3.0'
         cloud: cant
+        standard-2: cant
       allowedHeaders:
         status: 'yes'
         spec: settings.global.cors.allowedHeaders
         test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
-        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS). Not in GeoServer 2.28: it came in 3.0'
         cloud: cant
+        standard-2: cant
       maxAge:
         status: 'yes'
         spec: settings.global.cors.maxAge
         test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
-        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS). Not in GeoServer 2.28: it came in 3.0'
         cloud: cant
+        standard-2: cant
       supportsCredentials:
         status: 'yes'
         spec: settings.global.cors.supportsCredentials
         test: test_e2e_standard_only.py::test_standard_geoserver_takes_them_and_the_services_show_it
-        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS)'
+        note: 'GeoServer reads it only at startup, and GeoServer Cloud''s gateway answers CORS first: set the gateway''s (README, CORS). Not in GeoServer 2.28: it came in 3.0'
         cloud: cant
+        standard-2: cant
     CSPConfiguration:
       enabled:
         status: 'yes'

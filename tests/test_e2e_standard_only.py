@@ -174,6 +174,14 @@ def configops(capsys, *args):
     return code, out.out + out.err
 
 
+def settled(gs, code: int, out: str) -> None:
+    """Nothing left to do: on GeoServer 2.x, only CORS, which came in 3.0, left out with its reason."""
+    if gs.series and gs.series < (3, 0):
+        assert code == 3 and f"! settings global   (GeoServer {gs.version} can't set global.cors: it came in GeoServer 3.0)" in out, out
+    else:
+        assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+
+
 def restart(gs):
     subprocess.run(["docker", "restart", CONTAINER], check=True, capture_output=True)
     end = time.time() + 300
@@ -191,11 +199,11 @@ def restart(gs):
 def test_standard_geoserver_takes_them_and_the_services_show_it(gs, project, capsys):
     if gs.cloud:
         pytest.skip("standard GeoServer only: test_geoserver_cloud_leaves_them_out")
+    cors = not gs.series or gs.series >= (3, 0)  # GeoServer 2.28 has no CORS settings
     code, out = configops(capsys, "apply", "-C", str(project))
     assert code == 0, out
-    assert "restart it to use them" in out  # CORS
-    code, out = configops(capsys, "plan", "-C", str(project))
-    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+    assert ("restart it to use them" in out) is cors  # CORS
+    settled(gs, *configops(capsys, "plan", "-C", str(project)))
 
     # A group style draws, and WMS lists it
     r = requests.get(f"{SERVICES}/{WS}/wms", params={
@@ -223,15 +231,15 @@ def test_standard_geoserver_takes_them_and_the_services_show_it(gs, project, cap
     restart(gs)
     quota = gs.gwc_request("GET", "diskquota.xml", accept="application/xml").text
     assert "<quotaStore>HSQL</quotaStore>" in quota and "<bytes>2147483648</bytes>" in quota and f"<layer>{WS}:sites</layer>" in quota
-    r = requests.options(f"{SERVICES}/ows", params={"service": "WMS", "request": "GetCapabilities"}, timeout=60,
-                         headers={"Origin": ORIGIN, "Access-Control-Request-Method": "GET"})
-    assert r.headers.get("Access-Control-Allow-Origin") == ORIGIN, r.headers
-    assert r.headers.get("Access-Control-Max-Age") == "600" and r.headers.get("Access-Control-Allow-Credentials") == "true"
-    r = requests.get(f"{SERVICES}/ows", params={"service": "WMS", "request": "GetCapabilities"}, timeout=60,
-                     headers={"Origin": "https://elsewhere.example.org"})
-    assert "Access-Control-Allow-Origin" not in r.headers
-    code, out = configops(capsys, "plan", "-C", str(project))
-    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+    if cors:
+        r = requests.options(f"{SERVICES}/ows", params={"service": "WMS", "request": "GetCapabilities"}, timeout=60,
+                             headers={"Origin": ORIGIN, "Access-Control-Request-Method": "GET"})
+        assert r.headers.get("Access-Control-Allow-Origin") == ORIGIN, r.headers
+        assert r.headers.get("Access-Control-Max-Age") == "600" and r.headers.get("Access-Control-Allow-Credentials") == "true"
+        r = requests.get(f"{SERVICES}/ows", params={"service": "WMS", "request": "GetCapabilities"}, timeout=60,
+                         headers={"Origin": "https://elsewhere.example.org"})
+        assert "Access-Control-Allow-Origin" not in r.headers
+    settled(gs, *configops(capsys, "plan", "-C", str(project)))
 
     # Import writes them back
     imported = project / "imported"
@@ -241,7 +249,7 @@ def test_standard_geoserver_takes_them_and_the_services_show_it(gs, project, cap
     code, out = configops(capsys, "plan", "-C", str(imported))
     assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
     written = "".join(p.read_text() for p in imported.glob("*.yaml"))
-    for text in ("as-squares", "cors:", "contentSecurityPolicy:", "diskQuota:"):
+    for text in ("as-squares", "contentSecurityPolicy:", "diskQuota:") + (("cors:",) if cors else ()):
         assert text in written, text
 
 

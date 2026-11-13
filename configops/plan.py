@@ -309,7 +309,7 @@ class Planner:
         self.styles = self.style_files()
         self.changes: list[Change] = []
         self.unpublished: set[str] = set()  # layers and groups that can't be published yet ("!")
-        standard.leave_out_on_cloud(self)  # what only standard GeoServer can set: "!" on GeoServer Cloud
+        standard.leave_out_unsupported(self)  # what this GeoServer can't set: "!" lines
 
     # --- what the files say
 
