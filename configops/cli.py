@@ -154,4 +154,15 @@ def main(argv: list[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 2
-    return args.func(args)
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        print("configops: interrupted", file=sys.stderr)
+        return 130
+    except Exception as e:  # noqa: BLE001  nothing configops expects: said in a line, with the traceback on request
+        if os.environ.get("CONFIGOPS_DEBUG"):
+            raise
+        print(f"configops {args.command}: unexpected error: {type(e).__name__}: {e}\n"
+              "This is a bug in configops, or an answer from GeoServer it doesn't know. Nothing more was done. "
+              "Set CONFIGOPS_DEBUG=1 for the traceback.", file=sys.stderr)
+        return 1

@@ -104,16 +104,36 @@ def root_tag(r) -> str:
     return "org.geoserver.security.validation.PasswordPolicyConfig" if r.kind == "PasswordPolicy" else r.spec["class"]
 
 
+def other_provider(gs) -> str:
+    """The REST path of the first authentication provider GeoServer has, for one whose `default` was renamed or removed."""
+    listed = (gs.get("security/authproviders") or {}).get("authproviders") or []
+    names = [p.get("name") or p.get("@name") for p in (listed if isinstance(listed, list) else [listed]) if isinstance(p, dict)]
+    names = [n for n in names if n and n != "default"]
+    if not names:
+        raise GeoServerError("GET", "security/authproviders", 404, "GeoServer has no authentication provider to save, which is "
+                                                                   "how configops has it read its security files again")
+    return f"security/authproviders/{names[0]}"
+
+
 def reload_security(gs, seconds: float = 30, every: float = 2) -> None:
-    """Have GeoServer read its security files again: save its default authentication provider as it is.
-    Right after a master password change GeoServer may still be reloading by itself, and answers
+    """Have GeoServer read its security files again: save an authentication provider (`default`, or the first it
+    has) as it is. Right after a master password change GeoServer may still be reloading by itself, and answers
     500 "Cannot save security configuration" until it's done: try again for a while."""
-    url = f"{gs.rest}/security/authproviders/default"
+    provider = "security/authproviders/default"
     deadline = time.monotonic() + seconds
     while True:
-        body = gs.session.get(url, headers={"Accept": "application/xml"}, timeout=60).text
         try:
-            gs.request("PUT", "security/authproviders/default", body, content_type="application/xml")
+            body = gs.session.get(f"{gs.rest}/{provider}", headers={"Accept": "application/xml"}, timeout=60)
+        except OSError as e:
+            raise GeoServerError("GET", provider, 0, f"can't reach GeoServer: {e}") from None
+        status = getattr(body, "status_code", 200)
+        if status == 404 and provider.endswith("/default"):
+            provider = other_provider(gs)
+            continue
+        if status != 200 or not body.text.lstrip().startswith("<"):  # never save an error page as the provider
+            raise GeoServerError("GET", provider, status, body.text)
+        try:
+            gs.request("PUT", provider, body.text, content_type="application/xml")
             return
         except GeoServerError as e:
             if e.status != 500 or time.monotonic() + every > deadline:
@@ -144,9 +164,21 @@ def plan(planner) -> None:
             set_value(root, k, v)
         xml = ET.tostring(root, encoding="unicode")
 
-        def run(path=path, xml=xml):
+        def run(path=path, xml=xml, before=live_xml):
             gs.request("PUT", path, xml, content_type="application/xml")
-            reload_security(gs)
+            try:
+                reload_security(gs)
+            except GeoServerError:
+                # GeoServer won't load the object as written: back to what was there, so a restart doesn't meet a file it can't read
+                if before is None:
+                    gs.request("DELETE", path, ok=(200, 404))
+                else:
+                    gs.request("PUT", path, before, content_type="application/xml")
+                try:
+                    reload_security(gs)
+                except GeoServerError:
+                    pass
+                raise
         if changed is None:
             add("+", "security", target.lower(), note=r.spec.get("className") or r.kind, run=run)
         else:

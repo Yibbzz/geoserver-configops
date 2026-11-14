@@ -393,3 +393,55 @@ def test_style_images_fonts_and_templates_then_nothing_to_do_then_pruned(project
     assert assets.write(project, found) == []
     (project / "templates" / "header.ftl").unlink()
     assert assets.write(project, found) == ["templates/header.ftl"]
+
+
+def test_what_plan_doesnt_expect_is_said_in_a_line(tmp_path, monkeypatch, capsys):
+    from configops import cli
+
+    def broken(*args, **kwargs):
+        raise KeyError("featureType")
+
+    monkeypatch.setattr(cli, "plan", broken)
+    assert cli.main(["plan", "-C", str(tmp_path)]) == 1
+    err = capsys.readouterr().err
+    assert "unexpected error: KeyError: 'featureType'" in err and "Traceback" not in err
+    monkeypatch.setenv("CONFIGOPS_DEBUG", "1")
+    with pytest.raises(KeyError):
+        cli.main(["plan", "-C", str(tmp_path)])
+
+
+def test_a_database_that_fails_mid_plan_is_an_error_with_its_reason(project, monkeypatch):
+    import psycopg2
+
+    def gone(conn, schema, names):
+        raise psycopg2.OperationalError("terminating connection due to idle-in-transaction timeout")
+
+    monkeypatch.setattr(plan_module, "tables_exist", gone)
+
+    class Closing:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(plan_module, "connect",
+                        lambda root, url, wait: (load(root), converged(), Closing(), Database("h", 5432, "d", "u", "p", "data_layers")))
+    with pytest.raises(plan_module.PlanError, match="the database: terminating connection") as e:
+        plan_module.run(project)
+    assert e.value.code == 1
+
+
+def test_the_database_connection_only_reads_and_gives_up_in_time(monkeypatch):
+    import psycopg2
+
+    seen = {}
+
+    class Conn:
+        def set_session(self, **kwargs):
+            seen["session"] = kwargs
+
+    monkeypatch.setattr(psycopg2, "connect", lambda **kwargs: seen.update(kwargs) or Conn())
+    Database("h", 5432, "d", "u", "p", sslmode="verify-full").connect()
+    assert seen["connect_timeout"] == 15 and seen["sslmode"] == "verify-full"
+    assert seen["session"] == {"readonly": True, "autocommit": True}  # nothing left open in a transaction during apply
+    seen.clear()
+    Database("h", 5432, "d", "u", "p").connect()
+    assert "sslmode" not in seen  # libpq's own, or $PGSSLMODE

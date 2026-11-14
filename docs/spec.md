@@ -85,7 +85,7 @@ spec:
 | `geoserver.credentials.secret` | yes | | Secret with `username` and `password` |
 | `database` | for layers on tables or SQL views | | The PostGIS database GeoServer reaches through a JNDI datasource |
 | `database.jndi` | with `database` | | JNDI name GeoServer uses for the data store |
-| `database.connection.secret` | with `database` | | Secret with `host`, `port`, `database`, `username`, `password` |
+| `database.connection.secret` | with `database` | | Secret with `host`, `port`, `database`, `username`, `password`, and optionally `sslmode` (`verify-full` has the server's certificate checked; unset, libpq's own default or `$PGSSLMODE`). The connection only reads, and gives up after 15 seconds if the database doesn't answer |
 | `database.schema` | no | `public` | The schema of a layer's `table` given by name alone |
 | `workspace` | yes | | Default workspace; the tool owns it (see [Ownership](#ownership-and-pruning)) |
 | `crs` | no | | The project's usual CRS |
@@ -749,7 +749,9 @@ $ configops plan
 Plan: 1 to add, 2 to change, 0 to delete, 1 unmanaged. 1 can't be done.
 ```
 
-`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done yet, such as a layer on a table that doesn't exist yet. Groups leave such a layer out until it can be published. `plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables loaded separately, often after the deploy, so an apply Job doesn't fail for them, or are settings only standard GeoServer can take (below). It exits 1 when a change fails.
+`+` adds, `~` changes, `-` deletes (only with `--prune`), `?` is unmanaged and left alone, and `!` can't be done yet, such as a layer on a table that doesn't exist yet. Groups leave such a layer out until it can be published. Three environment variables change how configops talks to GeoServer: `CONFIGOPS_TIMEOUT` (seconds to wait for one answer; 60), `CONFIGOPS_GEOSERVER_CLOUD` (`true` or `false`, for a server that won't give its version at `/rest/about/version` and would otherwise be taken for standard GeoServer) and `CONFIGOPS_DEBUG` (`1` shows the traceback of an error configops doesn't expect).
+
+`plan`'s exit code is 0 when GeoServer matches the files, 2 when there are changes to make (for CI), 3 when nothing is left but `!` lines, and 1 when it can't run. `apply` exits 0 once it has made every change it can, even with `!` lines left: those wait for tables loaded separately, often after the deploy, so an apply Job doesn't fail for them, or are settings only standard GeoServer can take (below). It exits 1 when a change fails.
 
 **GeoServer 2.28.** The same files work on GeoServer 2.28 too, apart from four settings that came in GeoServer 3.0: the global `cors`, a contact's `internationalTitle`, and `tileCaching`'s `seederCorePoolSize` and `seederMaxPoolSize`. When the files set one, `plan` asks GeoServer its version and, on 2.x, shows it as `!` with the reason and leaves it out.
 

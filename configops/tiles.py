@@ -104,6 +104,8 @@ def wanted_blob_store(r, root) -> tuple[str, dict]:
     if kind == "file":
         fields["path"] = f"{DATA}/{spec['path'].strip('/')}"
         body += f"<baseDirectory>{escape(fields['path'])}</baseDirectory><fileSystemBlockSize>{spec.get('blockSize', 4096)}</fileSystemBlockSize>"
+        if "blockSize" in spec:  # compared when the files set it: a change used to go unseen
+            fields["blockSize"] = int(spec["blockSize"])
         if "layout" in spec:
             fields["layout"] = spec["layout"]
             body += f"<pathGeneratorType>{spec['layout'].upper()}</pathGeneratorType>"
@@ -149,6 +151,7 @@ def live_blob_store(xml: str) -> dict:
     out["type"] = kind
     if kind == "file":
         out["path"] = text("baseDirectory")
+        out["blockSize"] = int(text("fileSystemBlockSize")) if text("fileSystemBlockSize").isdigit() else 4096
         out["layout"] = text("pathGeneratorType").lower() or "default"
         return out
     for k, tag in FIELDS.get(kind, {}).items():

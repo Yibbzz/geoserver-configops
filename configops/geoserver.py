@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -21,7 +22,15 @@ from urllib3.util.retry import Retry
 
 from . import secrets
 
-TIMEOUT = 60
+def timeout() -> float:
+    """Seconds to wait for one answer: 60, or $CONFIGOPS_TIMEOUT (bounding boxes of a very large table take longer)."""
+    try:
+        return max(1.0, float(os.environ.get("CONFIGOPS_TIMEOUT") or 60))
+    except ValueError:
+        return 60.0
+
+
+TIMEOUT = 60  # the default; requests use timeout()
 
 STYLE_TYPES = {  # a style file's suffix -> the content type GeoServer reads it as
     ".sld": "application/vnd.ogc.sld+xml",
@@ -148,7 +157,7 @@ class GeoServer:
     def request(self, method: str, path: str, body=None, content_type: str = "application/json",
                 params: dict | None = None, ok=(200, 201)) -> requests.Response:
         url = f"{self.rest}/{path}"
-        kwargs: dict = {"params": params, "timeout": TIMEOUT, "headers": {"Accept": "application/json"}}
+        kwargs: dict = {"params": params, "timeout": timeout(), "headers": {"Accept": "application/json"}}
         if body is not None:
             kwargs["headers"]["Content-Type"] = content_type
             kwargs["json" if isinstance(body, (dict, list)) else "data"] = body
@@ -163,7 +172,13 @@ class GeoServer:
     def get(self, path: str, params: dict | None = None) -> dict | None:
         """The object at `path`, or None if there is none."""
         r = self.request("GET", f"{path}.json", params=params, ok=(200, 404))
-        return None if r.status_code == 404 else r.json()
+        if r.status_code == 404:
+            return None
+        try:
+            return r.json()
+        except ValueError:  # 200 and a page that isn't GeoServer's: a proxy's or a single sign-on's
+            raise GeoServerError("GET", path, r.status_code, "the answer isn't JSON: is something in front of GeoServer "
+                                                              "(a proxy, a login page) answering instead? " + r.text[:120]) from None
 
     def exists(self, path: str) -> bool:
         return self.request("GET", f"{path}.json", ok=(200, 404)).status_code == 200
@@ -394,7 +409,7 @@ class GeoServer:
             headers["Content-Type"] = "text/xml"
         try:
             return self.session.request(method, url, data=body.encode("utf-8") if body else None,
-                                        headers=headers, timeout=TIMEOUT)
+                                        headers=headers, timeout=timeout())
         except requests.RequestException as e:
             raise GeoServerError(method, f"gwc/{path}", 0, f"can't reach {self.gwc}: {e}") from None
 
@@ -481,7 +496,10 @@ class GeoServer:
         A server that won't say (security rules can refuse /rest/about) gives "" and counts as the newest."""
         if getattr(self, "_version", None) is None:
             r = self.request("GET", "about/version.json", ok=(200, 401, 403, 404))
-            about = (r.json() if r.status_code == 200 else {}).get("about") or {}
+            try:
+                about = (r.json() if r.status_code == 200 else {}).get("about") or {}
+            except ValueError:
+                about = {}
             resources = about.get("resource") or []
             self._version = next((str(r.get("Version", "")) for r in (resources if isinstance(resources, list) else [resources])
                                   if isinstance(r, dict) and r.get("@name") == "GeoServer"), "")
@@ -489,7 +507,16 @@ class GeoServer:
 
     @property
     def cloud(self) -> bool:
-        """Whether this is GeoServer Cloud (its version ends in -CLOUD) rather than standard GeoServer."""
+        """Whether this is GeoServer Cloud (its version ends in -CLOUD) rather than standard GeoServer.
+        $CONFIGOPS_GEOSERVER_CLOUD (true or false) says so for a server that won't give its version: without it
+        such a server counts as standard, and would be sent the settings GeoServer Cloud can't take."""
+        said = (os.environ.get("CONFIGOPS_GEOSERVER_CLOUD") or "").strip().lower()
+        if said in ("true", "1", "yes", "false", "0", "no"):
+            return said in ("true", "1", "yes")
+        if not self.version and not getattr(self, "_warned", False):
+            self._warned = True
+            print(f"configops: warning: {self.url} won't give its version (/rest/about/version), so it is taken for standard "
+                  "GeoServer. If it is GeoServer Cloud, set CONFIGOPS_GEOSERVER_CLOUD=true.", file=sys.stderr)
         return "CLOUD" in self.version.upper()
 
     @property

@@ -61,3 +61,11 @@ def test_an_integers_filter_keeps_a_whole_threshold():
     wanted = wanted_filters({"BUFFER": {"type": "integers", "values": [0, 8], "threshold": 2}})
     assert wanted["BUFFER"]["threshold"] == 2 and isinstance(wanted["BUFFER"]["threshold"], int)
     assert "<threshold>2</threshold>" in filter_xml("BUFFER", wanted["BUFFER"])
+
+
+def test_a_file_blob_stores_block_size_is_compared_when_the_files_set_it():
+    from configops.tiles import live_blob_store
+
+    live = live_blob_store('<FileBlobStore default="false"><id>disk</id><enabled>true</enabled><baseDirectory>/d</baseDirectory>'
+                           "<fileSystemBlockSize>4096</fileSystemBlockSize></FileBlobStore>")
+    assert live["blockSize"] == 4096

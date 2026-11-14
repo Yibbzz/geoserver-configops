@@ -73,3 +73,66 @@ def test_reload_security_gives_up_and_other_errors_are_not_retried():
     with pytest.raises(GeoServerError):
         reload_security(gs, every=0)
     assert gs.puts == 1
+
+
+def test_reload_security_never_saves_an_error_page_and_finds_another_provider():
+    class GS:
+        rest = "http://gs/rest"
+
+        def __init__(self, answers):
+            self.saved = []
+            self.session = types.SimpleNamespace(get=lambda url, **kw: answers[url.rsplit("/", 1)[1]])
+
+        def get(self, path):
+            return {"authproviders": [{"name": "corp-ldap"}]}
+
+        def request(self, method, path, body=None, **kw):
+            self.saved.append((path, body))
+
+    page = types.SimpleNamespace(status_code=503, text="<html>Service Unavailable</html>")
+    gs = GS({"default": page})
+    with pytest.raises(GeoServerError):
+        reload_security(gs, every=0)
+    assert gs.saved == []
+
+    gs = GS({"default": types.SimpleNamespace(status_code=404, text=""),
+             "corp-ldap": types.SimpleNamespace(status_code=200, text="<ldap/>")})
+    reload_security(gs, every=0)
+    assert gs.saved == [("security/authproviders/corp-ldap", "<ldap/>")]
+
+
+def test_a_security_object_geoserver_wont_load_is_put_back_as_it_was(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from configops import auth
+    from configops.loader import Resource
+    from configops.plan import Change
+
+    before = "<org.geoserver.security.ldap.LDAPSecurityServiceConfig><name>ldap</name><serverURL>ldap://old</serverURL></org.geoserver.security.ldap.LDAPSecurityServiceConfig>"
+    written = []
+
+    class GS:
+        rest = "http://gs/rest"
+
+        def request(self, method, path, body=None, **kw):
+            if method != "GET":
+                written.append((method, body))
+            return types.SimpleNamespace(status_code=200, text=before)
+
+    resource = Resource({"kind": "AuthProvider", "metadata": {"name": "ldap"}, "spec": {"config": {"serverURL": "ldap://new"}}},
+                        Path("security.yaml"), None)
+    changes = []
+    planner = types.SimpleNamespace(gs=GS(), root=tmp_path, add=lambda *a, **k: changes.append(Change(*a, **k)),
+                                    files=types.SimpleNamespace(of_kind=lambda kind: [resource] if kind == "AuthProvider" else []))
+    auth.plan(planner)
+    reloads = []
+
+    def refuse(gs):
+        reloads.append(1)
+        raise GeoServerError("PUT", "security/authproviders/default", 500, "can't load ldap")
+
+    monkeypatch.setattr(auth, "reload_security", refuse)
+    with pytest.raises(GeoServerError, match="can't load ldap"):
+        changes[0].run()
+    assert [method for method, _ in written] == ["PUT", "PUT"] and "ldap://new" in written[0][1] and written[1][1] == before
+    assert len(reloads) == 2  # once for the new object, once for the old one put back
