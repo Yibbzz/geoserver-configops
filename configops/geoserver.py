@@ -284,6 +284,10 @@ class GeoServer:
         ft.update(extra or {})
         path = f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}"
         result = self.upsert(path, f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes", {"featureType": ft})
+        if not enabled and result == "created":
+            # GeoServer makes a feature type turned on whatever the POST says; it takes `enabled: false` from a PUT.
+            # So a new layer the files turn off is on for this one request, and no longer.
+            self.request("PUT", path, {"featureType": {"name": name, "enabled": False}})
         self.recalculate(ws, store, name)
         return result
 
@@ -293,7 +297,9 @@ class GeoServer:
         current = self.get(path)
         if current is None:
             return
-        self.request("PUT", path, {"featureType": {"name": current["featureType"]["name"], "enabled": True}},
+        # `enabled` as it is: a layer the files turn off stays off
+        self.request("PUT", path, {"featureType": {"name": current["featureType"]["name"],
+                                                   "enabled": current["featureType"].get("enabled", True)}},
                      params={"recalculate": "nativebbox,latlonbbox"})
 
     def delete_featuretype(self, ws: str, store: str, name: str) -> bool:

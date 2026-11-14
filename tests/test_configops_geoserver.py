@@ -169,3 +169,10 @@ def test_wait_also_waits_for_the_tile_cache_service(monkeypatch):
     fake.request = request
     gs.wait(60, every=1)
     assert sum("/gwc/rest/" in u for u in calls) == 3
+
+
+def test_recalculating_keeps_a_layer_off():
+    gs, fake = client()
+    fake.objects["workspaces/uk/datastores/postgis/featuretypes/roads"] = {"featureType": {"name": "roads", "enabled": False}}
+    gs.recalculate("uk", "postgis", "roads")
+    assert fake.calls[-1][3] == {"featureType": {"name": "roads", "enabled": False}}

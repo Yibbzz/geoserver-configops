@@ -91,7 +91,9 @@ def refresh(gs: GeoServer, files: Project, targets: list[str] | None) -> str:
         if gs.get(item) is None:
             continue
         key = "coverage" if collection == "coverages" else "featureType"
-        gs.request("PUT", item, {key: {"enabled": r.spec.get("enabled", True)}}, params={"calculate": "nativebbox,latlonbbox"})
+        # GeoServer names the parameter `calculate` for a coverage and `recalculate` for a feature type
+        gs.request("PUT", item, {key: {"enabled": r.spec.get("enabled", True)}},
+                   params={"calculate" if collection == "coverages" else "recalculate": "nativebbox,latlonbbox"})
         refreshed += 1
         clear(f"{ws}:{name}")
     for r in table_layers:

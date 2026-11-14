@@ -11,6 +11,8 @@ from __future__ import annotations
 import difflib
 import json
 import os
+import re
+import xml.etree.ElementTree as ET
 from collections import defaultdict
 from importlib import resources as package_files
 from pathlib import Path
@@ -140,11 +142,45 @@ def style_names(project: Project) -> tuple[set[str], list[Problem]]:
     for stem, files in by_stem.items():
         if len(files) > 1:
             problems.append(Problem(files[1], 0, f"two style files named {stem} ({', '.join(f.name for f in files)}); rename one"))
+    checked = {f for files in by_stem.values() for f in files}
     for s in project.of_kind("Style"):
         f = s.spec.get("file")
         if isinstance(f, str) and not (project.root / f).is_file():
             problems.append(Problem(s.file, s.line(("spec", "file")), f"spec.file: {f} not found under {project.root}", s.label))
+        elif isinstance(f, str):
+            checked.add(project.root / f)
+    for f in sorted(checked):
+        found = style_problem(f)
+        if found:
+            problems.append(Problem(f, found[0], found[1]))
     return set(by_stem) | set(project.named("Style")) | BUILT_IN_STYLES, problems
+
+
+def style_problem(f: Path) -> tuple[int, str] | None:
+    """(line, what's wrong) with a style file GeoServer couldn't read: apply sends it as it is, as UTF-8, and
+    GeoServer keeps a broken style without a word until a map asks for it."""
+    try:
+        data = f.read_bytes()
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return 0, "not UTF-8 text: configops sends a style as UTF-8"
+    except OSError as e:
+        return 0, f"can't be read: {e.strerror or e}"
+    if f.suffix == ".sld":
+        declared = re.match(rb'\s*<\?xml[^>]*encoding=["\']([^"\']+)["\']', data)
+        other = declared and declared.group(1).decode("ascii", "replace").lower().replace("_", "-") not in ("utf-8", "utf8")
+        if other and not data.isascii():  # plain ASCII reads the same either way
+            return 1, f"says its encoding is {declared.group(1).decode('ascii', 'replace')}, but it is sent as UTF-8: save it as UTF-8 and say so"
+        try:
+            ET.fromstring(data)
+        except ET.ParseError as e:
+            return e.position[0], f"not well-formed XML: {e}"
+    elif f.suffix == ".mbstyle":
+        try:
+            json.loads(data)
+        except ValueError as e:
+            return getattr(e, "lineno", 0), f"not valid JSON: {e}"
+    return None
 
 
 def check_templates(project: Project) -> list[Problem]:
@@ -240,6 +276,24 @@ def check_names(project: Project) -> list[Problem]:
                                     f"GeoServer name {key[0]}:{key[1]} is also used by {other.label} ({other.file.name}:{other.line()})", r.label))
         published.setdefault(key, r)
 
+    # A layer on a table is published from a store configops makes for the table's schema, named after it:
+    # a Store with that name in the same workspace would be the same store in GeoServer, each apply undoing the other
+    database = projects[0].spec.get("database") if projects else None
+    default_schema = (database.get("schema") if isinstance(database, dict) else None) or "public"
+    own = {(s.spec.get("workspace") or default_ws, geoserver_name(s)): s for s in project.of_kind("Store")}
+    reported = set()
+    for layer in project.of_kind("Layer"):
+        table, sql = layer.spec.get("table"), layer.spec.get("sql")
+        if "store" in layer.spec or not (table or sql):
+            continue
+        schema = sql.get("schema") if isinstance(sql, dict) else table.get("schema") if isinstance(table, dict) else default_schema
+        key = (layer.spec.get("workspace") or default_ws, schema)
+        if key in own and key not in reported:
+            reported.add(key)
+            s = own[key]
+            problems.append(Problem(s.file, s.line(("metadata", "name")),
+                                    f"GeoServer store {key[0]}:{key[1]} is also the store configops makes for the layers on tables in "
+                                    f"schema {key[1]} ({layer.label}): give the Store another name", s.label))
     return problems
 
 
@@ -419,6 +473,10 @@ def check_auth(project: Project) -> list[Problem]:
         if not any(p.startswith("/rest") for c in chains for p in c["paths"]):
             problems.append(Problem(r.file, r.line(("spec", "global", "security", "filterChains")),
                                     "spec.global.security.filterChains: no chain for /rest/**: configops would lock itself out", r.label))
+        if not any(p == "/**" for c in chains for p in c["paths"]):  # the list is the whole list: GeoServer's other chains go
+            problems.append(Problem(r.file, r.line(("spec", "global", "security", "filterChains")),
+                                    "spec.global.security.filterChains: no chain for /**: the list replaces every chain GeoServer has, "
+                                    "and requests no chain matches go through no authentication filters", r.label, "warning"))
         for i, c in enumerate(chains):
             for f in c.get("filters", []):
                 if f not in filters:
