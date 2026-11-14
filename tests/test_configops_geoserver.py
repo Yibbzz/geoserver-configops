@@ -169,3 +169,35 @@ def test_wait_also_waits_for_the_tile_cache_service(monkeypatch):
     fake.request = request
     gs.wait(60, every=1)
     assert sum("/gwc/rest/" in u for u in calls) == 3
+
+
+def test_a_page_that_isnt_geoservers_is_an_error_not_a_crash():
+    gs, fake = client()
+
+    class Page:
+        status_code, text = 200, "<html>Sign in</html>"
+
+        def json(self):
+            raise ValueError("not JSON")
+
+    fake.request = lambda method, url, **kw: Page()
+    with pytest.raises(GeoServerError, match="the answer isn't JSON"):
+        gs.get("workspaces/uk")
+
+
+def test_cloud_can_be_said_for_a_server_that_wont_give_its_version(monkeypatch, capsys):
+    gs, fake = client()
+    gs._version = ""
+    assert gs.cloud is False and "won't give its version" in capsys.readouterr().err
+    monkeypatch.setenv("CONFIGOPS_GEOSERVER_CLOUD", "true")
+    assert gs.cloud is True
+
+
+def test_the_timeout_can_be_set(monkeypatch):
+    from configops.geoserver import timeout
+
+    assert timeout() == 60
+    monkeypatch.setenv("CONFIGOPS_TIMEOUT", "300")
+    assert timeout() == 300
+    monkeypatch.setenv("CONFIGOPS_TIMEOUT", "soon")
+    assert timeout() == 60

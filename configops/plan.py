@@ -808,6 +808,13 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
             changes = ordered(Planner(files, root, gs, conn, db, prune).plan())
         except (GeoServerError, MissingCredentials) as e:
             raise PlanError(str(e), code=1) from None
+        except psycopg2.Error as e:
+            raise PlanError(f"the database: {str(e).strip() or type(e).__name__}", code=1) from None
+        except OSError as e:  # a file of the project that can't be read
+            raise PlanError(f"{e.filename or 'a file'}: {e.strerror or e}", code=1) from None
+        except UnicodeDecodeError as e:
+            raise PlanError(f"a file of the project isn't UTF-8 text ({e.reason} at byte {e.start}); "
+                            "configops validate says which", code=1) from None
         print_plan(changes)
         blocked = any(c.action == "!" for c in changes)
         todo = [c for c in changes if c.run is not None]
