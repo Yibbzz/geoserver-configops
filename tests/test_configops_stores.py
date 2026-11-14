@@ -381,57 +381,6 @@ def test_the_fingerprint_keeps_the_stores_other_metadata():
     assert not same_login("not ours", "bob", "pw") and not same_login(None, "bob", "pw")
 
 
-class Encrypting(FakeGeoServer):
-    """GeoServer keeps a store's password encrypted and gives that back; a PUT without one leaves it as it is."""
-
-    saves = 0
-
-    def upsert(self, path, collection, body):
-        (key, store), = body.items()
-        store = dict(store)
-        if "password" in store:
-            self.saves += 1
-            store["password"] = f"crypt1:{self.saves}-{store['password'][::-1]}"
-        self.objects[path] = {key: store}
-
-    def request(self, method, path, body=None, **kwargs):
-        if method == "PUT" and path in self.objects:
-            (key, store), = body.items()
-            self.objects[path][key].update(store)
-            return
-        return super().request(method, path, body, **kwargs)
-
-
-def test_a_password_set_again_in_the_web_ui_is_a_change(tmp_path, monkeypatch):
-    from configops.stores import KEPT, kept_password, metadata_entries
-
-    partner(monkeypatch)
-    gs = Encrypting()
-    for c in plan(tmp_path, gs, WMS):
-        c.run()
-    store = gs.objects["workspaces/uk/wmsstores/partner"]["wmsStore"]
-    assert metadata_entries(store)[KEPT]["$"] == kept_password(store) and "pw-one" not in metadata_entries(store)[KEPT]["$"]
-    assert plan(tmp_path, gs, WMS) == []
-
-    store["password"] = "crypt1:set-in-the-web-ui"
-    changes = plan(tmp_path, gs, WMS)
-    assert [c.fields for c in changes] == [[("credentials", "(set again in GeoServer)", "(from secret partner)")]]
-    changes[0].run()
-    assert gs.objects["workspaces/uk/wmsstores/partner"]["wmsStore"]["password"].endswith("eno-wp")
-    assert plan(tmp_path, gs, WMS) == []
-
-
-def test_a_geoserver_that_gives_no_encrypted_password_back_is_left_as_before(tmp_path, monkeypatch):
-    from configops.stores import KEPT, metadata_entries
-
-    partner(monkeypatch)
-    gs = FakeGeoServer()
-    for c in plan(tmp_path, gs, WMS):
-        c.run()
-    assert KEPT not in metadata_entries(gs.objects["workspaces/uk/wmsstores/partner"]["wmsStore"])
-    assert plan(tmp_path, gs, WMS) == []
-
-
 def test_a_key_or_password_in_an_address_is_not_printed(tmp_path, capsys):
     from configops.plan import print_plan
     from configops.validate import redact

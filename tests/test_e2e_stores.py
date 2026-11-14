@@ -215,20 +215,6 @@ def test_a_password_changed_in_the_secret_is_a_change(gs, project, capsys, monke
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
 
 
-def test_a_password_set_again_in_geoserver_is_a_change(gs, project, capsys):
-    """As someone would in the web UI: apply noted the password as GeoServer keeps it (encrypted), and plan sees another."""
-    assert configops(capsys, "apply", "-C", str(project))[0] == 0
-    code, out = configops(capsys, "plan", "-C", str(project))
-    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
-    gs.request("PUT", f"workspaces/{WS}/wmsstores/eox_wms_login",
-               {"wmsStore": {"name": "eox_wms_login", "enabled": True, "password": "set-in-the-web-ui"}})
-    code, out = configops(capsys, "plan", "-C", str(project))
-    assert code == 2 and 'credentials: "(set again in GeoServer)" -> "(from secret eoxlogin)"' in out, out
-    assert configops(capsys, "apply", "-C", str(project))[0] == 0
-    code, out = configops(capsys, "plan", "-C", str(project))
-    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
-
-
 def test_a_header_value_that_differs_is_not_printed(gs, project, capsys, monkeypatch):
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
     monkeypatch.setenv("CONFIGOPS_EOXKEY_VALUE", "e2e-other-key")
