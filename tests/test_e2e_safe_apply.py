@@ -38,7 +38,7 @@ spec:
   workspace: {WS}
 """
 LAYERS = {
-    "switched-off": "{ table: e2e_safe_points, enabled: false }"  # not `off`: YAML reads that as false,
+    "switched-off": "{ table: e2e_safe_points, enabled: false }",  # not `off`: YAML reads that as false
     "private": "{ table: e2e_safe_points, attributes: [name] }",
     "summary": "{ table: e2e_safe_summary }",
     "moving": "{ table: e2e_safe_points }",
@@ -77,6 +77,12 @@ def gs():
     return GeoServer(URL.removesuffix("/rest"), "admin", PASSWORD, gwc_url=os.environ.get("E2E_GWC_URL"))
 
 
+def clean(gs) -> None:
+    gs.delete_workspace(WS)
+    if RULE in (gs.get("security/acl/layers") or {}):
+        gs.request("DELETE", f"security/acl/layers/{RULE}")
+
+
 @pytest.fixture(scope="module")
 def project(tmp_path_factory, gs):
     root = tmp_path_factory.mktemp("safe")
@@ -88,11 +94,9 @@ def project(tmp_path_factory, gs):
         "INSERT INTO data_layers.e2e_safe_points (name, owner, geom) VALUES ('a', 'secret', ST_SetSRID(ST_MakePoint(5, 5), 27700));"
         "CREATE MATERIALIZED VIEW data_layers.e2e_safe_summary AS SELECT id, name, geom FROM data_layers.e2e_safe_points;"
         "CREATE TABLE e2e_safe_other.e2e_safe_points AS SELECT * FROM data_layers.e2e_safe_points")
-    gs.delete_workspace(WS)
-    gs.request("DELETE", f"security/acl/layers/{RULE}", ok=(200, 404))
+    clean(gs)
     yield root
-    gs.delete_workspace(WS)
-    gs.request("DELETE", f"security/acl/layers/{RULE}", ok=(200, 404))
+    clean(gs)
     sql("DROP SCHEMA IF EXISTS e2e_safe_other CASCADE; DROP MATERIALIZED VIEW IF EXISTS data_layers.e2e_safe_summary;"
         "DROP TABLE IF EXISTS data_layers.e2e_safe_points")
 
