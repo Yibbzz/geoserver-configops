@@ -1,6 +1,7 @@
 """Role, Group, User and AccessRule resources (configops/security.py) against a fake GeoServer."""
 
 import types
+from urllib.parse import unquote
 
 import pytest
 
@@ -87,7 +88,9 @@ class FakeGeoServer:
         raise AssertionError(path)
 
     def request(self, method, path, body=None, content_type=None, *args, **kwargs):
-        parts = path.split("/")
+        parts = [unquote(p) for p in path.split("/")]
+        if path == "resource/security/usergroup/default/users.xml":  # no users file to read: plan logs in to check a password
+            return types.SimpleNamespace(status_code=404, text="")
         if path == "resource/security/rest.properties":
             if method == "PUT":
                 self.rest_file = body
@@ -255,3 +258,41 @@ spec: { roles: [ADMIN] }
     assert any("spec.roles[0]: no Role named 'MISSING'" in m for m in messages)
     assert "the same rule as AccessRule a (layers uk.*.r)" in messages
     assert any("exactly one of layer, service or rest" in m for m in messages)
+
+
+def test_one_of_geoservers_own_rules_with_other_roles_is_shown(tmp_path, gs):
+    """Everyone may write, say: the files don't name the rule, so it isn't changed, but it isn't passed over either."""
+    for c in plan(tmp_path, gs):
+        c.run()
+    gs.acl["layers"]["*.*.w"] = "*"
+    changes = plan(tmp_path, gs)
+    assert [(c.action, c.kind, c.target, c.fields, c.run) for c in changes] == [
+        ("?", "rule", "layers *.*.w", [("roles", ["*"], ["ADMIN", "GROUP_ADMIN"])], None)]
+    assert "GeoServer's own rule, changed" in changes[0].note
+
+
+def test_a_password_is_checked_against_geoservers_digest_without_logging_in(tmp_path, gs, monkeypatch):
+    import base64
+    import hashlib
+
+    def digest1(password, salt=b"0123456789abcdef"):  # as GeoServer's default encoder writes it
+        d = hashlib.sha256(salt + password.encode()).digest()
+        for _ in range(99_999):
+            d = hashlib.sha256(d).digest()
+        return "digest1:" + base64.b64encode(salt + d).decode()
+
+    assert security.stored_password_matches(digest1("pw-1"), "pw-1") is True
+    assert security.stored_password_matches(digest1("pw-1"), "other") is False
+    assert security.stored_password_matches("plain:pw-1", "pw-1") is True
+    assert security.stored_password_matches("crypt1:abc", "pw-1") is None  # can't tell: plan logs in instead
+    assert security.stored_password_matches("digest1:not base64!", "pw-1") is None
+    assert security.stored_password_matches(None, "pw-1") is None
+
+    for c in plan(tmp_path, gs):
+        c.run()
+    logins = []
+    monkeypatch.setattr(security, "password_works", lambda g, name, pw: logins.append(name) or True)
+    monkeypatch.setattr(security.SecurityFiles, "user_password", lambda self, name: digest1("pw-1"))
+    assert plan(tmp_path, gs) == [] and logins == []  # the digest matches: no login
+    monkeypatch.setattr(security.SecurityFiles, "user_password", lambda self, name: digest1("changed-in-the-ui"))
+    assert plan(tmp_path, gs) == [] and logins == ["alice"]  # it doesn't: the login decides

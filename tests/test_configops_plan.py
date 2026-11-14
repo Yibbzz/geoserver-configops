@@ -393,3 +393,51 @@ def test_style_images_fonts_and_templates_then_nothing_to_do_then_pruned(project
     assert assets.write(project, found) == []
     (project / "templates" / "header.ftl").unlink()
     assert assets.write(project, found) == ["templates/header.ftl"]
+
+
+class Closing:
+    def close(self):
+        pass
+
+
+def connected(monkeypatch, gs):
+    monkeypatch.setattr(plan_module, "connect",
+                        lambda root, url, wait: (load(root), gs, Closing(), Database("h", 5432, "d", "u", "p", "data_layers")))
+
+
+def test_unmanaged_counts_as_drift_when_asked(project, tables, monkeypatch, capsys):
+    gs = converged()
+    gs.publish("uk", "data_layers", "added_in_the_ui", "x", "x")
+    connected(monkeypatch, gs)
+    assert plan_module.run(project) == 0  # a ? line alone: left alone, as before
+    assert plan_module.run(project, fail_on_unmanaged=True) == 2
+    assert "--fail-on-unmanaged counts them as drift" in capsys.readouterr().out
+
+
+def test_apply_refuses_to_delete_more_than_it_was_told_it_may(project, tables, monkeypatch, capsys):
+    gs = converged()
+    for n in range(3):
+        gs.publish("uk", "data_layers", f"other_{n}", "x", "x")
+    connected(monkeypatch, gs)
+    with pytest.raises(plan_module.PlanError, match="would delete 3 things, more than --max-deletes 2. Nothing was applied") as e:
+        plan_module.run(project, apply=True, prune=True, max_deletes=2)
+    assert e.value.code == 1
+    assert plan_module.run(project, prune=True, max_deletes=2) == 2  # plan only shows them
+
+
+def test_apply_expects_the_plan_that_was_read(project, tables, monkeypatch, capsys):
+    gs = converged()
+    gs.layers[("uk", "road_links")]["layer"]["queryable"] = True
+    connected(monkeypatch, gs)
+    assert plan_module.run(project, digest=True) == 2
+    digest = capsys.readouterr().out.rsplit("Plan digest: ", 1)[1].strip()
+    gs.layers[("uk", "sites")]["layer"]["queryable"] = False  # someone edits GeoServer between plan and apply
+    with pytest.raises(plan_module.PlanError, match=f"not {digest}: GeoServer or the files changed"):
+        plan_module.run(project, apply=True, expect=digest)
+
+
+def test_files_plan_cant_read_are_an_error_not_changes(tmp_path):
+    from configops.cli import main
+
+    (tmp_path / "project.yaml").write_text("kind: Nonsense\n")
+    assert main(["plan", "-C", str(tmp_path)]) == 1

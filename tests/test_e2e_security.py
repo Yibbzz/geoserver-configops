@@ -138,6 +138,21 @@ def test_apply_then_nothing_to_do_and_rules_take_effect(gs, project, capsys):
     assert status_as("e2e-alice", "wrong") == 401
 
 
+def test_a_password_is_checked_against_geoservers_digest_not_by_logging_in(gs, project, capsys, monkeypatch):
+    """plan on a schedule must not log in as every user: it reads the digest GeoServer keeps and checks the Secret's password."""
+    from configops import security
+
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    stored = security.SecurityFiles(gs).user_password("e2e-alice")
+    current = os.environ["CONFIGOPS_E2EUSERS_ALICE"]
+    assert security.stored_password_matches(stored, current) is True, stored[:12]
+    assert security.stored_password_matches(stored, "not-her-password") is False
+    logins = []
+    monkeypatch.setattr(security, "password_works", lambda g, name, pw: logins.append(name) or True)
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert code == 0 and logins == [], out
+
+
 def test_a_new_password_is_applied(gs, project, capsys, monkeypatch):
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
     monkeypatch.setenv("CONFIGOPS_E2EUSERS_ALICE", PW["alice-2"])
