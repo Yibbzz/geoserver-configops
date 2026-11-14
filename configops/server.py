@@ -41,7 +41,8 @@ def merge(live: dict, wanted: dict) -> dict:
     """`live` with `wanted`'s fields set, nested objects merged rather than replaced."""
     out = dict(live)
     for key, value in wanted.items():
-        out[key] = merge(out.get(key) or {}, value) if isinstance(value, dict) and "string" not in value else value
+        here = out.get(key) if isinstance(out.get(key), dict) else {}  # GeoServer has a plain value there: replaced
+        out[key] = merge(here, value) if isinstance(value, dict) and "string" not in value else value
     return out
 
 

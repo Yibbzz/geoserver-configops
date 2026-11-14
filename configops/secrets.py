@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -28,6 +29,7 @@ def env_name(secret: str, key: str) -> str:
 
 
 SECRETS_DIR = "CONFIGOPS_SECRETS_DIR"
+_warned: set[Path] = set()
 
 
 def lookup(secret: str, key: str, root: Path | None = None) -> str | None:
@@ -47,7 +49,11 @@ def lookup(secret: str, key: str, root: Path | None = None) -> str | None:
             continue
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except (yaml.YAMLError, UnicodeDecodeError):
+        except (yaml.YAMLError, UnicodeDecodeError) as e:
+            if path not in _warned:  # said once: otherwise every secret in it just reads as missing
+                _warned.add(path)
+                print(f"configops: warning: {path} can't be read as YAML, so no secret is taken from it: {str(e).splitlines()[0]}",
+                      file=sys.stderr)
             continue
         entry = data.get(secret) if isinstance(data, dict) else None
         if isinstance(entry, dict) and entry.get(key) is not None:
