@@ -302,3 +302,80 @@ def test_a_cascaded_store_sends_its_user_as_geoserver_names_it(monkeypatch, tmp_
     body, compared = wanted_store(store, tmp_path)
     assert body["user"] == "bob" and "username" not in body
     assert live_store({"capabilitiesURL": "https://example.org/wms", "user": "bob"}, "wms")["user"] == compared["user"]
+
+
+WMS = """\
+apiVersion: configops/v1alpha1
+kind: Store
+metadata: { name: partner }
+spec:
+  type: wms
+  url: https://example.org/wms
+  credentials: { secret: partner }
+  header: { name: Authorization, secret: partner, key: token }
+"""
+
+
+def partner(monkeypatch, password="pw-one", token="Bearer one"):
+    monkeypatch.setenv("CONFIGOPS_PARTNER_USERNAME", "bob")
+    monkeypatch.setenv("CONFIGOPS_PARTNER_PASSWORD", password)
+    monkeypatch.setenv("CONFIGOPS_PARTNER_TOKEN", token)
+
+
+def test_a_password_changed_in_the_secret_is_a_change(tmp_path, monkeypatch, capsys):
+    """GeoServer never gives a store's password back, so apply records a fingerprint of the login beside it."""
+    from configops.plan import print_plan
+    from configops.stores import FINGERPRINT, metadata_entries
+
+    partner(monkeypatch)
+    gs = FakeGeoServer()
+    for c in plan(tmp_path, gs, WMS):
+        c.run()
+    store = gs.objects["workspaces/uk/wmsstores/partner"]["wmsStore"]
+    recorded = metadata_entries(store)[FINGERPRINT]["$"]
+    assert store["password"] == "pw-one" and "pw-one" not in recorded
+    assert plan(tmp_path, gs, WMS) == []
+
+    partner(monkeypatch, password="pw-two")
+    changes = plan(tmp_path, gs, WMS)
+    assert [(c.action, c.target, c.fields) for c in changes] == [
+        ("~", "uk:partner", [("credentials", "(differs)", "(from secret partner)")])]
+    print_plan(changes)
+    assert "pw-" not in capsys.readouterr().out
+    changes[0].run()
+    assert gs.objects["workspaces/uk/wmsstores/partner"]["wmsStore"]["password"] == "pw-two"
+    assert plan(tmp_path, gs, WMS) == []
+
+
+def test_a_store_made_before_fingerprints_is_set_once_more(tmp_path, monkeypatch):
+    partner(monkeypatch)
+    gs = FakeGeoServer()
+    for c in plan(tmp_path, gs, WMS):
+        c.run()
+    del gs.objects["workspaces/uk/wmsstores/partner"]["wmsStore"]["metadata"]
+    assert [c.fields for c in plan(tmp_path, gs, WMS)] == [[("credentials", "(not recorded yet)", "(from secret partner)")]]
+
+
+def test_a_header_from_a_secret_is_compared_and_never_printed(tmp_path, monkeypatch, capsys):
+    from configops.plan import print_plan
+
+    partner(monkeypatch)
+    gs = FakeGeoServer()
+    for c in plan(tmp_path, gs, WMS):
+        c.run()
+    partner(monkeypatch, token="Bearer two")
+    changes = plan(tmp_path, gs, WMS)
+    assert [c.fields for c in changes] == [[("headerValue", "(differs)", "(hidden)")]]
+    print_plan(changes)
+    assert "Bearer" not in capsys.readouterr().out
+
+
+def test_the_fingerprint_keeps_the_stores_other_metadata():
+    from configops.stores import FINGERPRINT, metadata_entries, same_login, with_fingerprint
+
+    live = {"metadata": {"entry": {"@key": "useConnectionPooling", "$": "false"}}}
+    body = with_fingerprint({"name": "s"}, live, "bob", "pw")
+    entries = metadata_entries(body)
+    assert entries["useConnectionPooling"]["$"] == "false"
+    assert same_login(entries[FINGERPRINT]["$"], "bob", "pw") and not same_login(entries[FINGERPRINT]["$"], "bob", "other")
+    assert not same_login("not ours", "bob", "pw") and not same_login(None, "bob", "pw")

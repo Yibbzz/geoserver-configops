@@ -24,7 +24,7 @@ import psycopg2
 
 from . import assets, auth, keywords, details, security, server, standard, stores, tiles, urlchecks
 from .database import Database, DatabaseError, database, tables_exist
-from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, q
+from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, q, sends_login_in_the_clear
 from .loader import Project, Resource, load
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
@@ -575,12 +575,12 @@ class Planner:
             for group_name in self.gs.names(base, "layerGroup"):
                 path = f"{base}/{q(group_name)}"
                 group = (self.gs.get(path) or {}).get("layerGroup") or {}
-                members = [{"@type": m.get("@type", "layer"), "name": m.get("name")}
+                held = [{"@type": m.get("@type", "layer"), "name": m.get("name")}
                            for m in as_list((group.get("publishables") or {}).get("published")) if isinstance(m, dict)]
                 styles = (group.get("styles") or {}).get("style")
                 styles = [{"name": s["name"]} if isinstance(s, dict) and s.get("name") else "" for s in (styles if isinstance(styles, list) else [styles])]
-                if any(m["name"] == f"{ws}:{name}" for m in members):
-                    found.append((path, members, (styles + [""] * len(members))[:len(members)]))
+                if any(m["name"] == f"{ws}:{name}" for m in held):
+                    found.append((path, held, (styles + [""] * len(held))[:len(held)]))
         return found
 
     def make_again(self, ws: str, name: str, delete: Callable[[], object], create: Callable[[], object],
@@ -590,17 +590,17 @@ class Planner:
         and also when a step fails: what's there at the end is the layer in its groups, the new one or the old."""
         target = f"{ws}:{name}"
         holding = self.groups_holding(ws, name)
-        for path, members, _ in holding:
-            if all(m["name"] == target for m in members):
+        for path, held, _ in holding:
+            if all(m["name"] == target for m in held):
                 raise GeoServerError("PUT", path, 0, f"{target} is this group's only layer, and GeoServer keeps no empty group: "
                                                      "take the group out first, or move the layer in the web UI")
         taken_out = []
         try:
-            for path, members, styles in holding:
-                keep = [i for i, m in enumerate(members) if m["name"] != target]
-                self.gs.request("PUT", path, {"layerGroup": {"publishables": {"published": [members[i] for i in keep]},
+            for path, held, styles in holding:
+                keep = [i for i, m in enumerate(held) if m["name"] != target]
+                self.gs.request("PUT", path, {"layerGroup": {"publishables": {"published": [held[i] for i in keep]},
                                                              "styles": {"style": [styles[i] for i in keep]}}})
-                taken_out.append((path, members, styles))
+                taken_out.append((path, held, styles))
             delete()
             try:
                 create()
@@ -609,9 +609,9 @@ class Planner:
                     put_back()
                 raise
         finally:
-            for path, members, styles in taken_out:
+            for path, held, styles in taken_out:
                 try:
-                    self.gs.request("PUT", path, {"layerGroup": {"publishables": {"published": members}, "styles": {"style": styles}}})
+                    self.gs.request("PUT", path, {"layerGroup": {"publishables": {"published": held}, "styles": {"style": styles}}})
                 except GeoServerError as e:
                     print(f"  note: {target} couldn't be put back in {path.rsplit('/', 1)[-1]} ({e}): "
                           "apply again sets the groups in the files", file=sys.stderr)
@@ -885,6 +885,9 @@ def connect(root: Path, geoserver_url: str | None, wait: float = 0):
         gs = for_project(project, root, geoserver_url)
     except MissingCredentials as e:
         raise PlanError(str(e)) from None
+    if sends_login_in_the_clear(gs.url):
+        print(f"configops: warning: {gs.url} is plain http: GeoServer's admin login, and every password apply sets, "
+              "crosses the network unencrypted. Use https.", file=sys.stderr)
     try:
         db = database(project, root)
     except DatabaseError as e:

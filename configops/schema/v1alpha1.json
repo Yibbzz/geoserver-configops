@@ -4515,7 +4515,7 @@
         },
         "config": {
           "type": "object",
-          "description": "its other fields, as GeoServer's own file names them; { class, value } for a field with a class"
+          "description": "its other fields, as GeoServer's own file names them; { class, value } for a field with a class; { secret, key } for a password or key, from a Secret"
         }
       }
     },
