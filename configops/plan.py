@@ -22,7 +22,7 @@ import psycopg2
 
 from . import assets, auth, keywords, details, security, server, standard, stores, tiles, urlchecks
 from .database import Database, DatabaseError, database, tables_exist
-from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
+from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, sends_login_in_the_clear
 from .loader import Project, Resource, load
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
@@ -773,6 +773,9 @@ def connect(root: Path, geoserver_url: str | None, wait: float = 0):
         gs = for_project(project, root, geoserver_url)
     except MissingCredentials as e:
         raise PlanError(str(e)) from None
+    if sends_login_in_the_clear(gs.url):
+        print(f"configops: warning: {gs.url} is plain http: GeoServer's admin login, and every password apply sets, "
+              "crosses the network unencrypted. Use https.", file=sys.stderr)
     try:
         db = database(project, root)
     except DatabaseError as e:

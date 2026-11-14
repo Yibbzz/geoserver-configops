@@ -198,6 +198,31 @@ def test_drift_is_shown_and_put_back(gs, project, capsys):
     assert configops(capsys, "plan", "-C", str(project))[0] == 0
 
 
+def test_a_password_changed_in_the_secret_is_a_change(gs, project, capsys, monkeypatch):
+    """GeoServer gives no password back: apply keeps a fingerprint of each login in the store's metadata, and plan compares it."""
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+    monkeypatch.setenv("CONFIGOPS_EOXLOGIN_PASSWORD", "e2e-rotated")
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert code == 2, out
+    assert f"~ store {WS}:eox_wms_login" in out and 'credentials: "(differs)" -> "(from secret eoxlogin)"' in out
+    assert "e2e-rotated" not in out and "e2e-secret" not in out
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert (code, out.strip()) == (0, "No changes: GeoServer matches the files."), out
+    monkeypatch.setenv("CONFIGOPS_EOXLOGIN_PASSWORD", "e2e-secret")  # as the later tests have it
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+
+
+def test_a_header_value_that_differs_is_not_printed(gs, project, capsys, monkeypatch):
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    monkeypatch.setenv("CONFIGOPS_EOXKEY_VALUE", "e2e-other-key")
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert code == 2 and 'headerValue: "(differs)" -> "(hidden)"' in out and 'authKey: "(differs)" -> "(hidden)"' in out, out
+    assert "e2e-other-key" not in out and "e2e-key" not in out
+
+
 def test_import_round_trip(gs, project, tmp_path_factory, capsys, env):
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
     imported = tmp_path_factory.mktemp("imported")

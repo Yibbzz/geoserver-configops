@@ -73,3 +73,82 @@ def test_reload_security_gives_up_and_other_errors_are_not_retried():
     with pytest.raises(GeoServerError):
         reload_security(gs, every=0)
     assert gs.puts == 1
+
+
+LDAP = ("<org.geoserver.security.ldap.LDAPSecurityServiceConfig><name>ldap</name><serverURL>ldap://old</serverURL>"
+        "<password>{password}</password></org.geoserver.security.ldap.LDAPSecurityServiceConfig>")
+
+
+class Files:
+    def __init__(self, config):
+        self.config = config
+
+    def of_kind(self, kind):
+        from pathlib import Path
+
+        from configops.loader import Resource
+
+        data = {"kind": "AuthProvider", "metadata": {"name": "ldap"}, "spec": {"config": self.config}}
+        return [Resource(data, Path("security.yaml"), None)] if kind == "AuthProvider" else []
+
+
+class Planned:
+    def __init__(self, config, live_password, root):
+        from configops.plan import Change
+
+        outer = self
+
+        class Response:
+            status_code, text = 200, LDAP.format(password=live_password)
+
+        class GS:
+            rest = "http://gs/rest"
+
+            def request(self, method, path, body=None, **kwargs):
+                if method == "PUT":
+                    outer.written = body
+                return Response()
+
+        self.gs, self.files, self.root, self.changes, self.written = GS(), Files(config), root, [], None
+        self.add = lambda *a, **k: self.changes.append(Change(*a, **k))
+
+
+def test_a_password_in_a_security_object_comes_from_a_secret_and_is_never_printed(tmp_path, monkeypatch, capsys):
+    from configops import auth
+    from configops.plan import print_plan
+
+    monkeypatch.setenv("CONFIGOPS_LDAP_BIND_PASSWORD", "s3cret-bind")
+    config = {"serverURL": "ldap://new", "password": {"secret": "ldap-bind", "key": "password"}}
+    planned = Planned(config, "crypt1:LIVEVALUE", tmp_path)
+    auth.plan(planned)
+    assert planned.changes[0].fields == [("serverURL", "ldap://old", "ldap://new"), ("password", "(differs)", "(from the Secret)")]
+    print_plan(planned.changes)
+    out = capsys.readouterr().out
+    assert "s3cret" not in out and "LIVEVALUE" not in out
+
+    same = Planned({"password": {"secret": "ldap-bind", "key": "password"}}, "s3cret-bind", tmp_path)
+    auth.plan(same)
+    assert same.changes == []
+
+
+def test_a_password_written_in_the_files_is_not_printed_either(tmp_path, capsys):
+    from configops import auth
+    from configops.plan import print_plan
+
+    planned = Planned({"password": "in-the-file", "passwordEncoderName": "plain"}, "crypt1:LIVEVALUE", tmp_path)
+    auth.plan(planned)
+    assert planned.changes[0].fields == [("password", "(differs)", "(hidden)"), ("passwordEncoderName", None, "plain")]
+
+
+def test_a_secret_that_isnt_there_stops_the_plan(tmp_path):
+    from configops import auth
+    from configops.geoserver import MissingCredentials
+
+    with pytest.raises(MissingCredentials, match="AuthProvider ldap: no value for config.password in secret ldap-bind, key password"):
+        auth.plan(Planned({"password": {"secret": "ldap-bind", "key": "password"}}, "x", tmp_path))
+
+
+def test_the_remember_me_key_is_not_printed():
+    config = CONFIG.replace("</security>", "<rememberMeService><className>c</className><key>live-key</key></rememberMeService></security>")
+    assert compare_security(config, {"rememberMe": {"key": "new-key"}}) == [("rememberMe", {"className": "c", "key": "(differs)"},
+                                                                             {"key": "(hidden)"})]

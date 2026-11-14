@@ -169,3 +169,14 @@ def test_wait_also_waits_for_the_tile_cache_service(monkeypatch):
     fake.request = request
     gs.wait(60, every=1)
     assert sum("/gwc/rest/" in u for u in calls) == 3
+
+
+@pytest.mark.parametrize("url, clear", [
+    ("http://maps.example.org/geoserver", True), ("https://maps.example.org/geoserver", False),
+    ("http://localhost:8080/geoserver", False), ("http://127.0.0.1:8080/geoserver", False),
+    ("http://geoserver:8080/geoserver", False), ("http://gateway.geoserver.svc.cluster.local/geoserver-cloud", False),
+])
+def test_a_login_over_plain_http_is_noticed(url, clear):
+    from configops.geoserver import sends_login_in_the_clear
+
+    assert sends_login_in_the_clear(url) is clear

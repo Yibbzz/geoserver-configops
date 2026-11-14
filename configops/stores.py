@@ -7,11 +7,16 @@ data volume (GeoPackage, Shapefile, FlatGeobuf, PMTiles, GeoTIFF, image mosaics)
 publishes one thing from it: a coverage, a remote layer or a feature type.
 
 Passwords come from the Store's credentials Secret (keys username and password).
-GeoServer keeps them encrypted, so they're set but never compared.
+GeoServer keeps them encrypted and never gives them back, so apply records a salted
+fingerprint of the login in the store's metadata (FINGERPRINT), and plan compares that:
+a password changed in the Secret shows as a change. A header's value and an
+authentication key are compared, and never printed.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -65,6 +70,40 @@ FAMILIES = {
 COG_READERS = {"http": "HTTP", "https": "HTTP", "s3": "S3", "gs": "GS", "az": "AZURE", "azure": "AZURE"}
 WFS = "WFSDataStoreFactory:"
 SECRET_PARAMS = {"postgis": ("user", "passwd"), "sqlserver": ("user", "passwd"), "oracle": ("user", "passwd"), "wfs": (f"{WFS}USERNAME", f"{WFS}PASSWORD")}
+
+
+FINGERPRINT = "configops.credentials"  # the store's metadata entry holding the login's fingerprint
+HIDDEN = ("headerValue", "authKey")  # compared, never printed
+ROUNDS = 100_000
+
+
+def fingerprint(user: str, password: str, salt: str | None = None) -> str:
+    """pbkdf2-sha256$<salt>$<digest> of a login: enough to tell whether the Secret still holds the login
+    GeoServer was given, not enough to read it back."""
+    salt = salt or os.urandom(8).hex()
+    digest = hashlib.pbkdf2_hmac("sha256", f"{user}\0{password}".encode(), bytes.fromhex(salt), ROUNDS).hex()[:40]
+    return f"pbkdf2-sha256${salt}${digest}"
+
+
+def same_login(recorded: str | None, user: str, password: str) -> bool:
+    parts = (recorded or "").split("$")
+    try:
+        return len(parts) == 3 and hmac.compare_digest(fingerprint(user, password, parts[1]), recorded)
+    except ValueError:  # not a salt of ours
+        return False
+
+
+def metadata_entries(store: dict) -> dict[str, dict]:
+    """A live store's (or a body's) metadata entries by key; GeoServer gives one entry as an object."""
+    found = (store.get("metadata") or {}).get("entry") or []
+    return {e["@key"]: e for e in (found if isinstance(found, list) else [found]) if isinstance(e, dict) and "@key" in e}
+
+
+def with_fingerprint(body: dict, live: dict, user: str, password: str) -> dict:
+    """The store's body with the login's fingerprint among its metadata entries; the entries GeoServer has stay."""
+    entries = {**metadata_entries(live), **metadata_entries(body)}
+    entries[FINGERPRINT] = {"@key": FINGERPRINT, "$": fingerprint(user, password)}
+    return {**body, "metadata": {"entry": list(entries.values())}}
 
 
 def location(spec: dict) -> str:
@@ -198,9 +237,14 @@ def plan(planner) -> None:
         key = family(store)["key"]
         target = f"{ws}:{geoserver_name(store)}"
         live = (gs.get(path) or {}).get(key)
-        def run(path=path, collection=collection, key=key, body=body, spec=spec):
+        user, password = credentials(store, planner.root)
+        login = user is not None and TYPES[spec["type"]][0] != "coverage"  # a coverage store is sent no login
+
+        def run(path=path, collection=collection, key=key, body=body, spec=spec, login=login, user=user, password=password):
             if spec["type"] == "appschema":
                 schema_cache(spec["path"])
+            if login:
+                body = with_fingerprint(body, (gs.get(path) or {}).get(key) or {}, user, password)
             gs.upsert(path, collection, {key: body})
         if live is None:
             where = spec.get("url") or (f"{DATA}/{spec['path'].strip('/')}" if spec.get("path") else "") \
@@ -208,7 +252,13 @@ def plan(planner) -> None:
             add("+", "store", target, note=f"{store.spec['type']}: {where}", run=run)
             continue
         current = live_store(live, store.spec["type"])
-        changed = [(k, current.get(k), v) for k, v in wanted.items() if current.get(k) != v]
+        changed = [(k, "(differs)" if k in HIDDEN else current.get(k), "(hidden)" if k in HIDDEN else v)
+                   for k, v in wanted.items() if current.get(k) != v]
+        if login:
+            recorded = (metadata_entries(live).get(FINGERPRINT) or {}).get("$")
+            if not same_login(recorded, user, password):  # GeoServer never gives a password back: the fingerprint is compared
+                changed.append(("credentials", "(differs)" if recorded else "(not recorded yet)",
+                                f"(from secret {store.spec['credentials']['secret']})"))
         if changed:
             add("~", "store", target, changed, run=run)
 
