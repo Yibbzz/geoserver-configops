@@ -371,7 +371,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         wanted_item.append(("view", view))
     wanted_layer, settings = planner.layer_settings(layer, (item_path, fam["item"]))
 
-    def run(old_store=None):
+    def run(old_store=None, tiles=True):
         if old_store is not None:
             gs.delete(f"workspaces/{q(ws)}/layers/{q(name)}", {"recurse": "true"})
         item = {"name": name, "title": title, "enabled": spec.get("enabled", True), "advertised": spec.get("advertised", True)}
@@ -388,7 +388,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
             current = (gs.get(item_path) or {}).get(fam["item"]) or {}
             item["metadata"] = with_view(current, view_body(name, view))
         gs.upsert(item_path, f"{path}/{fam['items']}", {fam["item"]: item})
-        settings()
+        settings(tiles)
 
     if live_layer is None:
         planner.add("+", "layer", target, note=f"{store.spec['type']} store {store.name}" + (f": {native}" if native else ""), run=run)
@@ -411,4 +411,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         changed.append(("store", live_store_name, geoserver_name(store)))
     if changed:
         old = live_store_name if live_store_name != geoserver_name(store) else None
-        planner.add("~", "layer", target, changed, run=lambda: run(old_store=old))
+        tiles = old is not None or any(k == "cache" for k, _, _ in changed)  # the cache is left alone when it is as wanted
+        planner.add("~", "layer", target, changed, run=lambda: run(old_store=old, tiles=tiles))
+        if old is not None:
+            planner.recreated.add(target)

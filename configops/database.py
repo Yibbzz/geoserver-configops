@@ -55,7 +55,10 @@ def database(project: Resource, root: Path) -> Database | None:
 
 
 def tables_exist(conn, schema: str, tables: list[str]) -> bool:
+    """Whether each of these is a table, view, materialized view, foreign or partitioned table in `schema`.
+    Read from pg_class: information_schema.tables has no materialized views, and only the tables this login has rights on."""
     with conn.cursor() as cur:
-        cur.execute("SELECT count(*) FROM information_schema.tables WHERE table_schema = %s AND table_name = ANY(%s)",
+        cur.execute("SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = %s AND c.relname = ANY(%s) AND c.relkind IN ('r', 'v', 'm', 'f', 'p')",
                     (schema, tables))
         return cur.fetchone()[0] == len(set(tables))

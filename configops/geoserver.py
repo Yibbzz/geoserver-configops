@@ -293,7 +293,9 @@ class GeoServer:
         current = self.get(path)
         if current is None:
             return
-        self.request("PUT", path, {"featureType": {"name": current["featureType"]["name"], "enabled": True}},
+        # `enabled` as it is: a layer the files turn off stays off
+        self.request("PUT", path, {"featureType": {"name": current["featureType"]["name"],
+                                                   "enabled": current["featureType"].get("enabled", True)}},
                      params={"recalculate": "nativebbox,latlonbbox"})
 
     def delete_featuretype(self, ws: str, store: str, name: str) -> bool:

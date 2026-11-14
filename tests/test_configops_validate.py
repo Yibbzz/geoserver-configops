@@ -183,3 +183,59 @@ def test_templates_belong_to_the_workspace_or_a_layer(tmp_path):
         "templates/ holds FreeMarker templates (.ftl) only",
         "templates/rivers/: no Layer named 'rivers'",
     ]
+
+
+def test_a_key_written_twice_is_an_error_not_the_last_one_wins(tmp_path):
+    data = DATA.replace("  style: line\n", "  title: Roads\n  style: line\n  title: Paths\n")
+    problems = validate(load(project(tmp_path, data=data)))
+    assert [(p.file.name, p.line, p.message) for p in problems] == [("data.yaml", 8, "not valid YAML: the key 'title' is there twice")]
+
+
+def test_a_store_named_after_a_schema_the_layers_tables_are_in(tmp_path):
+    store = """\
+        apiVersion: configops/v1alpha1
+        kind: Store
+        metadata: { name: public }
+        spec: { type: postgis, connection: { host: db, database: gis } }
+        """
+    problems = validate(load(project(tmp_path, {"stores.yaml": store})))
+    assert len(problems) == 1 and problems[0].file.name == "stores.yaml"
+    assert "GeoServer store uk:public is also the store configops makes for the layers on tables in schema public" in problems[0].message
+    other = store.replace("name: public }", "name: warehouse }")
+    assert validate(load(project(tmp_path, {"stores.yaml": other}))) == []
+
+
+@pytest.mark.parametrize("name, content, message", [
+    ("roads.sld", b"<StyledLayerDescriptor><NamedLayer></StyledLayerDescriptor>", "not well-formed XML"),
+    ("roads.sld", "<sld>café</sld>".encode("latin-1"), "not UTF-8 text"),
+    ("roads.sld", '<?xml version="1.0" encoding="ISO-8859-1"?><sld>café</sld>'.encode(), "says its encoding is ISO-8859-1"),
+    ("roads.mbstyle", b'{"version": 8,', "not valid JSON"),
+])
+def test_a_style_geoserver_couldnt_read_is_found_before_it_is_sent(tmp_path, name, content, message):
+    root = project(tmp_path)
+    (root / "styles").mkdir()
+    (root / "styles" / name).write_bytes(content)
+    problems = validate(load(root))
+    assert [p.file.name for p in problems] == [name] and message in problems[0].message
+
+
+def test_a_style_that_only_says_another_encoding_is_fine_when_it_is_plain_ascii(tmp_path):
+    root = project(tmp_path)
+    (root / "styles").mkdir()
+    (root / "styles" / "roads.sld").write_bytes(b'<?xml version="1.0" encoding="ISO-8859-1"?><sld>roads</sld>')
+    assert validate(load(root)) == []
+
+
+def test_filter_chains_without_a_catch_all_are_warned_about(tmp_path):
+    settings = """\
+        apiVersion: configops/v1alpha1
+        kind: Settings
+        metadata: { name: global }
+        spec:
+          global:
+            security:
+              filterChains:
+                - { name: rest, paths: ["/rest/**"], filters: [basic] }
+        """
+    problems = validate(load(project(tmp_path, {"server.yaml": settings})))
+    assert [(p.severity, "no chain for /**" in p.message) for p in problems] == [("warning", True)]

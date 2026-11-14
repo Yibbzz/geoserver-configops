@@ -8,7 +8,8 @@ reads and writes. GeoServer reads them again whenever its own security API saves
 configuration, so after writing, apply saves an authentication provider unchanged.
 
 The files use GeoServer's own field names (`config:`), because each kind of filter or
-service has its own. Only the fields a file sets are compared. Nothing is ever removed.
+service has its own. Only the fields a file sets are compared. No object is ever removed; `filterChains`
+is the whole list of chains, so a chain GeoServer has that the files leave out goes (plan names it).
 """
 
 from __future__ import annotations
@@ -198,9 +199,18 @@ def compare_security(xml: str, wanted: dict) -> list[tuple[str, object, object]]
     for key, value in wanted.items():
         here = live.get(key)
         if key == "filterChains":
-            here = [{k: c.get(k) for k in want} for c, want in zip(here, value)] + here[len(value):]
-            if here != value:
-                out.append((key, [c["name"] for c in live["filterChains"]], [c["name"] for c in value]))
+            names, wanted_names = [c["name"] for c in here], [c["name"] for c in value]
+            if names != wanted_names:
+                out.append((key, names, wanted_names))
+            gone = [n for n in names if n not in wanted_names]
+            if gone:  # said outright: the names above are easy to read past
+                out.append((f"{key} (removed)", gone, []))
+            by_name = {c["name"]: c for c in here}
+            for want in value:  # a chain both have, changed inside
+                have = by_name.get(want["name"])
+                compared = {k: have.get(k) for k in want} if have else None
+                if compared is not None and compared != want:
+                    out.append((f"{key}.{want['name']}", compared, want))
         elif key in ("bruteForcePrevention", "rememberMe"):
             if not same(here, value):
                 out.append((key, here, value))
