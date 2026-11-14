@@ -57,7 +57,8 @@ def cmd_validate(args) -> int:
 def cmd_plan(args) -> int:
     try:
         return plan(Path(args.dir), apply=args.command == "apply", prune=args.prune, geoserver_url=args.geoserver,
-                    wait=args.wait)
+                    wait=args.wait, fail_on_unmanaged=getattr(args, "fail_on_unmanaged", False), digest=getattr(args, "digest", False),
+                    expect=getattr(args, "expect", None), max_deletes=getattr(args, "max_deletes", None))
     except PlanError as e:
         print(f"configops {args.command}: {e}", file=sys.stderr)
         return e.code
@@ -109,6 +110,17 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--geoserver", metavar="URL", help="GeoServer's address, if not the Project's (e.g. through a port-forward)")
         c.add_argument("--wait", type=float, default=0, metavar="SECONDS",
                        help="wait this long for GeoServer to answer first (a job started with a fresh install)")
+        if name == "plan":
+            c.add_argument("--fail-on-unmanaged", action="store_true",
+                           help="exit 2 also when GeoServer has what the files don't mention (the ? lines): a user, role or rule "
+                                "added in the web UI, a default rule that was changed. For a drift check.")
+            c.add_argument("--digest", action="store_true", help="print a digest of the plan, for apply --expect")
+        else:
+            c.add_argument("--expect", metavar="DIGEST",
+                           help="apply only if the plan is the one `plan --digest` printed: nothing changed since it was read")
+            c.add_argument("--max-deletes", type=int, default=10, metavar="N",
+                           help="with --prune, stop before deleting more than N things (default: 10): a project folder that "
+                                "is only half there would otherwise empty a workspace")
         c.set_defaults(func=cmd_plan)
 
     st = commands.add_parser("status", help="layers and groups: published, drifted, cached",

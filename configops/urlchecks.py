@@ -8,6 +8,7 @@ name are unmanaged, removed only with --prune.
 
 from __future__ import annotations
 
+from .geoserver import q
 from .loader import Resource
 
 FIELDS = ("description", "enabled", "regex")
@@ -29,7 +30,7 @@ def live_checks(gs) -> dict[str, dict]:
     out = {}
     for item in items if isinstance(items, list) else [items]:
         name = item["name"]
-        check = (gs.get(f"urlchecks/{name}") or {}).get("regexUrlCheck") or {}
+        check = (gs.get(f"urlchecks/{q(name)}") or {}).get("regexUrlCheck") or {}
         out[name] = {"description": check.get("description") or "", "enabled": check.get("enabled", True),
                      "regex": check.get("regex", "")}
     return out
@@ -54,10 +55,10 @@ def plan(planner) -> None:
         changed = [(k, live[name][k], want[k]) for k in FIELDS if live[name][k] != want[k]]
         if changed:
             planner.add("~", "url check", name, changed,
-                        run=lambda n=name, b=body: gs.request("PUT", f"urlchecks/{n}", b))
+                        run=lambda n=name, b=body: gs.request("PUT", f"urlchecks/{q(n)}", b))
     for name in sorted(set(live) - names):
         if planner.prune:
             planner.add("-", "url check", name, note="not in the files",
-                        run=lambda n=name: gs.request("DELETE", f"urlchecks/{n}"))
+                        run=lambda n=name: gs.request("DELETE", f"urlchecks/{q(n)}"))
         else:
             planner.add("?", "url check", name, note="unmanaged; removed with --prune")

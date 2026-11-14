@@ -12,7 +12,7 @@ import re
 import xml.etree.ElementTree as ET
 
 from .importer import resource, resource_name
-from .security import ACCESS, BUILT_IN_ROLES, BUILT_IN_USERS, DEFAULT_RULES, read_rest_rules, roles_list
+from .security import ACCESS, BUILT_IN_ROLES, BUILT_IN_USERS, DEFAULT_RULE_ROLES, DEFAULT_RULES, read_rest_rules, roles_list
 from .server import SERVICES, URL_CHECKS_FILE, service_view, unwrap
 from .validate import schema
 
@@ -54,10 +54,6 @@ DEFAULTS = {
             "defaultDeflateCompressionLevel": 9, "maxRequestedDimensionValues": 100, "overviewPolicy": "IGNORE"},
     "wmts": {},
 }
-DEFAULT_RULE_ROLES = {"*.*.r": ["*"], "*.*.w": ["ADMIN", "GROUP_ADMIN"], "wfs.CreateStoredQuery": ["ADMIN", "GROUP_ADMIN"],
-                      "wfs.DropStoredQuery": ["ADMIN", "GROUP_ADMIN"], "/**:GET,HEAD": ["ADMIN"], "/**:POST,DELETE,PUT": ["ADMIN"]}
-
-
 def no_attributes(value):
     """A language map without GeoServer's "@class": {"@class": "...", "cy": "..."} -> {"cy": "..."}."""
     return {k: v for k, v in value.items() if not k.startswith("@") and v not in (None, "")} if isinstance(value, dict) else value
