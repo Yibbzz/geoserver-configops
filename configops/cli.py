@@ -58,7 +58,9 @@ def cmd_plan(args) -> int:
     try:
         return plan(Path(args.dir), apply=args.command == "apply", prune=args.prune, geoserver_url=args.geoserver,
                     wait=args.wait, fail_on_unmanaged=getattr(args, "fail_on_unmanaged", False), digest=getattr(args, "digest", False),
-                    expect=getattr(args, "expect", None), max_deletes=getattr(args, "max_deletes", None))
+                    expect=getattr(args, "expect", None), max_deletes=getattr(args, "max_deletes", None),
+                    lock=not getattr(args, "no_lock", False), lock_wait=getattr(args, "lock_wait", 0),
+                    break_lock=getattr(args, "break_lock", False))
     except PlanError as e:
         print(f"configops {args.command}: {e}", file=sys.stderr)
         return e.code
@@ -121,6 +123,12 @@ def main(argv: list[str] | None = None) -> int:
             c.add_argument("--max-deletes", type=int, default=10, metavar="N",
                            help="with --prune, stop before deleting more than N things (default: 10): a project folder that "
                                 "is only half there would otherwise empty a workspace")
+            c.add_argument("--lock-wait", type=float, default=0, metavar="SECONDS",
+                           help="apply takes a lock in GeoServer so two applies don't run through each other; "
+                                "wait this long for another apply to finish (default: 0, fail at once)")
+            c.add_argument("--break-lock", action="store_true",
+                           help="take the lock over from an apply that was killed, before its lock runs out (15 minutes)")
+            c.add_argument("--no-lock", action="store_true", help="apply without the lock")
         c.set_defaults(func=cmd_plan)
 
     st = commands.add_parser("status", help="layers and groups: published, drifted, cached",

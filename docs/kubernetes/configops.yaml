@@ -18,7 +18,9 @@ spec:
       containers:
         - name: configops
           image: registry.example.org/my-project-configops:1  # docs/kubernetes/Dockerfile
-          args: ["apply", "-C", "/project", "--wait", "900"]  # --wait: GeoServer may still be starting
+          # --wait: GeoServer may still be starting. --lock-wait: another apply (a pipeline's, a person's) may be running;
+          # 960 seconds also outlasts the lock of an apply that was killed (it runs out after 900)
+          args: ["apply", "-C", "/project", "--wait", "900", "--lock-wait", "960"]
           resources:
             requests: { cpu: 250m, memory: 512Mi }
             limits: { memory: 2Gi }

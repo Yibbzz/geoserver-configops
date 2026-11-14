@@ -43,6 +43,8 @@ kubectl apply -f configops.yaml
 kubectl logs -f job/configops-apply
 ```
 
+Only one apply runs at a time: `apply` takes a lock in GeoServer's data directory ([spec](spec.md)), and the Job waits (`--lock-wait`) for an apply started somewhere else, such as a pipeline or a laptop, instead of running through it.
+
 Inside the cluster the project's `geoserver.url` is GeoServer's Service, for example `http://geoserver-gsc-gateway:8080/geoserver-cloud`. To apply a new version, change the image tag, delete the finished Job (`kubectl delete job configops-apply`) and apply the file again; a CD tool (Argo CD, Flux) can do this on every commit.
 
 ## Drift

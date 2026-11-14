@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import signal
 import sys
 import time
 from collections.abc import Callable
@@ -26,6 +27,7 @@ from . import assets, auth, keywords, details, security, server, standard, store
 from .database import Database, DatabaseError, database, tables_exist
 from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, q, sends_login_in_the_clear
 from .loader import Project, Resource, load
+from .lock import Lock, LockHeld
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
 # Apply order: what a change needs is made first; deletions come last, outermost first. Access rules are made
@@ -918,9 +920,27 @@ def connect(root: Path, geoserver_url: str | None, wait: float = 0):
 
 def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str | None = None, wait: float = 0,
         fail_on_unmanaged: bool = False, digest: bool = False, expect: str | None = None,
-        max_deletes: int | None = MAX_DELETES) -> int:
+        max_deletes: int | None = MAX_DELETES, lock: bool = True, lock_wait: float = 0, break_lock: bool = False) -> int:
     files, gs, conn, db = connect(root, geoserver_url, wait)
+    held = None
     try:
+        if apply and lock:
+            # One apply at a time (configops/lock.py). Taken before the plan is worked out, so the plan is of a
+            # GeoServer no other apply is changing; given back whatever happens, also when the Job is stopped.
+            held = Lock(gs)
+            try:
+                signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+            except ValueError:  # not the main thread
+                pass
+            try:
+                held.acquire(wait=lock_wait, steal=break_lock)
+            except LockHeld as e:
+                held = None
+                raise PlanError(str(e)) from None
+            except GeoServerError as e:
+                held = None
+                raise PlanError(f"can't take the apply lock in GeoServer's data directory ({e}). Nothing was applied. "
+                                "If this GeoServer's REST API has no /resource, run apply with --no-lock.") from None
         try:
             changes = ordered(Planner(files, root, gs, conn, db, prune).plan())
         except (GeoServerError, MissingCredentials) as e:
@@ -956,7 +976,13 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
         for c in todo:
             print(f"  {c.action} {c.kind} {c.target}", flush=True)
             try:
+                if held is not None:
+                    held.keep()
                 c.run()
+            except LockHeld as e:
+                held = None
+                print(f"configops apply: {e}", file=sys.stderr)
+                return 1
             except (GeoServerError, psycopg2.Error, OSError) as e:
                 print(f"configops apply: {c.kind} {c.target} failed: {e}", file=sys.stderr)
                 print("Nothing after it was applied; fix the cause and run apply again.", file=sys.stderr)
@@ -969,5 +995,7 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
                   "settings GeoServer Cloud can't take)")
         return 0
     finally:
+        if held is not None:
+            held.release()
         if conn is not None:
             conn.close()
