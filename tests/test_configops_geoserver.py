@@ -201,3 +201,49 @@ def test_the_timeout_can_be_set(monkeypatch):
     assert timeout() == 300
     monkeypatch.setenv("CONFIGOPS_TIMEOUT", "soon")
     assert timeout() == 60
+
+
+@pytest.mark.parametrize("url, clear", [
+    ("http://maps.example.org/geoserver", True), ("https://maps.example.org/geoserver", False),
+    ("http://localhost:8080/geoserver", False), ("http://127.0.0.1:8080/geoserver", False),
+    ("http://geoserver:8080/geoserver", False), ("http://gateway.geoserver.svc.cluster.local/geoserver-cloud", False),
+])
+def test_a_login_over_plain_http_is_noticed(url, clear):
+    from configops.geoserver import sends_login_in_the_clear
+
+    assert sends_login_in_the_clear(url) is clear
+
+
+def test_recalculating_keeps_a_layer_off():
+    gs, fake = client()
+    fake.objects["workspaces/uk/datastores/postgis/featuretypes/roads"] = {"featureType": {"name": "roads", "enabled": False}}
+    gs.recalculate("uk", "postgis", "roads")
+    assert fake.calls[-1][3] == {"featureType": {"name": "roads", "enabled": False}}
+
+
+def test_while_planning_the_same_thing_is_read_once():
+    gs, fake = client()
+    fake.objects["workspaces/uk"] = {"workspace": {"name": "uk"}}
+    with gs.reading():
+        assert gs.get("workspaces/uk") == gs.get("workspaces/uk") and gs.get("workspaces/none") is None
+        assert gs.get("workspaces/none") is None
+        assert [c[1] for c in fake.calls] == ["workspaces/uk.json", "workspaces/none.json"]
+        gs.request("PUT", "workspaces/uk", {"workspace": {"name": "uk"}})  # a change: what was read is forgotten
+        gs.get("workspaces/uk")
+        assert len(fake.calls) == 4
+    gs.get("workspaces/uk")
+    gs.get("workspaces/uk")
+    assert len(fake.calls) == 6  # outside a plan nothing is remembered
+
+
+def test_bounds_are_worked_out_when_what_the_layer_reads_changes_not_for_a_title():
+    path = "workspaces/uk/datastores/postgis/featuretypes/roads"
+    gs, fake = client()
+    fake.objects[path] = {"featureType": {"name": "roads", "nativeName": "roads", "enabled": True}}
+    assert gs.upsert_featuretype("uk", "postgis", "roads", "roads", title="Highways") == "updated"
+    assert not [c for c in fake.calls if c[2] and "recalculate" in c[2]]
+    gs.upsert_featuretype("uk", "postgis", "roads", "roads_v2")  # another table
+    assert [c[2] for c in fake.calls if c[2]] == [{"recalculate": "nativebbox,latlonbbox"}]
+    gs, fake = client()
+    assert gs.upsert_featuretype("uk", "postgis", "new", "new") == "created"  # a new layer: always (it reads the layer to do so)
+    assert [c[0] for c in fake.calls] == ["GET", "POST", "GET"]

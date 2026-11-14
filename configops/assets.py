@@ -15,7 +15,7 @@ from __future__ import annotations
 import mimetypes
 import os
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 from .geoserver import q
 from .validate import geoserver_name
@@ -124,7 +124,8 @@ def plan(planner, managed: list[str]) -> None:
             continue
         kind = "template" if suffix == TEMPLATE else "file"
         if planner.prune:
-            add("-", kind, path, note="not in the files", run=lambda path=path: gs.request("DELETE", f"resource/{path}"))
+            add("-", kind, path, note="not in the files",
+                run=lambda path=path: gs.request("DELETE", f"resource/{quote(path, safe='/')}"))  # a live name: anything goes
         else:
             add("?", kind, path, note="unmanaged; removed with --prune")
 
@@ -157,8 +158,11 @@ def download(gs, ws: str, layers: dict[str, str]) -> tuple[dict[str, bytes], lis
 def write(target: Path, found: dict[str, bytes]) -> list[str]:
     """Write what `download` found where it differs; the paths written."""
     written = []
+    inside = target.resolve()
     for where, body in found.items():
         path = target / where
+        if inside not in path.resolve().parents:  # a name from GeoServer that climbs out of the project (../..)
+            raise ValueError(f"GeoServer names a file {where!r}, which is outside {target}: not written")
         if not path.exists() or path.read_bytes() != body:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(body)

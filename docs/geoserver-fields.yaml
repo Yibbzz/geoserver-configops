@@ -72,6 +72,10 @@ pages:
         spec: store.url
         note: set for a cog store's range reader
         extra: true
+      metadata.configops.credentials:
+        status: none
+        note: configops's own, a salted fingerprint of the store's login, so plan sees a password that changed in the Secret
+        extra: true
       type=Oracle:
         status: 'yes'
         spec: store.type

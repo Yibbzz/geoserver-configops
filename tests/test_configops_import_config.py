@@ -110,3 +110,28 @@ def test_tile_caching_defaults_and_a_workspaces_own_service():
     assert by_name["global"] == {"global": {"tileCaching": {"cacheLayersByDefault": False, "gutter": 8,
                                                             "defaultCachingGridSetIds": ["EPSG:900913"]}}}
     assert by_name["uk-wms"] == {"service": "wms", "workspace": "uk", "title": "UK maps"}
+
+
+def test_a_security_objects_password_is_imported_as_a_secret_not_its_value():
+    from configops.import_config import auth_resources
+
+    class Response:
+        def __init__(self, text, status=200):
+            self.text, self.status_code = text, status
+
+    class GS:
+        def request(self, method, path, params=None, ok=()):
+            if path == "resource/security/auth":
+                return Response("<ResourceDirectory><children><child><name>corp-ldap</name></child></children></ResourceDirectory>")
+            if path == "resource/security/auth/corp-ldap/config.xml":
+                return Response("<org.geoserver.security.ldap.LDAPSecurityServiceConfig><name>corp-ldap</name>"
+                                "<className>org.geoserver.security.ldap.LDAPAuthenticationProvider</className>"
+                                "<serverURL>ldap://x</serverURL><password>crypt1:abc</password>"
+                                "<passwordEncoderName>plain</passwordEncoderName></org.geoserver.security.ldap.LDAPSecurityServiceConfig>")
+            return Response("", 404)
+
+    notes: list[str] = []
+    found = auth_resources(GS(), notes)
+    assert found[0]["spec"]["config"] == {"serverURL": "ldap://x", "password": {"secret": "corp-ldap-auth", "key": "password"},
+                                          "passwordEncoderName": "plain"}
+    assert notes[0] == ("AuthProvider corp-ldap: password can't be written to the files: put it in Secret corp-ldap-auth (key: password)")

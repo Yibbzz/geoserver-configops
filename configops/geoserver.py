@@ -12,8 +12,9 @@ import re
 import sys
 import time
 import xml.etree.ElementTree as ET
+from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from xml.sax.saxutils import escape
 
 import requests
@@ -78,6 +79,15 @@ def for_project(project, root: Path, url: str | None = None) -> "GeoServer":
         raise MissingCredentials(f"the GeoServer secret {secret} is missing {', '.join(missing)}: set {names}, or add them to secrets.yaml")
     # CONFIGOPS_GWC_URL: GeoWebCache's REST address, for a GeoServer Cloud REST service reached without its gateway
     return GeoServer(url or spec["url"], creds["username"], creds["password"], gwc_url=os.environ.get("CONFIGOPS_GWC_URL"))
+
+
+def sends_login_in_the_clear(url: str) -> bool:
+    """Whether the login would cross a network unencrypted: plain http to a host that isn't this machine or a
+    Kubernetes service (one name, or a name under .svc or .cluster.local)."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    inside = host in ("localhost", "::1") or host.startswith("127.") or "." not in host or host.endswith((".svc", ".cluster.local"))
+    return parsed.scheme == "http" and not inside
 
 
 def q(name: str) -> str:
@@ -154,6 +164,17 @@ class GeoServer:
 
     # --- generic
 
+    @contextmanager
+    def reading(self):
+        """While a plan is worked out, the same GET is asked once: a plan reads a layer's tile cache, a style, a
+        store from several places. Any request that changes something forgets what was read; outside the
+        `with`, nothing is remembered."""
+        self._seen: dict | None = {}
+        try:
+            yield self
+        finally:
+            self._seen = None
+
     def request(self, method: str, path: str, body=None, content_type: str = "application/json",
                 params: dict | None = None, ok=(200, 201)) -> requests.Response:
         url = f"{self.rest}/{path}"
@@ -161,10 +182,16 @@ class GeoServer:
         if body is not None:
             kwargs["headers"]["Content-Type"] = content_type
             kwargs["json" if isinstance(body, (dict, list)) else "data"] = body
+        seen = getattr(self, "_seen", None)
+        key = ("rest", path, repr(sorted((params or {}).items())))
+        if seen is not None and method != "GET":
+            seen.clear()
         try:
-            r = self.session.request(method, url, **kwargs)
+            r = seen[key] if seen is not None and method == "GET" and key in seen else self.session.request(method, url, **kwargs)
         except requests.RequestException as e:
             raise GeoServerError(method, path, 0, f"can't reach {self.url}: {e}") from None
+        if seen is not None and method == "GET":
+            seen[key] = r
         if r.status_code not in ok:
             raise GeoServerError(method, path, r.status_code, r.text)
         return r
@@ -273,9 +300,6 @@ class GeoServer:
         }}
         return self.upsert(f"workspaces/{q(ws)}/datastores/{q(name)}", f"workspaces/{q(ws)}/datastores", body)
 
-    def delete_datastore(self, ws: str, name: str) -> bool:
-        return self.delete(f"workspaces/{q(ws)}/datastores/{q(name)}", {"recurse": "true"})
-
     # --- feature types (a table published from a store)
 
     def featuretype(self, ws: str, store: str, name: str) -> dict | None:
@@ -285,8 +309,9 @@ class GeoServer:
                            abstract: str | None = None, keywords: list[str] | None = None, srs: str | None = None,
                            enabled: bool = True, advertised: bool = True, extra: dict | None = None) -> str:
         """
-        Publish `table` as `name`. GeoServer works out the attributes, and the
-        bounding boxes are recalculated from the data each time.
+        Publish `table` as `name`. GeoServer works out the attributes. The bounding boxes are worked out from
+        the data when the layer is made, and again when what it reads changes (its table, SQL or CRS): that is
+        a scan of the table, which a change of title doesn't need. After new data, `configops refresh` does it.
         """
         ft: dict = {"name": name, "nativeName": table, "title": title or name, "enabled": enabled, "advertised": advertised}
         if abstract is not None:
@@ -298,8 +323,18 @@ class GeoServer:
             ft["projectionPolicy"] = "FORCE_DECLARED"
         ft.update(extra or {})
         path = f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}"
-        result = self.upsert(path, f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes", {"featureType": ft})
-        self.recalculate(ws, store, name)
+        live = (self.get(path) or {}).get("featureType")
+        if live is None:
+            self.request("POST", f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes", {"featureType": ft})
+        else:
+            self.request("PUT", path, {"featureType": ft})
+        result = "created" if live is None else "updated"
+        if not enabled and result == "created":
+            # GeoServer makes a feature type turned on whatever the POST says; it takes `enabled: false` from a PUT.
+            # So a new layer the files turn off is on for this one request, and no longer.
+            self.request("PUT", path, {"featureType": {"name": name, "enabled": False}})
+        if live is None or live.get("nativeName") != table or (srs and live.get("srs") != srs) or extra:
+            self.recalculate(ws, store, name)
         return result
 
     def recalculate(self, ws: str, store: str, name: str) -> None:
@@ -308,7 +343,9 @@ class GeoServer:
         current = self.get(path)
         if current is None:
             return
-        self.request("PUT", path, {"featureType": {"name": current["featureType"]["name"], "enabled": True}},
+        # `enabled` as it is: a layer the files turn off stays off
+        self.request("PUT", path, {"featureType": {"name": current["featureType"]["name"],
+                                                   "enabled": current["featureType"].get("enabled", True)}},
                      params={"recalculate": "nativebbox,latlonbbox"})
 
     def delete_featuretype(self, ws: str, store: str, name: str) -> bool:
@@ -407,11 +444,20 @@ class GeoServer:
         headers = {"Accept": accept}
         if body is not None:
             headers["Content-Type"] = "text/xml"
+        seen = getattr(self, "_seen", None)
+        key = ("gwc", path, accept)
+        if seen is not None and method != "GET":
+            seen.clear()
+        if seen is not None and method == "GET" and key in seen:
+            return seen[key]
         try:
-            return self.session.request(method, url, data=body.encode("utf-8") if body else None,
-                                        headers=headers, timeout=timeout())
+            r = self.session.request(method, url, data=body.encode("utf-8") if body else None,
+                                     headers=headers, timeout=timeout())
         except requests.RequestException as e:
             raise GeoServerError(method, f"gwc/{path}", 0, f"can't reach {self.gwc}: {e}") from None
+        if seen is not None and method == "GET":
+            seen[key] = r
+        return r
 
     def tile_layer(self, name: str) -> dict | None:
         """A layer's or group's tile cache settings (name as ws:name), or None if it isn't cached."""

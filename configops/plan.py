@@ -12,6 +12,8 @@ don't mention there is shown as unmanaged, and removed only with --prune.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 import time
 from collections.abc import Callable
@@ -22,13 +24,16 @@ import psycopg2
 
 from . import assets, auth, keywords, details, security, server, standard, stores, tiles, urlchecks
 from .database import Database, DatabaseError, database, tables_exist
-from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
+from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, q, sends_login_in_the_clear
 from .loader import Project, Resource, load
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
-# Apply order: what a change needs is made first; deletions come last, outermost first
-ORDER = ["workspace", "settings", "service", "security", "security settings", "url check", "role", "user group", "user", "store", "file", "style", "blobstore", "gridset", "layer", "template", "group", "rule"]
-DELETE_ORDER = ["url check", "rule", "user", "user group", "role", "group", "template", "layer", "style", "file", "store"]
+# Apply order: what a change needs is made first; deletions come last, outermost first. Access rules are made
+# before the layers they protect (GeoServer keeps a rule for a layer it doesn't have yet) and removed after
+# them, so a layer is never published, even for a moment, without its rule.
+ORDER = ["workspace", "settings", "service", "security", "security settings", "url check", "role", "user group", "user", "rule",
+         "store", "file", "style", "blobstore", "gridset", "layer", "template", "group"]
+DELETE_ORDER = ["url check", "user", "user group", "group", "template", "layer", "style", "file", "store", "rule", "role"]
 
 # Every kind of store a workspace can hold: (REST collection, JSON key)
 STORE_COLLECTIONS = [("datastores", "dataStore"), ("coveragestores", "coverageStore"), ("wmsstores", "wmsStore"), ("wmtsstores", "wmtsStore")]
@@ -361,6 +366,14 @@ class Planner:
         self.changes.append(Change(*args, **kwargs))
 
     def plan(self) -> list[Change]:
+        """What apply would do. GeoServer is only read, and the same thing is read once."""
+        reading = getattr(self.gs, "reading", None)
+        if reading is None:
+            return self.work_out()
+        with reading():
+            return self.work_out()
+
+    def work_out(self) -> list[Change]:
         workspaces = {geoserver_name(w): w for w in self.files.of_kind("Workspace")}
         managed = sorted({self.ws} | set(workspaces) | {self.workspace_of(r) for r in [*self.layers.values(), *self.groups.values()]}
                          | {self.workspace_of(s) for s in self.files.named("Style").values() if not s.spec.get("global")})
@@ -443,7 +456,8 @@ class Planner:
             wanted.append(("styles", [self.style_ref(s) for s in spec["styles"]]))
         wanted += list(resource_wanted.items()) + list(layer_wanted.items())
 
-        def run():
+        def run(tiles: bool = True):
+            """`tiles`: also set the tile cache (and seed it); False when the cache is as the files want it."""
             self.gs.update_layer(ws, name, style=self.style_ref(spec.get("style")),
                                  styles=[self.style_ref(s) for s in spec["styles"]] if "styles" in spec else None,
                                  queryable=spec.get("queryable", True), attribution=attribution)
@@ -454,7 +468,8 @@ class Planner:
             if layer_wanted:
                 live = (self.gs.layer(ws, name) or {}).get("layer") or {}
                 self.gs.request("PUT", f"workspaces/{ws}/layers/{name}", {"layer": details.patch_layer(live, layer_wanted)})
-            set_cache(self.gs, f"{ws}:{name}", cache, seed_of(spec))
+            if tiles:
+                set_cache(self.gs, f"{ws}:{name}", cache, seed_of(spec))
         return wanted, run
 
     def live_layer_settings(self, layer: Resource, live_layer: dict, live_resource: dict | None = None) -> dict:
@@ -477,8 +492,11 @@ class Planner:
             target = f"{ws}:{name}"
             view = virtual_table(name, spec["sql"]) if "sql" in spec else None
             if view is None and not tables_exist(self.conn, schema, [table]):
-                self.add("!", "layer", target, note=f"table {schema}.{table} doesn't exist yet; configops only publishes it")
-                self.unpublished.add(layer.name)
+                if self.gs.layer(ws, name) is None:
+                    self.add("!", "layer", target, note=f"table {schema}.{table} doesn't exist yet; configops only publishes it")
+                    self.unpublished.add(layer.name)
+                else:  # published before, and its table is away (being loaded again): it stays as it is, and in its groups
+                    self.add("!", "layer", target, note=f"table {schema}.{table} is missing; the layer is left as GeoServer has it")
                 continue
 
             title = spec.get("title") or name
@@ -496,16 +514,31 @@ class Planner:
             wanted_layer, settings = self.layer_settings(layer, (ft_path, "featureType"))
 
             def run(ws=ws, name=name, schema=schema, table=table, spec=spec, title=title, settings=settings, view=view,
-                    ft_path=ft_path, old_store=None):
-                if old_store and old_store != schema:
-                    self.gs.delete_featuretype(ws, old_store, name)
+                    ft_path=ft_path, old_store=None, attributes=True, tiles=True):
+                """`attributes`, `tiles`: set the published attributes and the tile cache (a change that leaves
+                them as they are doesn't touch them)."""
+                enabled = spec.get("enabled", True)
+                narrow = attributes and "attributes" in spec
                 extra = {"metadata": {"entry": {"@key": "JDBC_VIRTUAL_TABLE", "virtualTable": view}}} if view else None
-                self.gs.upsert_featuretype(ws, schema, name, table, title=title, abstract=spec.get("abstract"),
-                                           keywords=keywords.to_strings(spec.get("keywords")), enabled=spec.get("enabled", True),
-                                           advertised=spec.get("advertised", True), srs=spec.get("crs"), extra=extra)
-                if "attributes" in spec:
-                    self.set_attributes(ft_path, spec["attributes"])
-                settings()
+
+                def publish():
+                    # A layer that publishes only some attributes is made turned off, and turned on once they are set:
+                    # it is never served with every column
+                    self.gs.upsert_featuretype(ws, schema, name, table, title=title, abstract=spec.get("abstract"),
+                                               keywords=keywords.to_strings(spec.get("keywords")), enabled=enabled and not narrow,
+                                               advertised=spec.get("advertised", True), srs=spec.get("crs"), extra=extra)
+
+                if old_store and old_store != schema:  # one name, one feature type: the old one goes first
+                    saved = self.gs.featuretype(ws, old_store, name)
+                    self.make_again(ws, name, delete=lambda: self.gs.delete_featuretype(ws, old_store, name), create=publish,
+                                    put_back=lambda: self.put_back(ws, old_store, name, saved))
+                else:
+                    publish()
+                if narrow:
+                    self.set_attributes(ft_path, spec["attributes"], enabled)
+                settings(tiles)
+                if not enabled:  # the last word: a layer the files turn off is off, whatever the requests before left
+                    self.gs.request("PUT", ft_path, {"featureType": {"name": name, "enabled": False}})
 
             live_layer = self.gs.layer(ws, name)
             if live_layer is None:
@@ -529,12 +562,76 @@ class Planner:
             if store != schema:
                 changed.append(("store", store, schema))
             if changed:
-                self.add("~", "layer", target, changed, run=lambda run=run, store=store: run(old_store=store))
+                moved = store != schema  # made again in the new store: its attributes and tile cache are set again too
+                fields = {f.split(".")[0] for f, _, _ in changed}
+                self.add("~", "layer", target, changed,
+                         run=lambda run=run, store=store, a=moved or "attributes" in fields, t=moved or "cache" in fields:
+                         run(old_store=store, attributes=a, tiles=t))
 
-    def set_attributes(self, path: str, attributes: list) -> None:
+    def groups_holding(self, ws: str, name: str) -> list[tuple[str, list[dict], list]]:
+        """(REST path, members, styles) of each live group, the workspace's or a global one, with ws:name among its members."""
+        found = []
+        for base in (f"workspaces/{q(ws)}/layergroups", "layergroups"):
+            for group_name in self.gs.names(base, "layerGroup"):
+                path = f"{base}/{q(group_name)}"
+                group = (self.gs.get(path) or {}).get("layerGroup") or {}
+                held = [{"@type": m.get("@type", "layer"), "name": m.get("name")}
+                           for m in as_list((group.get("publishables") or {}).get("published")) if isinstance(m, dict)]
+                styles = (group.get("styles") or {}).get("style")
+                styles = [{"name": s["name"]} if isinstance(s, dict) and s.get("name") else "" for s in (styles if isinstance(styles, list) else [styles])]
+                if any(m["name"] == f"{ws}:{name}" for m in held):
+                    found.append((path, held, (styles + [""] * len(held))[:len(held)]))
+        return found
+
+    def make_again(self, ws: str, name: str, delete: Callable[[], object], create: Callable[[], object],
+                   put_back: Callable[[], object] | None = None) -> None:
+        """Delete a layer and make it again (in another store). GeoServer won't delete a layer a group holds, so it is
+        taken out of its groups first and put back in the same places afterwards, also in groups the files don't have,
+        and also when a step fails: what's there at the end is the layer in its groups, the new one or the old."""
+        target = f"{ws}:{name}"
+        holding = self.groups_holding(ws, name)
+        for path, held, _ in holding:
+            if all(m["name"] == target for m in held):
+                raise GeoServerError("PUT", path, 0, f"{target} is this group's only layer, and GeoServer keeps no empty group: "
+                                                     "take the group out first, or move the layer in the web UI")
+        taken_out = []
+        try:
+            for path, held, styles in holding:
+                keep = [i for i, m in enumerate(held) if m["name"] != target]
+                self.gs.request("PUT", path, {"layerGroup": {"publishables": {"published": [held[i] for i in keep]},
+                                                             "styles": {"style": [styles[i] for i in keep]}}})
+                taken_out.append((path, held, styles))
+            delete()
+            try:
+                create()
+            except GeoServerError:
+                if put_back:
+                    put_back()
+                raise
+        finally:
+            for path, held, styles in taken_out:
+                try:
+                    self.gs.request("PUT", path, {"layerGroup": {"publishables": {"published": held}, "styles": {"style": styles}}})
+                except GeoServerError as e:
+                    print(f"  note: {target} couldn't be put back in {path.rsplit('/', 1)[-1]} ({e}): "
+                          "apply again sets the groups in the files", file=sys.stderr)
+
+    def put_back(self, ws: str, store: str, name: str, saved: dict) -> None:
+        """A layer couldn't be made in its new store after it was taken out of the old one: publish it there again."""
+        try:
+            self.gs.request("POST", f"workspaces/{ws}/datastores/{store}/featuretypes", saved)
+            print(f"  note: {ws}:{name} couldn't be made in its new store, and was put back in {store}; "
+                  "its styles and cache are set again by the next apply", file=sys.stderr)
+        except GeoServerError as e:
+            print(f"  note: {ws}:{name} couldn't be made in its new store, nor put back in {store} ({e}): "
+                  "it is not published until apply succeeds", file=sys.stderr)
+
+    def set_attributes(self, path: str, attributes: list, enabled: bool = True) -> None:
         """Publish only these attributes, and the geometry: clearing the list makes GeoServer list them all again.
-        An entry with `source` is GeoServer's own attribute, worked out from that expression."""
-        self.gs.request("PUT", path, {"featureType": {"attributes": {"attribute": []}}})
+        An entry with `source` is GeoServer's own attribute, worked out from that expression.
+        The layer is off while the list is empty, and set to `enabled` with the list: if the second request
+        fails, the layer is left off rather than published with every column."""
+        self.gs.request("PUT", path, {"featureType": {"enabled": False, "attributes": {"attribute": []}}})
         every = {a["name"]: a for a in as_list(((self.gs.get(path) or {}).get("featureType") or {}).get("attributes", {}).get("attribute"))}
         kept = [a for a in every.values() if is_geometry(a)]
         for entry in wanted_attributes(attributes):
@@ -544,7 +641,7 @@ class Planner:
             base = dict(every.get(entry["name"]) or {"name": entry["name"], "nillable": True, "minOccurs": 0, "maxOccurs": 1})
             base.update({ATTRIBUTE_FIELDS[k]: attribute_value(k, v) for k, v in entry.items() if k != "name"})
             kept.append(base)
-        self.gs.request("PUT", path, {"featureType": {"attributes": {"attribute": kept}}})
+        self.gs.request("PUT", path, {"featureType": {"enabled": enabled, "attributes": {"attribute": kept}}})
 
     @staticmethod
     def store_of(live_layer: dict) -> str | None:
@@ -555,8 +652,8 @@ class Planner:
     def delete_store(self, ws: str, name: str) -> None:
         """Remove a store of any kind, with what's published from it."""
         for kind, key in STORE_COLLECTIONS:
-            if name in self.gs.names(f"workspaces/{ws}/{kind}", key):
-                self.gs.delete(f"workspaces/{ws}/{kind}/{name}", {"recurse": "true"})
+            if name in self.gs.names(f"workspaces/{q(ws)}/{kind}", key):
+                self.gs.delete(f"workspaces/{q(ws)}/{kind}/{q(name)}", {"recurse": "true"})  # a live name: anything goes
                 return
 
     def delete_layer(self, ws: str, name: str) -> None:
@@ -566,7 +663,7 @@ class Planner:
         if store:
             self.gs.delete_featuretype(ws, store, name)
         else:
-            self.gs.delete(f"workspaces/{ws}/layers/{name}", {"recurse": "true"})
+            self.gs.delete(f"workspaces/{q(ws)}/layers/{q(name)}", {"recurse": "true"})
 
     def plan_workspace(self, ws: str, w: Resource) -> None:
         """A Workspace's namespace URI, isolation, and whether it's the default."""
@@ -630,7 +727,7 @@ class Planner:
                 extra = {**extra, "layerGroupStyles": {"LayerGroupStyle": [group_style_body(s) for s in group_styles]}}
 
             def run(gs_name=gs_name, ws=ws, spec=spec, entries=entries, cache=cache, extra=extra, links=links, root=root,
-                    like_layer=like_layer):
+                    like_layer=like_layer, tiles=True):
                 if root and not root[1]:  # GeoServer wants a root style: the root layer's own
                     root_ws, root_name = root[0].split(":", 1)
                     root = (root[0], ((self.gs.layer(root_ws, root_name) or {}).get("layer", {}).get("defaultStyle") or {}).get("name"))
@@ -640,7 +737,8 @@ class Planner:
                 if extra or links or like_layer:
                     self.gs.request("PUT", f"workspaces/{ws}/layergroups/{gs_name}",
                                     {"layerGroup": {**extra, **details.patch_resource({}, links), **details.patch_layer({}, like_layer)}})
-                set_cache(self.gs, f"{ws}:{gs_name}", cache, seed_of(spec))
+                if tiles:
+                    set_cache(self.gs, f"{ws}:{gs_name}", cache, seed_of(spec))
 
             live = self.gs.layergroup(gs_name, ws)
             if live is None:
@@ -659,7 +757,8 @@ class Planner:
                        **details.live_resource(g, links), **details.live_layer(g, like_layer)}
             changed = diff([(k, current[k], v) for k, v in wanted])
             if changed:
-                self.add("~", "group", f"{ws}:{gs_name}", changed, run=run)
+                tiles = any(f.split(".")[0] == "cache" for f, _, _ in changed)
+                self.add("~", "group", f"{ws}:{gs_name}", changed, run=lambda run=run, tiles=tiles: run(tiles=tiles))
 
     def group_style(self, spec: dict) -> dict:
         """One of a group's named styles, as compared: its own members, each in a style (or its default)."""
@@ -751,9 +850,22 @@ def print_plan(changes: list[Change]) -> None:
 
 
 class PlanError(Exception):
-    def __init__(self, message: str, code: int = 2):
+    """plan, apply, status, import or refresh can't go on. Exit code 1: 2 is kept for "plan has changes"."""
+
+    def __init__(self, message: str, code: int = 1):
         super().__init__(message)
         self.code = code
+
+
+def plan_digest(changes: list[Change]) -> str:
+    """A short digest of what a plan would do: `plan --digest` prints it, and `apply --expect` refuses to go on
+    when the plan it works out has another, because GeoServer or the files changed in between."""
+    lines = [[c.action, c.kind, c.target, c.note, [[name, repr(live), repr(wanted)] for name, live, wanted in c.fields]]
+             for c in changes]
+    return hashlib.sha256(json.dumps(lines, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+MAX_DELETES = 10  # apply --prune stops above this many deletions unless --max-deletes says otherwise
 
 
 def connect(root: Path, geoserver_url: str | None, wait: float = 0):
@@ -773,6 +885,9 @@ def connect(root: Path, geoserver_url: str | None, wait: float = 0):
         gs = for_project(project, root, geoserver_url)
     except MissingCredentials as e:
         raise PlanError(str(e)) from None
+    if sends_login_in_the_clear(gs.url):
+        print(f"configops: warning: {gs.url} is plain http: GeoServer's admin login, and every password apply sets, "
+              "crosses the network unencrypted. Use https.", file=sys.stderr)
     try:
         db = database(project, root)
     except DatabaseError as e:
@@ -801,7 +916,9 @@ def connect(root: Path, geoserver_url: str | None, wait: float = 0):
     return files, gs, conn, db
 
 
-def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str | None = None, wait: float = 0) -> int:
+def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str | None = None, wait: float = 0,
+        fail_on_unmanaged: bool = False, digest: bool = False, expect: str | None = None,
+        max_deletes: int | None = MAX_DELETES) -> int:
     files, gs, conn, db = connect(root, geoserver_url, wait)
     try:
         try:
@@ -818,9 +935,22 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
         print_plan(changes)
         blocked = any(c.action == "!" for c in changes)
         todo = [c for c in changes if c.run is not None]
+        if digest:
+            print(f"Plan digest: {plan_digest(changes)}")
         if not apply:
             # 1 is kept for errors; 3 says only "!" lines are left: layers waiting for their tables, settings GeoServer Cloud can't take
-            return 2 if todo else (3 if blocked else 0)
+            unmanaged = fail_on_unmanaged and any(c.action == "?" for c in changes)
+            if unmanaged and not todo:
+                print("Unmanaged (the ? lines): --fail-on-unmanaged counts them as drift.")
+            return 2 if todo or unmanaged else (3 if blocked else 0)
+        if expect and plan_digest(changes) != expect:
+            raise PlanError(f"this plan's digest is {plan_digest(changes)}, not {expect}: GeoServer or the files changed since "
+                            "that plan was made. Nothing was applied; read the plan above and run plan --digest again.")
+        deletions = sum(1 for c in changes if c.action == "-")
+        if max_deletes is not None and deletions > max_deletes:
+            raise PlanError(f"this apply would delete {deletions} things, more than --max-deletes {max_deletes}. Nothing was applied. "
+                            "If the plan above is what you mean (and not a project folder that is only half there), "
+                            f"run apply again with --max-deletes {deletions}.")
         if todo:
             print("\nApplying:")
         for c in todo:

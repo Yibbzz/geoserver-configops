@@ -12,7 +12,7 @@ import re
 import xml.etree.ElementTree as ET
 
 from .importer import resource, resource_name
-from .security import ACCESS, BUILT_IN_ROLES, BUILT_IN_USERS, DEFAULT_RULES, read_rest_rules, roles_list
+from .security import ACCESS, BUILT_IN_ROLES, BUILT_IN_USERS, DEFAULT_RULE_ROLES, DEFAULT_RULES, read_rest_rules, roles_list
 from .server import SERVICES, URL_CHECKS_FILE, service_view, unwrap
 from .validate import schema
 
@@ -54,10 +54,6 @@ DEFAULTS = {
             "defaultDeflateCompressionLevel": 9, "maxRequestedDimensionValues": 100, "overviewPolicy": "IGNORE"},
     "wmts": {},
 }
-DEFAULT_RULE_ROLES = {"*.*.r": ["*"], "*.*.w": ["ADMIN", "GROUP_ADMIN"], "wfs.CreateStoredQuery": ["ADMIN", "GROUP_ADMIN"],
-                      "wfs.DropStoredQuery": ["ADMIN", "GROUP_ADMIN"], "/**:GET,HEAD": ["ADMIN"], "/**:POST,DELETE,PUT": ["ADMIN"]}
-
-
 def no_attributes(value):
     """A language map without GeoServer's "@class": {"@class": "...", "cy": "..."} -> {"cy": "..."}."""
     return {k: v for k, v in value.items() if not k.startswith("@") and v not in (None, "")} if isinstance(value, dict) else value
@@ -290,7 +286,7 @@ def auth_resources(gs, notes: list[str]) -> list[dict]:
     """Password policies, authentication filters and providers, user/group and role services that differ from a fresh GeoServer's."""
     import xml.etree.ElementTree as ET
 
-    from .auth import FOLDERS, POLICY, to_value
+    from .auth import FOLDERS, POLICY, SENSITIVE, to_value
 
     defaults = security_defaults()["objects"]
     out = []
@@ -321,6 +317,10 @@ def auth_resources(gs, notes: list[str]) -> list[dict]:
                     changed = live
                 if changed:
                     spec["config"] = {k: typed(v) for k, v in changed.items() if k != "className"}
+                    for k, v in spec["config"].items():  # a password or key: named as a Secret, never written to the files
+                        if SENSITIVE.search(k) and isinstance(v, (str, int)) and not isinstance(v, bool) and v != "":
+                            spec["config"][k] = {"secret": f"{meta}-{folder}", "key": k}
+                            notes.append(f"{kind} {name}: {k} can't be written to the files: put it in Secret {meta}-{folder} (key: {k})")
             out.append(resource(kind, meta, spec))
             if kind != "PasswordPolicy" and fresh is None and root.tag[:1].islower():
                 notes.append(f"{kind} {name}: GeoServer names its class {root.tag}; check spec.class before applying it elsewhere")

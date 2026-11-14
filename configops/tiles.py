@@ -87,7 +87,7 @@ FIELDS = {
 TAGS = {"file": "FileBlobStore", "s3": "S3BlobStore", "azure": "AzureBlobStore", "gcs": "GoogleCloudStorageBlobStore"}
 KEYS = {"s3": {"accessKey": "awsAccessKey", "secretKey": "awsSecretKey"},  # the Secret's keys -> GeoWebCache's
         "azure": {"accountName": "accountName", "accountKey": "accountKey"}, "gcs": {"apiKey": "apiKey"}}
-SECRET_KEYS = ("secretKey", "accountKey", "apiKey", "proxy.password")  # never shown
+SECRET_KEYS = ("accessKey", "secretKey", "accountKey", "apiKey", "proxy.password")  # never shown
 PROXY = {"host": "proxyHost", "port": "proxyPort", "domain": "proxyDomain", "workstation": "proxyWorkstation"}  # S3 has all; Azure host, port
 
 
