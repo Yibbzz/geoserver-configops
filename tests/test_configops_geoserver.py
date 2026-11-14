@@ -247,3 +247,20 @@ def test_bounds_are_worked_out_when_what_the_layer_reads_changes_not_for_a_title
     gs, fake = client()
     assert gs.upsert_featuretype("uk", "postgis", "new", "new") == "created"  # a new layer: always (it reads the layer to do so)
     assert [c[0] for c in fake.calls] == ["GET", "POST", "GET"]
+
+
+def test_a_refusal_right_after_a_security_reload_is_asked_again(monkeypatch):
+    import time
+
+    from configops import geoserver
+
+    monkeypatch.setattr(geoserver.time, "sleep", lambda seconds: None)
+    gs, fake = client()
+    answers = [Response(403, text="<html>Forbidden</html>"), Response(403, text="<html>Forbidden</html>"), Response(201)]
+    fake.request = lambda method, url, **kw: answers.pop(0)
+    with pytest.raises(GeoServerError):  # an ordinary 403 is an error at once
+        gs.request("POST", "security/usergroup/group/staff")
+    assert len(answers) == 2
+    gs.security_reloaded = time.monotonic()
+    assert gs.request("POST", "security/usergroup/group/staff").status_code == 201
+    assert answers == []

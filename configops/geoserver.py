@@ -32,6 +32,7 @@ def timeout() -> float:
 
 
 TIMEOUT = 60  # the default; requests use timeout()
+RELOAD_GRACE, RELOAD_TRIES, RELOAD_PAUSE = 30.0, 5, 1.0  # after a security reload: seconds a refusal is asked again, times, pause
 
 STYLE_TYPES = {  # a style file's suffix -> the content type GeoServer reads it as
     ".sld": "application/vnd.ogc.sld+xml",
@@ -190,6 +191,18 @@ class GeoServer:
             r = seen[key] if seen is not None and method == "GET" and key in seen else self.session.request(method, url, **kwargs)
         except requests.RequestException as e:
             raise GeoServerError(method, path, 0, f"can't reach {self.url}: {e}") from None
+        # While GeoServer reads its security files again it can refuse its own administrator for a moment
+        # (seen on 2.28: 403 for the request after roles.xml was written). A refused request changed nothing,
+        # so it is asked again, for a few seconds after a reload and no longer.
+        tries = 0
+        while r.status_code in (401, 403) and r.status_code not in ok and tries < RELOAD_TRIES \
+                and time.monotonic() - getattr(self, "security_reloaded", float("-inf")) < RELOAD_GRACE:
+            tries += 1
+            time.sleep(RELOAD_PAUSE)
+            try:
+                r = self.session.request(method, url, **kwargs)
+            except requests.RequestException as e:
+                raise GeoServerError(method, path, 0, f"can't reach {self.url}: {e}") from None
         if seen is not None and method == "GET":
             seen[key] = r
         if r.status_code not in ok:

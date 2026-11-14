@@ -76,6 +76,10 @@ pages:
         status: none
         note: configops's own, a salted fingerprint of the store's login, so plan sees a password that changed in the Secret
         extra: true
+      metadata.configops.password:
+        status: none
+        note: configops's own, a digest of the password as GeoServer keeps it (encrypted), so plan sees one set again in the web UI
+        extra: true
       type=Oracle:
         status: 'yes'
         spec: store.type

@@ -174,6 +174,7 @@ def reload_security(gs, seconds: float = 30, every: float = 2) -> None:
             raise GeoServerError("GET", provider, status, body.text)
         try:
             gs.request("PUT", provider, body.text, content_type="application/xml")
+            gs.security_reloaded = time.monotonic()  # the requests right after may be refused for a moment: asked again
             return
         except GeoServerError as e:
             if e.status != 500 or time.monotonic() + every > deadline:

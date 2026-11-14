@@ -47,6 +47,14 @@ jobs:
         run: |
           docker run --rm configops:ci --version
           docker run --rm -v "$PWD/examples/uk-basemap:/project:ro" configops:ci validate /project
+      - name: Build a project image (docs/kubernetes/Dockerfile) and check no secrets file reaches it
+        run: |
+          printf 'geoserver-admin: { username: admin, password: not-for-the-registry }\n' > examples/quickstart/secrets.yaml
+          docker build -f docs/kubernetes/Dockerfile --build-arg PROJECT=quickstart \
+            --build-arg CONFIGOPS_IMAGE=configops --build-arg CONFIGOPS_VERSION=ci -t project:ci examples
+          docker run --rm project:ci validate /project
+          docker run --rm --entrypoint sh project:ci -c 'test -f /project/project.yaml && ! find / -xdev -name "secrets.y*ml" | grep .'
+          if docker save project:ci | grep -a -q not-for-the-registry; then echo "the secret is in a layer of the image"; exit 1; fi
 
   # GeoServer Cloud in Docker (gateway, REST, WMS, WFS, WCS and the tile cache), then the e2e tests against it
   e2e-cloud:

@@ -9,7 +9,8 @@ publishes one thing from it: a coverage, a remote layer or a feature type.
 Passwords come from the Store's credentials Secret (keys username and password).
 GeoServer keeps them encrypted and never gives them back, so apply records a salted
 fingerprint of the login in the store's metadata (FINGERPRINT), and plan compares that:
-a password changed in the Secret shows as a change. A header's value and an
+a password changed in the Secret shows as a change. Beside it apply records a digest of the
+password as GeoServer keeps it, encrypted (KEPT): one changed in the web UI shows too. A header's value and an
 authentication key are compared, and never printed.
 """
 
@@ -99,9 +100,41 @@ def metadata_entries(store: dict) -> dict[str, dict]:
     return {e["@key"]: e for e in (found if isinstance(found, list) else [found]) if isinstance(e, dict) and "@key" in e}
 
 
+KEPT = "configops.password"  # the store's metadata entry holding a digest of the password as GeoServer keeps it (encrypted)
+
+
+def kept_password(live: dict) -> str | None:
+    """A digest of a live store's password as GeoServer gives it back (`crypt1:...`, never the password), or None
+    when it gives none back that way. It changes when the password is set again, in the web UI or anywhere else."""
+    entries = (live.get("connectionParameters") or {}).get("entry") or []
+    values = [e.get("$") for e in (entries if isinstance(entries, list) else [entries]) if isinstance(e, dict)]
+    kept = sorted(v for v in [live.get("password"), *values] if isinstance(v, str) and v.startswith(("crypt1:", "crypt2:")))
+    return hashlib.sha256("\n".join(kept).encode()).hexdigest()[:40] if kept else None
+
+
+def record_kept_password(gs, path: str, key: str) -> None:
+    """After a store's login was set: note the password as GeoServer now keeps it, so plan sees it set again elsewhere.
+    Not noted when GeoServer gives no encrypted password back, or encrypts it anew on every save (the note would
+    never match)."""
+    live = (gs.get(path) or {}).get(key) or {}
+    kept = kept_password(live)
+    if kept is None:
+        return
+    entries = metadata_entries(live)
+    entries[KEPT] = {"@key": KEPT, "$": kept}
+    gs.request("PUT", path, {key: {"name": live.get("name"), "enabled": live.get("enabled", True),
+                                   "metadata": {"entry": list(entries.values())}}})
+    after = (gs.get(path) or {}).get(key) or {}
+    if kept_password(after) != kept:
+        entries.pop(KEPT)
+        gs.request("PUT", path, {key: {"name": live.get("name"), "enabled": live.get("enabled", True),
+                                       "metadata": {"entry": list(entries.values())}}})
+
+
 def with_fingerprint(body: dict, live: dict, user: str, password: str) -> dict:
     """The store's body with the login's fingerprint among its metadata entries; the entries GeoServer has stay."""
     entries = {**metadata_entries(live), **metadata_entries(body)}
+    entries.pop(KEPT, None)  # the password is set again: noted again once GeoServer has it
     entries[FINGERPRINT] = {"@key": FINGERPRINT, "$": fingerprint(user, password)}
     return {**body, "metadata": {"entry": list(entries.values())}}
 
@@ -246,6 +279,8 @@ def plan(planner) -> None:
             if login:
                 body = with_fingerprint(body, (gs.get(path) or {}).get(key) or {}, user, password)
             gs.upsert(path, collection, {key: body})
+            if login:
+                record_kept_password(gs, path, key)
         if live is None:
             where = spec.get("url") or (f"{DATA}/{spec['path'].strip('/')}" if spec.get("path") else "") \
                 or spec.get("connection", {}).get("host", "")
@@ -259,6 +294,10 @@ def plan(planner) -> None:
             if not same_login(recorded, user, password):  # GeoServer never gives a password back: the fingerprint is compared
                 changed.append(("credentials", "(differs)" if recorded else "(not recorded yet)",
                                 f"(from secret {store.spec['credentials']['secret']})"))
+            else:
+                noted, kept = (metadata_entries(live).get(KEPT) or {}).get("$"), kept_password(live)
+                if noted and kept and noted != kept:  # set again since apply set it, in the web UI say
+                    changed.append(("credentials", "(set again in GeoServer)", f"(from secret {store.spec['credentials']['secret']})"))
         if changed:
             add("~", "store", target, changed, run=run)
 
