@@ -465,22 +465,35 @@ def percent(c: dict[str, int]) -> int:
     return int(100 * c["tested"] / settable) if settable else 100
 
 
+UP = ROOT / "tests" / "e2e" / "up.sh"  # where the versions the e2e tests run are pinned (tests/versions.py)
+PINS = {"cloud": "GEOSERVER_TAG", "standard": "STANDARD_GEOSERVER_VERSION", "standard-2": "STANDARD_2_GEOSERVER_VERSION"}
+
+
+def tested_versions() -> dict[str, str]:
+    """Each target's badge label, with the version the e2e tests run: GeoServer Cloud 3.0.2.1, GeoServer 3.0.2, GeoServer 2.28.6."""
+    up = UP.read_text()
+    return {target: ("GeoServer Cloud " if target == "cloud" else "GeoServer ")
+            + re.search(rf"^export {name}=(\S+)", up, re.M).group(1) for target, name in PINS.items()}
+
+
 def badge(manifest: dict) -> str:
+    """The README's badges, one per GeoServer the e2e tests run, named by its version, and the sentence under them."""
     parts, sentences = [], []
+    labels = tested_versions()
     for target, title in TARGETS.items():
         c = counts(manifest, target)["all"]
         p = percent(c)
         colour = "brightgreen" if p >= 90 else "green" if p >= 80 else "yellow" if p >= 60 else "orange"
-        parts.append(f"![{title} coverage](https://img.shields.io/badge/{title.replace(' ', '_')}-{p}%25-{colour})")
+        parts.append(f"![{labels[target]} coverage](https://img.shields.io/badge/{labels[target].replace(' ', '_')}-{p}%25-{colour})")
         name = {"standard": "standard GeoServer"}.get(target, title)
         sentences.append(f"{c['tested']} on {name}" + (f" ({c['cant']} more it can't set)" if c["cant"] else ""))
     total = counts(manifest, "cloud")["all"]
     settable = total["yes"] + total["no"] + total["cant"]
-    return (" ".join(parts) + f" Of the {settable} settings GeoServer can configure, the e2e tests prove configops sets "
+    return (" ".join(parts) + f"\n\nOf the {settable} settings GeoServer can configure, the e2e tests prove configops sets "
             + ", ".join(sentences[:-1]) + " and " + sentences[-1] + " ([field by field](docs/geoserver-fields.yaml)).")
 
 
-BADGE = re.compile(r"!\[GeoServer[^\]]* coverage\][^\n]*")
+BADGE = re.compile(r"!\[GeoServer[^\]]* coverage\][^\n]*(?:\n\n[^\n]*field by field[^\n]*)?")
 
 
 def report(manifest: dict, write: bool = True) -> str:
@@ -493,7 +506,7 @@ def report(manifest: dict, write: bool = True) -> str:
                          + (f"  ({c['unsorted']} unsorted)" if c["unsorted"] else ""))
     if write:
         text = README.read_text()
-        README.write_text(BADGE.sub(badge(manifest), text, count=1))
+        README.write_text(BADGE.sub(lambda m: badge(manifest), text, count=1))
     return "\n".join(lines)
 
 

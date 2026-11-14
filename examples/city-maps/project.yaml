@@ -1,0 +1,39 @@
+apiVersion: configops/v1alpha1
+kind: Project
+metadata: { name: city-maps }
+spec:
+  geoserver:
+    url: https://maps.example.org/geoserver-cloud
+    credentials: { secret: geoserver-admin }        # never in the files: a Secret, an env var or secrets.yaml
+  database:
+    jndi: java:comp/env/jdbc/postgis                # how GeoServer reaches PostGIS
+    connection: { secret: postgis }                 # how configops checks a table exists
+  workspace: city
+---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: roads }
+spec: { table: roads, title: Roads, style: roads }  # styles/roads.sld
+---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: parcels }
+spec:
+  table: parcels
+  title: Land parcels
+  attributes: [parcel_id, area]                     # publish only these columns
+---
+apiVersion: configops/v1alpha1
+kind: LayerGroup
+metadata: { name: basemap }
+spec: { title: Basemap, layers: [parcels, roads], cache: true }
+---
+apiVersion: configops/v1alpha1
+kind: Role
+metadata: { name: surveyor }
+spec: {}
+---
+apiVersion: configops/v1alpha1
+kind: AccessRule
+metadata: { name: parcels-for-surveyors }
+spec: { layer: { workspace: city, layer: parcels, access: read }, roles: [SURVEYOR] }

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="GeoServer ConfigOps">
+  <title>GeoServer ConfigOps</title>
+  <!-- three map layers, kept in step by a plan that has been applied -->
+  <g stroke-linejoin="round" stroke-width="5">
+    <path d="M80 86 L138 112 L80 138 L22 112 Z" fill="#17647a" stroke="#17647a"/>
+    <path d="M80 59 L138 85 L80 111 L22 85 Z" fill="#1b8a8f" stroke="#1b8a8f"/>
+    <path d="M80 32 L138 58 L80 84 L22 58 Z" fill="#5fc9b8" stroke="#5fc9b8"/>
+  </g>
+  <circle cx="121" cy="116" r="27" fill="#ffffff"/>
+  <circle cx="121" cy="116" r="22" fill="#f4a261"/>
+  <path d="M110 117 L118 125 L133 108" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
