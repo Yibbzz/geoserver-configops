@@ -1,5 +1,5 @@
-"""Keywords with a language or vocabulary. GeoServer's REST API writes such a keyword as one string,
-`word\\@language=en\;\\@vocabulary=GEMET\;`; the files write `{ keyword, language, vocabulary }`."""
+r"""Keywords with a language or vocabulary. GeoServer's REST API writes such a keyword as one string,
+`word\@language=en\;\@vocabulary=GEMET\;`; the files write `{ keyword, language, vocabulary }`."""
 
 from __future__ import annotations
 
