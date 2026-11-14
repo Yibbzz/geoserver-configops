@@ -144,7 +144,7 @@ spec:
 | `internationalTitle`, `internationalAbstract` | no | none | The title and abstract in other languages, `{ cy: Mapiau, fr: Cartes }`: clients that ask for a language (`AcceptLanguages=cy`) get it. GeoServer can't drop a language once set, only blank it |
 | `style` | no | GeoServer's default for the geometry | Default style |
 | `styles` | no | none | Extra styles |
-| `enabled`, `advertised`, `queryable` | no | `true` | Publishing switches |
+| `enabled`, `advertised`, `queryable` | no | `true` | Publishing switches. GeoServer makes a new layer turned on whatever it is asked, so a new layer with `enabled: false` is on for the one request that makes it, and off from the next; likewise a new layer with `attributes` is off from the request after the one that makes it until only those attributes are listed. To keep a new layer from being read at all in that moment, give it an `AccessRule`: rules are made before layers |
 | `cache` | no | `false` | `true`, or `{ gridsets, formats, metaTiles: [w, h], gutter, expireCache, expireClients }`: the gridsets (GeoWebCache's own, or a `Gridset`), image formats, tiles drawn at once, pixels drawn around each tile, how long (seconds) the cache and clients keep a tile, and `blobStore`: the `BlobStore` the tiles go in. `parameterFilters` and `seed`: see below. Only the options set are compared |
 | `attribution` | no | none | Text clients must show, e.g. "Contains OS data © Crown copyright and database right 2026"; or `{ title, link, logo: { url, width, height, type } }` |
 | `filter` | no | none | A CQL filter: only these features are published, e.g. `"flood_zone = 'FZ3'"` |

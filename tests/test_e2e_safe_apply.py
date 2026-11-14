@@ -149,28 +149,18 @@ def test_a_layer_the_files_turn_off_is_off(project, gs, capsys):
     assert code == 0 and to_do(out) == [], out
 
 
-def test_each_request_apply_makes_leaves_a_layer_off(project, gs):
-    """The requests apply makes for a layer, one by one: which of them GeoServer answers by turning the layer on."""
+def test_geoserver_makes_a_layer_turned_on_and_takes_off_from_the_next_request(project, gs):
+    """Why apply can't make a layer that is off from the start: GeoServer ignores `enabled: false` in the POST that
+    makes a feature type (2.28, 3.0 and Cloud all do). The client's next request turns it off, and it stays off."""
     types = f"workspaces/{WS}/datastores/data_layers/featuretypes"
-
-    def enabled() -> bool:
-        return gs.get(f"{types}/probe")["featureType"]["enabled"]
-
-    gs.request("POST", types, {"featureType": {"name": "probe", "nativeName": "e2e_safe_points", "title": "probe",
-                                               "enabled": False, "advertised": True}})
+    gs.upsert_featuretype(WS, "data_layers", "probe", "e2e_safe_points", enabled=False)
     try:
-        made = enabled()
-        gs.recalculate(WS, "data_layers", "probe")
-        recalculated = enabled()
+        assert gs.get(f"{types}/probe")["featureType"]["enabled"] is False
         gs.update_layer(WS, "probe", queryable=True)
-        layer_set = enabled()
-        gs.request("PUT", f"{types}/probe", {"featureType": {"name": "probe", "enabled": False}})
-        last_word = enabled()
+        gs.recalculate(WS, "data_layers", "probe")
+        assert gs.get(f"{types}/probe")["featureType"]["enabled"] is False
     finally:
         gs.delete_featuretype(WS, "data_layers", "probe")
-    assert last_word is False
-    assert (made, recalculated, layer_set) == (False, False, False), \
-        f"enabled after the POST: {made}, after the recalculation: {recalculated}, after the layer's PUT: {layer_set}"
 
 
 def test_only_the_listed_attributes_are_published_and_the_layer_is_on(project, gs):

@@ -93,6 +93,7 @@ class MemoryGeoServer(GeoServer):
         if method == "POST" and isinstance(value, dict) and "name" in value:
             self.objects[f"{key}/{value['name']}"] = {kind: copy.deepcopy(value)}
             if kind == "featureType":
+                self.objects[f"{key}/{value['name']}"][kind]["enabled"] = True  # whatever the POST says, as GeoServer does
                 self.objects[f"workspaces/uk/layers/{value['name']}"] = {"layer": {
                     "name": value["name"], "resource": {"href": f"http://gs/rest/{key}/{value['name']}.json"}}}
                 self.tiles[f"uk:{value['name']}"] = tile()  # GeoServer caches every new layer
@@ -169,7 +170,8 @@ def test_a_layer_the_files_turn_off_stays_off(tmp_path, tables):
     root, gs = project(tmp_path, layer("{ table: roads, enabled: false }")), MemoryGeoServer()
     apply(root, gs)
     assert gs.objects[f"{FT}/roads"]["featureType"]["enabled"] is False
-    assert all(enabled is False for _, enabled, _, _ in gs.served)  # at no point on the way
+    # GeoServer makes it turned on whatever is asked: off from the next request, and at every one after
+    assert [enabled for _, enabled, _, _ in gs.served][:2] == [True, False] and not any(e for _, e, _, _ in gs.served[1:])
     assert plan(root, gs) == []
     gs.recalculate("uk", "public", "roads")  # as `configops refresh` does after new data
     assert gs.objects[f"{FT}/roads"]["featureType"]["enabled"] is False
@@ -196,7 +198,8 @@ def test_only_the_listed_attributes_are_ever_served(tmp_path, tables):
     apply(root, gs)
     assert [a["name"] for a in gs.objects[f"{FT}/roads"]["featureType"]["attributes"]["attribute"]] == ["geom", "id"]
     assert gs.objects[f"{FT}/roads"]["featureType"]["enabled"] is True
-    assert all(columns == ["geom", "id"] for _, enabled, columns, _ in gs.served if enabled)  # `owner` never went out
+    # after the request that makes it (GeoServer makes a layer turned on), it is off until only its attributes are listed
+    assert all(columns == ["geom", "id"] for _, enabled, columns, _ in gs.served[1:] if enabled)
     assert plan(root, gs) == []
 
 
@@ -213,7 +216,7 @@ def test_a_layer_whose_attributes_cant_be_set_is_left_off(tmp_path, tables):
     with pytest.raises(GeoServerError):
         next(c for c in changes if c.kind == "layer").run()
     assert gs.objects[f"{FT}/roads"]["featureType"]["enabled"] is False
-    assert all(enabled is False for _, enabled, _, _ in gs.served)
+    assert not any(enabled for _, enabled, _, _ in gs.served[1:])
 
 
 def test_a_change_elsewhere_leaves_attributes_and_the_cache_alone(tmp_path, tables):

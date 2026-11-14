@@ -284,6 +284,10 @@ class GeoServer:
         ft.update(extra or {})
         path = f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes/{q(name)}"
         result = self.upsert(path, f"workspaces/{q(ws)}/datastores/{q(store)}/featuretypes", {"featureType": ft})
+        if not enabled and result == "created":
+            # GeoServer makes a feature type turned on whatever the POST says; it takes `enabled: false` from a PUT.
+            # So a new layer the files turn off is on for this one request, and no longer.
+            self.request("PUT", path, {"featureType": {"name": name, "enabled": False}})
         self.recalculate(ws, store, name)
         return result
 
