@@ -9,9 +9,8 @@ rules) are never touched unless a file names them.
 
 Passwords come from Secrets and can't be read back. GeoServer keeps a salted digest of each
 in its users file, so plan checks the Secret's password against that; only when it can't tell
-(another encoding, a file it can't read) or the digest doesn't match does it log in as the
-user, where 401 means the password differs. A scheduled plan therefore makes no logins, failed
-or otherwise, while the passwords are as the Secrets have them.
+(the user/group service encrypts passwords instead: `crypt1:`; a file it can't read) or the
+digest doesn't match does it log in as the user, where 401 means the password differs.
 """
 
 from __future__ import annotations
