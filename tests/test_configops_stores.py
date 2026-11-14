@@ -430,3 +430,25 @@ def test_a_geoserver_that_gives_no_encrypted_password_back_is_left_as_before(tmp
         c.run()
     assert KEPT not in metadata_entries(gs.objects["workspaces/uk/wmsstores/partner"]["wmsStore"])
     assert plan(tmp_path, gs, WMS) == []
+
+
+def test_a_key_or_password_in_an_address_is_not_printed(tmp_path, capsys):
+    from configops.plan import print_plan
+    from configops.validate import redact
+
+    assert redact("https://bob:hunter2@example.org/wms?service=WMS&apikey=abc123&layers=a") == \
+        "https://bob:***@example.org/wms?service=WMS&apikey=***&layers=a"
+    assert redact("https://example.org/wms?service=WMS") == "https://example.org/wms?service=WMS"
+    assert redact("roads") == "roads" and redact(None) is None
+
+    keyed = WMS.replace("https://example.org/wms", "https://example.org/wms?api_key=first-key").replace(
+        "  credentials: { secret: partner }\n  header: { name: Authorization, secret: partner, key: token }\n", "")
+    gs = FakeGeoServer()
+    changes = plan(tmp_path, gs, keyed)
+    print_plan(changes)
+    for c in changes:
+        c.run()
+    changes = plan(tmp_path, gs, keyed.replace("first-key", "second-key"))
+    assert [c.fields for c in changes] == [[("capabilitiesURL", "(differs in its key or password)", "https://example.org/wms?api_key=***")]]
+    print_plan(changes)
+    assert "-key" not in capsys.readouterr().out

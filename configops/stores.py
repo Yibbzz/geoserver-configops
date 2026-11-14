@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 from . import keywords, secrets
 from .geoserver import MissingCredentials, q
 from .loader import Resource
-from .validate import geoserver_name
+from .validate import geoserver_name, redact
 
 # Store type -> (family, GeoServer's type)
 TYPES = {
@@ -98,6 +98,15 @@ def metadata_entries(store: dict) -> dict[str, dict]:
     """A live store's (or a body's) metadata entries by key; GeoServer gives one entry as an object."""
     found = (store.get("metadata") or {}).get("entry") or []
     return {e["@key"]: e for e in (found if isinstance(found, list) else [found]) if isinstance(e, dict) and "@key" in e}
+
+
+def shown(key: str, live, wanted) -> tuple:
+    """One changed field as plan prints it: (name, live, wanted), with what is secret left out."""
+    if key in HIDDEN:
+        return key, "(differs)", "(hidden)"
+    if redact(live) == redact(wanted) and live != wanted:  # only the key or password in the address differs
+        return key, "(differs in its key or password)", redact(wanted)
+    return key, redact(live), redact(wanted)
 
 
 KEPT = "configops.password"  # the store's metadata entry holding a digest of the password as GeoServer keeps it (encrypted)
@@ -284,11 +293,10 @@ def plan(planner) -> None:
         if live is None:
             where = spec.get("url") or (f"{DATA}/{spec['path'].strip('/')}" if spec.get("path") else "") \
                 or spec.get("connection", {}).get("host", "")
-            add("+", "store", target, note=f"{store.spec['type']}: {where}", run=run)
+            add("+", "store", target, note=f"{store.spec['type']}: {redact(where)}", run=run)
             continue
         current = live_store(live, store.spec["type"])
-        changed = [(k, "(differs)" if k in HIDDEN else current.get(k), "(hidden)" if k in HIDDEN else v)
-                   for k, v in wanted.items() if current.get(k) != v]
+        changed = [shown(k, current.get(k), v) for k, v in wanted.items() if current.get(k) != v]
         if login:
             recorded = (metadata_entries(live).get(FINGERPRINT) or {}).get("$")
             if not same_login(recorded, user, password):  # GeoServer never gives a password back: the fingerprint is compared
