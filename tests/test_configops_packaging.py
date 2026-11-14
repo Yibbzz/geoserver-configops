@@ -1,5 +1,3 @@
-
-
 def test_the_images_lock_file_has_every_dependency():
     """requirements.lock is what the image installs, with hashes: a dependency added to pyproject.toml must be added there."""
     import re
