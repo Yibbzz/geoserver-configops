@@ -38,7 +38,7 @@ spec:
   workspace: {WS}
 """
 LAYERS = {
-    "off": "{ table: e2e_safe_points, enabled: false }",
+    "switched-off": "{ table: e2e_safe_points, enabled: false }"  # not `off`: YAML reads that as false,
     "private": "{ table: e2e_safe_points, attributes: [name] }",
     "summary": "{ table: e2e_safe_summary }",
     "moving": "{ table: e2e_safe_points }",
@@ -136,11 +136,11 @@ def test_apply_makes_the_rule_first_and_leaves_nothing_to_do(project, gs, capsys
 
 
 def test_a_layer_the_files_turn_off_is_off(project, gs, capsys):
-    assert gs.featuretype(WS, "data_layers", "off")["featureType"]["enabled"] is False
+    assert gs.featuretype(WS, "data_layers", "switched_off")["featureType"]["enabled"] is False
     assert gs.featuretype(WS, "data_layers", "moving")["featureType"]["enabled"] is True
     code, out = configops(capsys, "refresh", "-C", str(project), "data_layers.e2e_safe_points")  # after new data
     assert code == 0, out
-    assert gs.featuretype(WS, "data_layers", "off")["featureType"]["enabled"] is False
+    assert gs.featuretype(WS, "data_layers", "switched_off")["featureType"]["enabled"] is False
     code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 0 and to_do(out) == [], out
 
