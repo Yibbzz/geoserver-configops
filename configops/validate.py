@@ -262,7 +262,7 @@ def check_groups(project: Project) -> list[Problem]:
 
 
 def check_names(project: Project) -> list[Problem]:
-    """Names that would clash once applied: GeoServer layer names, and live tables."""
+    """Names that would clash once applied: two layers or groups GeoServer would publish under one name."""
     problems = []
     projects = project.of_kind("Project")
     default_ws = projects[0].spec.get("workspace") if projects else None
