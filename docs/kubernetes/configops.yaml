@@ -51,8 +51,9 @@ spec:
           containers:
             - name: configops
               image: registry.example.org/my-project-configops:1
-              # plan exits 2 on drift and 1 when it can't run; 3 (only ! lines) isn't drift
-              command: ["sh", "-c", "configops plan -C /project; rc=$?; [ $rc -eq 3 ] && exit 0; exit $rc"]
+              # plan exits 2 on drift and 1 when it can't run; 3 (only ! lines) isn't drift. --fail-on-unmanaged: what
+              # GeoServer has that the files don't mention (a user, role or rule added in the web UI) is drift too
+              command: ["sh", "-c", "configops plan -C /project --fail-on-unmanaged; rc=$?; [ $rc -eq 3 ] && exit 0; exit $rc"]
               resources:
                 requests: { cpu: 250m, memory: 512Mi }
                 limits: { memory: 2Gi }

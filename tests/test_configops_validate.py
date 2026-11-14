@@ -151,7 +151,7 @@ def test_cli_exit_codes_and_json(tmp_path, capsys):
     assert problem["line"] == 6 and problem["severity"] == "error" and problem["resource"] == "Layer road-links"
 
     assert main(["validate", str(root / "missing")]) == 2
-    assert main(["plan"]) == 2
+    assert main(["plan"]) == 1  # files plan can't read: an error, not "there are changes" (2)
 
 
 def test_a_project_mounted_from_a_configmap(tmp_path):

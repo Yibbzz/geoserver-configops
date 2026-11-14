@@ -7,16 +7,24 @@ files don't mention are shown as unmanaged and removed only with --prune.
 GeoServer's own (the admin user, the ADMIN and GROUP_ADMIN roles, the default
 rules) are never touched unless a file names them.
 
-Passwords come from Secrets and can't be read back, so plan checks one by
-logging in as the user: 401 means it differs.
+Passwords come from Secrets and can't be read back. GeoServer keeps a salted digest of each
+in its users file, so plan checks the Secret's password against that; only when it can't tell
+(the user/group service encrypts passwords instead: `crypt1:`; a file it can't read) or the
+digest doesn't match does it log in as the user, where 401 means the password differs.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
+import hmac
+import unicodedata
+
 import requests
 
 from . import secrets
-from .geoserver import GeoServerError, MissingCredentials
+from .geoserver import GeoServerError, MissingCredentials, q
 from .loader import Resource
 
 BUILT_IN_USERS = {"admin"}
@@ -26,6 +34,16 @@ DEFAULT_RULES = {
     "services": {"wfs.CreateStoredQuery", "wfs.DropStoredQuery"},
     "rest": {"/**:GET,HEAD", "/**:POST,DELETE,PUT"},
 }
+# The roles each has in a fresh GeoServer. One with other roles (everyone may write, say) is shown as unmanaged
+DEFAULT_RULE_ROLES = {"*.*.r": ["*"], "*.*.w": ["ADMIN", "GROUP_ADMIN"], "wfs.CreateStoredQuery": ["ADMIN", "GROUP_ADMIN"],
+                      "wfs.DropStoredQuery": ["ADMIN", "GROUP_ADMIN"], "/**:GET,HEAD": ["ADMIN"], "/**:POST,DELETE,PUT": ["ADMIN"]}
+
+
+def changed_default(add, kind: str, key: str, roles: list[str]) -> None:
+    """A `?` line for one of GeoServer's own rules whose roles aren't the ones it comes with."""
+    if roles != DEFAULT_RULE_ROLES[key]:
+        add("?", "rule", f"{kind} {key}", [("roles", roles, DEFAULT_RULE_ROLES[key])],
+            note="GeoServer's own rule, changed; a rule in the files with the same key sets it")
 ACCESS = {"read": "r", "write": "w", "admin": "a"}
 KINDS = ("Role", "Group", "User", "AccessRule")
 
@@ -83,9 +101,9 @@ def plan(planner) -> None:
     live_roles = set(names(gs.get("security/roles"), "roles"))
     wanted_roles = {role_name(r) for r in files.of_kind("Role")}
     for name in sorted(wanted_roles - live_roles):
-        add("+", "role", name, run=lambda n=name: gs.request("POST", f"security/roles/role/{n}"))
+        add("+", "role", name, run=lambda n=name: gs.request("POST", f"security/roles/role/{q(n)}"))
     for name in sorted(live_roles - wanted_roles - BUILT_IN_ROLES):
-        unmanaged("role", name, lambda n=name: drop(gs, f"security/roles/role/{n}"))
+        unmanaged("role", name, lambda n=name: drop(gs, f"security/roles/role/{q(n)}"))
     role_files = SecurityFiles(gs)
     for r in files.of_kind("Role"):
         want = {k: r.spec[k] for k in ("parent", "properties") if k in r.spec}
@@ -101,7 +119,7 @@ def plan(planner) -> None:
     for r in files.of_kind("Group"):
         wanted_groups[account_name(r)] = sorted(r.spec.get("roles", []))
     for name, roles in sorted(wanted_groups.items()):
-        current = names(gs.get(f"security/roles/group/{name}"), "roles") if name in live_groups else []
+        current = names(gs.get(f"security/roles/group/{q(name)}"), "roles") if name in live_groups else []
         run = lambda n=name, want=roles, have=current, new=name not in live_groups: set_group(gs, n, want, have, new)
         if name not in live_groups:
             add("+", "user group", name, note=f"roles: {', '.join(roles) or 'none'}", run=run)
@@ -112,7 +130,7 @@ def plan(planner) -> None:
             add("~", "user group", account_name(r), [("enabled", not r.spec["enabled"], r.spec["enabled"])],
                 run=lambda n=account_name(r), on=r.spec["enabled"]: SecurityFiles(gs).set_group_enabled(n, on))
     for name in sorted(live_groups - set(wanted_groups)):
-        unmanaged("user group", name, lambda n=name: drop(gs, f"security/usergroup/group/{n}"))
+        unmanaged("user group", name, lambda n=name: drop(gs, f"security/usergroup/group/{q(n)}"))
 
     # Users
     live_users = {u["userName"]: u for u in as_items((gs.get("security/usergroup/users") or {}).get("users"))}
@@ -132,11 +150,12 @@ def plan(planner) -> None:
                 run=lambda n=name, w=want, p=password: set_user(gs, n, w, p, {"groups": [], "roles": []}, new=True))
             continue
         have = {"enabled": live.get("enabled", True),
-                "groups": names(gs.get(f"security/usergroup/user/{name}/groups"), "groups"),
-                "roles": names(gs.get(f"security/roles/user/{name}"), "roles")}
+                "groups": names(gs.get(f"security/usergroup/user/{q(name)}/groups"), "groups"),
+                "roles": names(gs.get(f"security/roles/user/{q(name)}"), "roles")}
         changed = [(k, have[k], want[k]) for k in want if have[k] != want[k]]
         new_password = None
-        if want["enabled"] and not password_works(gs, name, password):
+        if want["enabled"] and stored_password_matches(role_files.user_password(name), password) is not True \
+                and not password_works(gs, name, password):
             changed.append(("password", "(differs)", f"(from secret {ref['secret']}, key {ref['key']})"))
             new_password = password
         if changed:
@@ -149,7 +168,7 @@ def plan(planner) -> None:
                 add("~", "user", account_name(r), [("properties", have, want)],
                     run=lambda n=account_name(r), w=want: SecurityFiles(gs).set_user_properties(n, w))
     for name in sorted(set(live_users) - wanted_users - BUILT_IN_USERS):
-        unmanaged("user", name, lambda n=name: drop(gs, f"security/usergroup/user/{n}"))
+        unmanaged("user", name, lambda n=name: drop(gs, f"security/usergroup/user/{q(n)}"))
 
     # Access rules
     wanted_rules: dict[str, dict[str, list[str]]] = {"layers": {}, "services": {}, "rest": {}}
@@ -169,6 +188,8 @@ def plan(planner) -> None:
                     run=lambda k=kind, b=body: gs.request("PUT", f"security/acl/{k}", b))
         for key in sorted(set(live) - set(wanted) - DEFAULT_RULES[kind]):
             unmanaged("rule", f"{kind} {key}", lambda k=kind, key=key: delete_rule(gs, k, key))
+        for key in sorted((set(live) & DEFAULT_RULES[kind]) - set(wanted)):
+            changed_default(add, kind, key, live[key])
 
 
 def as_items(value) -> list[dict]:
@@ -179,11 +200,11 @@ def as_items(value) -> list[dict]:
 
 def set_group(gs, name: str, want: list[str], have: list[str], new: bool) -> None:
     if new:
-        gs.request("POST", f"security/usergroup/group/{name}")
+        gs.request("POST", f"security/usergroup/group/{q(name)}")
     for role in sorted(set(want) - set(have)):
-        gs.request("POST", f"security/roles/role/{role}/group/{name}")
+        gs.request("POST", f"security/roles/role/{q(role)}/group/{q(name)}")
     for role in sorted(set(have) - set(want)):
-        gs.request("DELETE", f"security/roles/role/{role}/group/{name}")
+        gs.request("DELETE", f"security/roles/role/{q(role)}/group/{q(name)}")
 
 
 def set_user(gs, name: str, want: dict, password: str | None, have: dict, new: bool) -> None:
@@ -193,15 +214,36 @@ def set_user(gs, name: str, want: dict, password: str | None, have: dict, new: b
     if new:
         gs.request("POST", "security/usergroup/users", {"user": {"userName": name, **user}})
     else:
-        gs.request("POST", f"security/usergroup/user/{name}", {"user": user})
+        gs.request("POST", f"security/usergroup/user/{q(name)}", {"user": user})
     for group in sorted(set(want["groups"]) - set(have["groups"])):
-        gs.request("POST", f"security/usergroup/user/{name}/group/{group}")
+        gs.request("POST", f"security/usergroup/user/{q(name)}/group/{q(group)}")
     for group in sorted(set(have["groups"]) - set(want["groups"])):
-        gs.request("DELETE", f"security/usergroup/user/{name}/group/{group}")
+        gs.request("DELETE", f"security/usergroup/user/{q(name)}/group/{q(group)}")
     for role in sorted(set(want["roles"]) - set(have["roles"])):
-        gs.request("POST", f"security/roles/role/{role}/user/{name}")
+        gs.request("POST", f"security/roles/role/{q(role)}/user/{q(name)}")
     for role in sorted(set(have["roles"]) - set(want["roles"])):
-        gs.request("DELETE", f"security/roles/role/{role}/user/{name}")
+        gs.request("DELETE", f"security/roles/role/{q(role)}/user/{q(name)}")
+
+
+def stored_password_matches(stored: str | None, password: str) -> bool | None:
+    """Whether `password` is the one GeoServer's users file holds, or None when configops can't tell.
+    `digest1:` is GeoServer's default: base64 of a 16-byte salt and SHA-256 over salt and password, 100 000 times."""
+    if not stored:
+        return None
+    if stored.startswith("plain:"):
+        return hmac.compare_digest(stored[len("plain:"):].encode(), password.encode())
+    if not stored.startswith("digest1:"):
+        return None
+    try:
+        raw = base64.b64decode(stored[len("digest1:"):], validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    if len(raw) != 48:
+        return None
+    digest = hashlib.sha256(raw[:16] + unicodedata.normalize("NFC", password).encode()).digest()
+    for _ in range(99_999):
+        digest = hashlib.sha256(digest).digest()
+    return hmac.compare_digest(digest, raw[16:])
 
 
 def password_works(gs, name: str, password: str) -> bool:
@@ -219,7 +261,7 @@ def drop(gs, path: str) -> None:
 
 
 def delete_rule(gs, kind: str, key: str) -> None:
-    gs.request("DELETE", f"security/acl/{kind}/{key}", ok=(200, 404))
+    gs.request("DELETE", f"security/acl/{kind}/{q(key)}", ok=(200, 404))
 
 
 # --- REST rules. GeoServer checks them in file order and the first match wins, so a rule
@@ -275,6 +317,9 @@ def plan_rest_rules(gs, wanted: dict[str, list[str]], add, unmanaged) -> None:
                 add("~", "rule", target, changed, run=run(keep_others=True))
     for key, _ in others:
         unmanaged("rule", f"rest {key}", run(keep_others=False))
+    for key, roles in live:
+        if key in DEFAULT_RULES["rest"] and key not in wanted:
+            changed_default(add, "rest", key, roles)
 
 
 # --- What the REST API doesn't reach: a role's parent and properties, a user's properties, a group
@@ -370,6 +415,14 @@ class SecurityFiles:
             raise GeoServerError("PUT", USERS_FILE, 404, f"group {name} isn't in GeoServer's default user/group service")
         e.set("enabled", str(on).lower())
         self._write(USERS_FILE, self.users)
+
+    def user_password(self, name: str) -> str | None:
+        """The user's password as the users file holds it (`digest1:...`), or None if it can't be read."""
+        try:
+            e = self._find(self.users, USERS_NS, "s:users/s:user", "name", name)
+        except GeoServerError:
+            return None
+        return e.get("password") if e is not None else None
 
     def user_properties(self, name: str) -> dict:
         return self._properties(self._find(self.users, USERS_NS, "s:users/s:user", "name", name))

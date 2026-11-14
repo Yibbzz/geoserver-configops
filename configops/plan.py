@@ -12,6 +12,8 @@ don't mention there is shown as unmanaged, and removed only with --prune.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 import time
 from collections.abc import Callable
@@ -22,7 +24,7 @@ import psycopg2
 
 from . import assets, auth, keywords, details, security, server, standard, stores, tiles, urlchecks
 from .database import Database, DatabaseError, database, tables_exist
-from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
+from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, q
 from .loader import Project, Resource, load
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
@@ -555,8 +557,8 @@ class Planner:
     def delete_store(self, ws: str, name: str) -> None:
         """Remove a store of any kind, with what's published from it."""
         for kind, key in STORE_COLLECTIONS:
-            if name in self.gs.names(f"workspaces/{ws}/{kind}", key):
-                self.gs.delete(f"workspaces/{ws}/{kind}/{name}", {"recurse": "true"})
+            if name in self.gs.names(f"workspaces/{q(ws)}/{kind}", key):
+                self.gs.delete(f"workspaces/{q(ws)}/{kind}/{q(name)}", {"recurse": "true"})  # a live name: anything goes
                 return
 
     def delete_layer(self, ws: str, name: str) -> None:
@@ -566,7 +568,7 @@ class Planner:
         if store:
             self.gs.delete_featuretype(ws, store, name)
         else:
-            self.gs.delete(f"workspaces/{ws}/layers/{name}", {"recurse": "true"})
+            self.gs.delete(f"workspaces/{q(ws)}/layers/{q(name)}", {"recurse": "true"})
 
     def plan_workspace(self, ws: str, w: Resource) -> None:
         """A Workspace's namespace URI, isolation, and whether it's the default."""
@@ -751,9 +753,22 @@ def print_plan(changes: list[Change]) -> None:
 
 
 class PlanError(Exception):
-    def __init__(self, message: str, code: int = 2):
+    """plan, apply, status, import or refresh can't go on. Exit code 1: 2 is kept for "plan has changes"."""
+
+    def __init__(self, message: str, code: int = 1):
         super().__init__(message)
         self.code = code
+
+
+def plan_digest(changes: list[Change]) -> str:
+    """A short digest of what a plan would do: `plan --digest` prints it, and `apply --expect` refuses to go on
+    when the plan it works out has another, because GeoServer or the files changed in between."""
+    lines = [[c.action, c.kind, c.target, c.note, [[name, repr(live), repr(wanted)] for name, live, wanted in c.fields]]
+             for c in changes]
+    return hashlib.sha256(json.dumps(lines, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+MAX_DELETES = 10  # apply --prune stops above this many deletions unless --max-deletes says otherwise
 
 
 def connect(root: Path, geoserver_url: str | None, wait: float = 0):
@@ -801,7 +816,9 @@ def connect(root: Path, geoserver_url: str | None, wait: float = 0):
     return files, gs, conn, db
 
 
-def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str | None = None, wait: float = 0) -> int:
+def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str | None = None, wait: float = 0,
+        fail_on_unmanaged: bool = False, digest: bool = False, expect: str | None = None,
+        max_deletes: int | None = MAX_DELETES) -> int:
     files, gs, conn, db = connect(root, geoserver_url, wait)
     try:
         try:
@@ -811,9 +828,22 @@ def run(root: Path, apply: bool = False, prune: bool = False, geoserver_url: str
         print_plan(changes)
         blocked = any(c.action == "!" for c in changes)
         todo = [c for c in changes if c.run is not None]
+        if digest:
+            print(f"Plan digest: {plan_digest(changes)}")
         if not apply:
             # 1 is kept for errors; 3 says only "!" lines are left: layers waiting for their tables, settings GeoServer Cloud can't take
-            return 2 if todo else (3 if blocked else 0)
+            unmanaged = fail_on_unmanaged and any(c.action == "?" for c in changes)
+            if unmanaged and not todo:
+                print("Unmanaged (the ? lines): --fail-on-unmanaged counts them as drift.")
+            return 2 if todo or unmanaged else (3 if blocked else 0)
+        if expect and plan_digest(changes) != expect:
+            raise PlanError(f"this plan's digest is {plan_digest(changes)}, not {expect}: GeoServer or the files changed since "
+                            "that plan was made. Nothing was applied; read the plan above and run plan --digest again.")
+        deletions = sum(1 for c in changes if c.action == "-")
+        if max_deletes is not None and deletions > max_deletes:
+            raise PlanError(f"this apply would delete {deletions} things, more than --max-deletes {max_deletes}. Nothing was applied. "
+                            "If the plan above is what you mean (and not a project folder that is only half there), "
+                            f"run apply again with --max-deletes {deletions}.")
         if todo:
             print("\nApplying:")
         for c in todo:
