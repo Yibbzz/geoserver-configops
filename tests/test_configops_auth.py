@@ -30,7 +30,8 @@ def test_security_settings_round_trip():
     wanted = {"authProviders": ["ldap", "default"], "bruteForcePrevention": {"maxDelaySeconds": 9},
               "filterChains": [{"name": "wms", "paths": ["/wms/**"], "filters": ["basic"]},
                                {"name": "rest", "paths": ["/rest/**"], "filters": ["basic"]}]}
-    assert [k for k, _, _ in compare_security(CONFIG, wanted)] == ["authProviders", "bruteForcePrevention", "filterChains"]
+    assert [k for k, _, _ in compare_security(CONFIG, wanted)] == ["authProviders", "bruteForcePrevention", "filterChains",
+                                                                         "filterChains.rest"]
     new = set_security(CONFIG, wanted)
     assert compare_security(new, wanted) == []
     chains = live_security(new)["filterChains"]

@@ -82,6 +82,25 @@ class Project:
         return out
 
 
+class UniqueKeyLoader(yaml.SafeLoader):
+    """YAML keeps the last of two keys with the same name without a word; here that's an error, with its line."""
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            if key_node.tag == "tag:yaml.org,2002:merge":
+                continue
+            key = self.construct_object(key_node, deep=True)
+            try:
+                repeated = key in seen
+                seen.add(key)
+            except TypeError:  # a key that is a list or mapping: the constructor reports it
+                continue
+            if repeated:
+                raise yaml.constructor.ConstructorError(None, None, f"the key {key!r} is there twice", key_node.start_mark)
+        return super().construct_mapping(node, deep)
+
+
 def find_files(root: Path) -> list[Path]:
     """
     Every YAML file under `root`, hidden ones left out. Symlinked folders are
@@ -110,7 +129,7 @@ def load(root: Path) -> Project:
             for node in yaml.compose_all(text, Loader=yaml.SafeLoader):
                 if node is None:
                     continue
-                data = yaml.SafeLoader(text).construct_document(node)
+                data = UniqueKeyLoader(text).construct_document(node)
                 if data is None:
                     continue
                 resources.append(Resource(data=data, file=path, node=node))
