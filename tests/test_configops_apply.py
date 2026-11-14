@@ -79,12 +79,13 @@ class MemoryGeoServer(GeoServer):
         if (method, path) in self.fail:
             raise GeoServerError(method, path, 500, "refused")
         if method == "DELETE":
-            self.objects.pop(key, None)
             if "/featuretypes/" in key:
                 name = key.rsplit("/", 1)[1]
+                for group in (v["layerGroup"] for k, v in self.objects.items() if "/layergroups/" in k):
+                    if any(p["name"] == f"uk:{name}" for p in group["publishables"]["published"]):  # as GeoServer answers
+                        raise GeoServerError(method, path, 500, "Unable to delete layer referenced by layer group")
                 self.objects.pop(f"workspaces/uk/layers/{name}", None)
-                for group in (v["layerGroup"] for k, v in self.objects.items() if "/layergroups/" in k):  # as GeoServer does
-                    group["publishables"]["published"] = [p for p in group["publishables"]["published"] if p["name"] != f"uk:{name}"]
+            self.objects.pop(key, None)
             return Response(200)
         if not (isinstance(body, dict) and len(body) == 1):
             return Response(200)
@@ -264,16 +265,17 @@ def test_a_layer_moved_to_another_schema_is_put_back_in_its_groups(tmp_path, tab
     gs.objects["workspaces/uk/datastores/other"] = copy.deepcopy(gs.objects["workspaces/uk/datastores/public"])
     gs.objects["workspaces/uk/datastores/other"]["dataStore"]["connectionParameters"]["entry"][1]["$"] = "other"
     changes = apply(root, gs)
-    assert [(c.action, c.kind, c.target) for c in changes] == [("~", "layer", "uk:roads"), ("~", "group", "uk:base")]
-    assert changes[1].note == "put back after uk:roads is made again"
+    assert [(c.action, c.kind, c.target) for c in changes] == [("~", "layer", "uk:roads")]
     members = gs.objects["workspaces/uk/layergroups/base"]["layerGroup"]["publishables"]["published"]
-    assert [m["name"] for m in members] == ["uk:roads", "uk:sites"]
+    assert [m["name"] for m in members] == ["uk:roads", "uk:sites"]  # GeoServer deletes no layer a group holds: out, then back
+    assert f"{FT}/roads" not in gs.objects and "workspaces/uk/datastores/other/featuretypes/roads" in gs.objects
+    assert plan(root, gs) == []
 
 
 def test_a_layer_that_cant_be_made_in_its_new_store_is_put_back(tmp_path, tables, capsys):
-    root, gs = project(tmp_path, layer("{ table: roads }")), MemoryGeoServer()
+    root, gs = project(tmp_path, layer("{ table: roads }") + layer("{ table: sites }", "sites") + GROUP), MemoryGeoServer()
     apply(root, gs)
-    project(tmp_path, layer("{ table: { schema: other, name: roads } }"))
+    project(tmp_path, layer("{ table: { schema: other, name: roads } }") + layer("{ table: sites }", "sites") + GROUP)
     gs.objects["workspaces/uk/datastores/other"] = copy.deepcopy(gs.objects["workspaces/uk/datastores/public"])
     gs.objects["workspaces/uk/datastores/other"]["dataStore"]["connectionParameters"]["entry"][1]["$"] = "other"
     gs.fail.add(("POST", "workspaces/uk/datastores/other/featuretypes"))
@@ -281,3 +283,18 @@ def test_a_layer_that_cant_be_made_in_its_new_store_is_put_back(tmp_path, tables
         apply(root, gs)
     assert f"{FT}/roads" in gs.objects
     assert "was put back in public" in capsys.readouterr().err
+    members = gs.objects["workspaces/uk/layergroups/base"]["layerGroup"]["publishables"]["published"]
+    assert [m["name"] for m in members] == ["uk:roads", "uk:sites"]  # and back in its group
+
+
+def test_a_groups_only_layer_isnt_moved(tmp_path, tables):
+    only = GROUP.replace("[roads, sites]", "[roads]")
+    root, gs = project(tmp_path, layer("{ table: roads }") + only), MemoryGeoServer()
+    apply(root, gs)
+    project(tmp_path, layer("{ table: { schema: other, name: roads } }") + only)
+    gs.objects["workspaces/uk/datastores/other"] = copy.deepcopy(gs.objects["workspaces/uk/datastores/public"])
+    gs.objects["workspaces/uk/datastores/other"]["dataStore"]["connectionParameters"]["entry"][1]["$"] = "other"
+    gs.calls.clear()
+    with pytest.raises(GeoServerError, match="is this group's only layer"):
+        apply(root, gs)
+    assert gs.calls == [] and f"{FT}/roads" in gs.objects  # nothing was touched

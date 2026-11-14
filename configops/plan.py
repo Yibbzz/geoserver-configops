@@ -22,7 +22,7 @@ import psycopg2
 
 from . import assets, auth, keywords, details, security, server, standard, stores, tiles, urlchecks
 from .database import Database, DatabaseError, database, tables_exist
-from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project
+from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, q
 from .loader import Project, Resource, load
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
 
@@ -312,7 +312,6 @@ class Planner:
         self.styles = self.style_files()
         self.changes: list[Change] = []
         self.unpublished: set[str] = set()  # layers and groups that can't be published yet ("!")
-        self.recreated: set[str] = set()  # ws:name of layers apply deletes and makes again (GeoServer drops them from groups)
         standard.leave_out_unsupported(self)  # what this GeoServer can't set: "!" lines
 
     # --- what the files say
@@ -510,24 +509,26 @@ class Planner:
                 them as they are doesn't touch them)."""
                 enabled = spec.get("enabled", True)
                 narrow = attributes and "attributes" in spec
-                saved = None
-                if old_store and old_store != schema:  # one name, one feature type: the old one goes first
-                    saved = self.gs.featuretype(ws, old_store, name)
-                    self.gs.delete_featuretype(ws, old_store, name)
                 extra = {"metadata": {"entry": {"@key": "JDBC_VIRTUAL_TABLE", "virtualTable": view}}} if view else None
-                try:
+
+                def publish():
                     # A layer that publishes only some attributes is made turned off, and turned on once they are set:
                     # it is never served with every column
                     self.gs.upsert_featuretype(ws, schema, name, table, title=title, abstract=spec.get("abstract"),
                                                keywords=keywords.to_strings(spec.get("keywords")), enabled=enabled and not narrow,
                                                advertised=spec.get("advertised", True), srs=spec.get("crs"), extra=extra)
-                except GeoServerError:
-                    if saved:
-                        self.put_back(ws, old_store, name, saved)
-                    raise
+
+                if old_store and old_store != schema:  # one name, one feature type: the old one goes first
+                    saved = self.gs.featuretype(ws, old_store, name)
+                    self.make_again(ws, name, delete=lambda: self.gs.delete_featuretype(ws, old_store, name), create=publish,
+                                    put_back=lambda: self.put_back(ws, old_store, name, saved))
+                else:
+                    publish()
                 if narrow:
                     self.set_attributes(ft_path, spec["attributes"], enabled)
                 settings(tiles)
+                if not enabled:  # the last word: a layer the files turn off is off, whatever the requests before left
+                    self.gs.request("PUT", ft_path, {"featureType": {"name": name, "enabled": False}})
 
             live_layer = self.gs.layer(ws, name)
             if live_layer is None:
@@ -556,15 +557,61 @@ class Planner:
                 self.add("~", "layer", target, changed,
                          run=lambda run=run, store=store, a=moved or "attributes" in fields, t=moved or "cache" in fields:
                          run(old_store=store, attributes=a, tiles=t))
-                if moved:
-                    self.recreated.add(target)
+
+    def groups_holding(self, ws: str, name: str) -> list[tuple[str, list[dict], list]]:
+        """(REST path, members, styles) of each live group, the workspace's or a global one, with ws:name among its members."""
+        found = []
+        for base in (f"workspaces/{q(ws)}/layergroups", "layergroups"):
+            for group_name in self.gs.names(base, "layerGroup"):
+                path = f"{base}/{q(group_name)}"
+                group = (self.gs.get(path) or {}).get("layerGroup") or {}
+                members = [{"@type": m.get("@type", "layer"), "name": m.get("name")}
+                           for m in as_list((group.get("publishables") or {}).get("published")) if isinstance(m, dict)]
+                styles = (group.get("styles") or {}).get("style")
+                styles = [{"name": s["name"]} if isinstance(s, dict) and s.get("name") else "" for s in (styles if isinstance(styles, list) else [styles])]
+                if any(m["name"] == f"{ws}:{name}" for m in members):
+                    found.append((path, members, (styles + [""] * len(members))[:len(members)]))
+        return found
+
+    def make_again(self, ws: str, name: str, delete: Callable[[], object], create: Callable[[], object],
+                   put_back: Callable[[], object] | None = None) -> None:
+        """Delete a layer and make it again (in another store). GeoServer won't delete a layer a group holds, so it is
+        taken out of its groups first and put back in the same places afterwards, also in groups the files don't have,
+        and also when a step fails: what's there at the end is the layer in its groups, the new one or the old."""
+        target = f"{ws}:{name}"
+        holding = self.groups_holding(ws, name)
+        for path, members, _ in holding:
+            if all(m["name"] == target for m in members):
+                raise GeoServerError("PUT", path, 0, f"{target} is this group's only layer, and GeoServer keeps no empty group: "
+                                                     "take the group out first, or move the layer in the web UI")
+        taken_out = []
+        try:
+            for path, members, styles in holding:
+                keep = [i for i, m in enumerate(members) if m["name"] != target]
+                self.gs.request("PUT", path, {"layerGroup": {"publishables": {"published": [members[i] for i in keep]},
+                                                             "styles": {"style": [styles[i] for i in keep]}}})
+                taken_out.append((path, members, styles))
+            delete()
+            try:
+                create()
+            except GeoServerError:
+                if put_back:
+                    put_back()
+                raise
+        finally:
+            for path, members, styles in taken_out:
+                try:
+                    self.gs.request("PUT", path, {"layerGroup": {"publishables": {"published": members}, "styles": {"style": styles}}})
+                except GeoServerError as e:
+                    print(f"  note: {target} couldn't be put back in {path.rsplit('/', 1)[-1]} ({e}): "
+                          "apply again sets the groups in the files", file=sys.stderr)
 
     def put_back(self, ws: str, store: str, name: str, saved: dict) -> None:
         """A layer couldn't be made in its new store after it was taken out of the old one: publish it there again."""
         try:
             self.gs.request("POST", f"workspaces/{ws}/datastores/{store}/featuretypes", saved)
             print(f"  note: {ws}:{name} couldn't be made in its new store, and was put back in {store}; "
-                  "its styles, cache and groups are set again by the next apply", file=sys.stderr)
+                  "its styles and cache are set again by the next apply", file=sys.stderr)
         except GeoServerError as e:
             print(f"  note: {ws}:{name} couldn't be made in its new store, nor put back in {store} ({e}): "
                   "it is not published until apply succeeds", file=sys.stderr)
@@ -699,12 +746,9 @@ class Planner:
                        "queryDisabled": g.get("queryDisabled", False), "groupStyles": live_group_styles(g),
                        **details.live_resource(g, links), **details.live_layer(g, like_layer)}
             changed = diff([(k, current[k], v) for k, v in wanted])
-            # GeoServer takes a layer out of its groups when the layer is deleted, as a move to another store does
-            again = sorted(n for (_, n), _ in entries if n in self.recreated)
-            if changed or again:
+            if changed:
                 tiles = any(f.split(".")[0] == "cache" for f, _, _ in changed)
-                note = "" if changed else f"put back after {', '.join(again)} is made again"
-                self.add("~", "group", f"{ws}:{gs_name}", changed, note=note, run=lambda run=run, tiles=tiles: run(tiles=tiles))
+                self.add("~", "group", f"{ws}:{gs_name}", changed, run=lambda run=run, tiles=tiles: run(tiles=tiles))
 
     def group_style(self, spec: dict) -> dict:
         """One of a group's named styles, as compared: its own members, each in a style (or its default)."""
