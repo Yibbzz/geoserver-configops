@@ -1,6 +1,7 @@
 # Only what the package needs goes into the image
 *
 !pyproject.toml
+!requirements.lock
 !README.md
 !LICENSE
 !configops/
