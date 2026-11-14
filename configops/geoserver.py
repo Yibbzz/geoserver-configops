@@ -12,7 +12,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from xml.sax.saxutils import escape
 
 import requests
@@ -69,6 +69,15 @@ def for_project(project, root: Path, url: str | None = None) -> "GeoServer":
         raise MissingCredentials(f"the GeoServer secret {secret} is missing {', '.join(missing)}: set {names}, or add them to secrets.yaml")
     # CONFIGOPS_GWC_URL: GeoWebCache's REST address, for a GeoServer Cloud REST service reached without its gateway
     return GeoServer(url or spec["url"], creds["username"], creds["password"], gwc_url=os.environ.get("CONFIGOPS_GWC_URL"))
+
+
+def sends_login_in_the_clear(url: str) -> bool:
+    """Whether the login would cross a network unencrypted: plain http to a host that isn't this machine or a
+    Kubernetes service (one name, or a name under .svc or .cluster.local)."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    inside = host in ("localhost", "::1") or host.startswith("127.") or "." not in host or host.endswith((".svc", ".cluster.local"))
+    return parsed.scheme == "http" and not inside
 
 
 def q(name: str) -> str:

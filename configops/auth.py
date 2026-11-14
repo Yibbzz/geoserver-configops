@@ -13,10 +13,12 @@ service has its own. Only the fields a file sets are compared. Nothing is ever r
 
 from __future__ import annotations
 
+import re
 import time
 import xml.etree.ElementTree as ET
 
-from .geoserver import GeoServerError
+from . import secrets
+from .geoserver import GeoServerError, MissingCredentials
 
 FOLDERS = {"PasswordPolicy": "pwpolicy", "AuthFilter": "filter", "AuthProvider": "auth",
            "UserGroupService": "usergroup", "RoleService": "role", "MasterPasswordProvider": "masterpw"}
@@ -32,6 +34,43 @@ CHAIN_ATTRS = {"class": "class", "interceptor": "interceptorName", "exceptionTra
                "ssl": "ssl", "matchHTTPMethod": "matchHTTPMethod"}
 SETTINGS = {"roleService": "roleServiceName", "encryptUrlParams": "encryptingUrlParams",
             "passwordEncryption": "configPasswordEncrypterName"}
+
+
+# Fields whose value is a password, key or token whatever the object: never printed, and written by import as a Secret
+# (by how its name ends: `password`, `clientSecret`, `apiKey`, `key`; not `passwordPolicyName`)
+SENSITIVE = re.compile(r"(password|passwd|secret|token|credentials?|key)$", re.IGNORECASE)
+
+
+def is_secret_ref(value) -> bool:
+    """`{ secret, key }` in a security object's config: the value comes from a Secret."""
+    return isinstance(value, dict) and set(value) == {"secret", "key"} and all(isinstance(v, str) for v in value.values())
+
+
+def resolve(fields: dict, root, label: str) -> tuple[dict, set[str]]:
+    """(the fields with each `{ secret, key }` replaced by the Secret's value, the names of those fields)."""
+    out, from_secrets = {}, set()
+    for k, v in fields.items():
+        if is_secret_ref(v):
+            found = secrets.lookup(v["secret"], v["key"], root)
+            if found is None:
+                raise MissingCredentials(f"{label}: no value for config.{k} in secret {v['secret']}, key {v['key']}")
+            out[k] = found
+            from_secrets.add(k)
+        elif isinstance(v, dict) and set(v) != {"class", "value"}:
+            out[k], inner = resolve(v, root, label)
+            from_secrets |= {f"{k}.{name}" for name in inner}
+        else:
+            out[k] = v
+    return out, from_secrets
+
+
+def hidden(key: str, value, live: bool = False):
+    """A field's value as plan prints it: a password, key or token (by its name) is never shown."""
+    if isinstance(value, dict) and set(value) != {"class", "value"}:
+        return {k: hidden(k, v, live) for k, v in value.items()}
+    if SENSITIVE.search(key) and value not in (None, ""):
+        return "(differs)" if live else "(hidden)"
+    return value
 
 
 # --- XML <-> plain values
@@ -126,9 +165,9 @@ def plan(planner) -> None:
     for r in [r for kind in KINDS for r in planner.files.of_kind(kind)]:
         name = r.spec.get("name") or r.name
         path = f"resource/security/{FOLDERS[r.kind]}/{name}/config.xml"
-        wanted = wanted_fields(r)
-        response = gs.request("GET", path, ok=(200, 404))
         target = f"{r.kind} {name}"
+        wanted, from_secrets = resolve(wanted_fields(r), planner.root, target)
+        response = gs.request("GET", path, ok=(200, 404))
         live_xml = response.text if response.status_code == 200 and response.text.lstrip().startswith("<") else None
         if live_xml is None:
             root = ET.Element(root_tag(r))
@@ -137,7 +176,9 @@ def plan(planner) -> None:
         else:
             root = ET.fromstring(live_xml)
             live = {c.tag: to_value(c) for c in root}
-            changed = [(k, live.get(k), v) for k, v in wanted.items() if not same(live.get(k), v)]
+            changed = [(k, "(differs)" if k in from_secrets else hidden(k, live.get(k), live=True),
+                        "(from the Secret)" if k in from_secrets else hidden(k, v))
+                       for k, v in wanted.items() if not same(live.get(k), v)]
             if not changed:
                 continue
         for k, v in wanted.items():
@@ -202,8 +243,8 @@ def compare_security(xml: str, wanted: dict) -> list[tuple[str, object, object]]
             if here != value:
                 out.append((key, [c["name"] for c in live["filterChains"]], [c["name"] for c in value]))
         elif key in ("bruteForcePrevention", "rememberMe"):
-            if not same(here, value):
-                out.append((key, here, value))
+            if not same(here, value):  # rememberMe.key signs the cookies: not printed
+                out.append((key, hidden(key, here, live=True), hidden(key, value)))
         elif here != value:
             out.append((key, here, value))
     return out

@@ -290,7 +290,7 @@ def auth_resources(gs, notes: list[str]) -> list[dict]:
     """Password policies, authentication filters and providers, user/group and role services that differ from a fresh GeoServer's."""
     import xml.etree.ElementTree as ET
 
-    from .auth import FOLDERS, POLICY, to_value
+    from .auth import FOLDERS, POLICY, SENSITIVE, to_value
 
     defaults = security_defaults()["objects"]
     out = []
@@ -321,6 +321,10 @@ def auth_resources(gs, notes: list[str]) -> list[dict]:
                     changed = live
                 if changed:
                     spec["config"] = {k: typed(v) for k, v in changed.items() if k != "className"}
+                    for k, v in spec["config"].items():  # a password or key: named as a Secret, never written to the files
+                        if SENSITIVE.search(k) and isinstance(v, (str, int)) and not isinstance(v, bool) and v != "":
+                            spec["config"][k] = {"secret": f"{meta}-{folder}", "key": k}
+                            notes.append(f"{kind} {name}: {k} can't be written to the files: put it in Secret {meta}-{folder} (key: {k})")
             out.append(resource(kind, meta, spec))
             if kind != "PasswordPolicy" and fresh is None and root.tag[:1].islower():
                 notes.append(f"{kind} {name}: GeoServer names its class {root.tag}; check spec.class before applying it elsewhere")
