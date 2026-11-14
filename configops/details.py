@@ -15,7 +15,6 @@ from __future__ import annotations
 PRESENTATIONS = {"list": "LIST", "continuous": "CONTINUOUS_INTERVAL", "interval": "DISCRETE_INTERVAL"}
 WCS = {"requestCRS": "requestSRS", "responseCRS": "responseSRS", "formats": "supportedFormats", "interpolations": "interpolationMethods"}
 TRANSLATED = ("internationalTitle", "internationalAbstract")  # {language: text}, on a resource or a group
-BAND_FIELDS = ("name", "description", "unit", "nullValues", "range")
 DIMENSION_FIELDS = {"acceptableInterval": "acceptableInterval", "nearestFailBehavior": "nearestFailBehavior",
                     "rawNearestMatch": "rawNearestMatchEnabled", "start": "startValue", "end": "endValue"}  # spec -> GeoServer
 FT_FIELDS = {"wfs.simpleConversion": "simpleConversionEnabled", "wfs.padWithZeros": "padWithZeros", "wfs.forcedDecimal": "forcedDecimal", "wfs.encodeMeasures": "encodeMeasures",

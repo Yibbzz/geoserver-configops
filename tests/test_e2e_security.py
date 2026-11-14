@@ -138,6 +138,25 @@ def test_apply_then_nothing_to_do_and_rules_take_effect(gs, project, capsys):
     assert status_as("e2e-alice", "wrong") == 401
 
 
+def test_a_password_geoserver_keeps_as_a_digest_is_checked_without_logging_in(gs, project, capsys, monkeypatch):
+    """Where GeoServer keeps a digest of the password (`digest1:`), plan checks the Secret's password against it and
+    doesn't log in. Where it keeps it encrypted (`crypt1:`, as these servers do), plan can't tell and logs in, as before."""
+    from configops import security
+
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    stored = security.SecurityFiles(gs).user_password("e2e-alice")
+    assert stored and stored.split(":", 1)[0] in ("digest1", "crypt1", "crypt2", "plain"), stored[:8]
+    matches = security.stored_password_matches(stored, os.environ["CONFIGOPS_E2EUSERS_ALICE"])
+    assert matches is not False  # never "differs" for the password that is set
+    logins = []
+    monkeypatch.setattr(security, "password_works", lambda g, name, pw: logins.append(name) or True)
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert code == 0, out
+    assert logins == ([] if matches else ["e2e-alice"])
+    if stored.startswith("digest1:"):
+        assert matches is True and security.stored_password_matches(stored, "not-her-password") is False
+
+
 def test_a_new_password_is_applied(gs, project, capsys, monkeypatch):
     assert configops(capsys, "apply", "-C", str(project))[0] == 0
     monkeypatch.setenv("CONFIGOPS_E2EUSERS_ALICE", PW["alice-2"])

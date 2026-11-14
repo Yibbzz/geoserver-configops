@@ -330,7 +330,7 @@ ENVELOPES = {"intersection": "INTERSECTION", "union": "UNION"}
 RESOLUTIONS = {"best": "BEST", "worst": "WORST"}
 
 
-def wanted_view(name: str, spec: dict) -> dict:
+def wanted_view(spec: dict) -> dict:
     """A layer's `view` as compared."""
     out = {"bands": [{"coverage": b["coverage"], "band": int(b.get("band", 0))} for b in spec["bands"]],
            "envelope": spec.get("envelope", "intersection"), "resolution": spec.get("resolution", "best"),
@@ -391,7 +391,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
     path, _ = store_path(store_ws, store)
     item_path = f"{path}/{fam['items']}/{q(name)}"
     title = spec.get("title") or name
-    view = wanted_view(name, spec["view"]) if spec.get("view") else None
+    view = wanted_view(spec["view"]) if spec.get("view") else None
     native = name if view else spec.get("resource")
 
     live_layer = gs.layer(ws, name)
@@ -421,9 +421,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         wanted_item.append(("view", view))
     wanted_layer, settings = planner.layer_settings(layer, (item_path, fam["item"]))
 
-    def run(old_store=None):
-        if old_store is not None:
-            gs.delete(f"workspaces/{q(ws)}/layers/{q(name)}", {"recurse": "true"})
+    def run(old_store=None, tiles=True):
         item = {"name": name, "title": title, "enabled": spec.get("enabled", True), "advertised": spec.get("advertised", True)}
         if "abstract" in spec:
             item["abstract"] = spec["abstract"]
@@ -437,8 +435,14 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         if view:
             current = (gs.get(item_path) or {}).get(fam["item"]) or {}
             item["metadata"] = with_view(current, view_body(name, view))
-        gs.upsert(item_path, f"{path}/{fam['items']}", {fam["item"]: item})
-        settings()
+        if old_store is not None:  # in another store: the layer goes, with what it publishes there, and is made again
+            planner.make_again(ws, name, delete=lambda: gs.delete(f"workspaces/{q(ws)}/layers/{q(name)}", {"recurse": "true"}),
+                               create=lambda: gs.upsert(item_path, f"{path}/{fam['items']}", {fam["item"]: item}))
+        else:
+            gs.upsert(item_path, f"{path}/{fam['items']}", {fam["item"]: item})
+        settings(tiles)
+        if not item["enabled"]:  # the last word: a layer the files turn off is off, whatever the requests before left
+            gs.request("PUT", item_path, {fam["item"]: {"name": name, "enabled": False}})
 
     if live_layer is None:
         planner.add("+", "layer", target, note=f"{store.spec['type']} store {store.name}" + (f": {native}" if native else ""), run=run)
@@ -461,4 +465,5 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
         changed.append(("store", live_store_name, geoserver_name(store)))
     if changed:
         old = live_store_name if live_store_name != geoserver_name(store) else None
-        planner.add("~", "layer", target, changed, run=lambda: run(old_store=old))
+        tiles = old is not None or any(k == "cache" for k, _, _ in changed)  # the cache is left alone when it is as wanted
+        planner.add("~", "layer", target, changed, run=lambda: run(old_store=old, tiles=tiles))
