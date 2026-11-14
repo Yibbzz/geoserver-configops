@@ -280,7 +280,7 @@ ENVELOPES = {"intersection": "INTERSECTION", "union": "UNION"}
 RESOLUTIONS = {"best": "BEST", "worst": "WORST"}
 
 
-def wanted_view(name: str, spec: dict) -> dict:
+def wanted_view(spec: dict) -> dict:
     """A layer's `view` as compared."""
     out = {"bands": [{"coverage": b["coverage"], "band": int(b.get("band", 0))} for b in spec["bands"]],
            "envelope": spec.get("envelope", "intersection"), "resolution": spec.get("resolution", "best"),
@@ -341,7 +341,7 @@ def plan_layer(planner, layer: Resource, store: Resource) -> None:
     path, _ = store_path(store_ws, store)
     item_path = f"{path}/{fam['items']}/{q(name)}"
     title = spec.get("title") or name
-    view = wanted_view(name, spec["view"]) if spec.get("view") else None
+    view = wanted_view(spec["view"]) if spec.get("view") else None
     native = name if view else spec.get("resource")
 
     live_layer = gs.layer(ws, name)

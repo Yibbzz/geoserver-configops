@@ -364,6 +364,14 @@ class Planner:
         self.changes.append(Change(*args, **kwargs))
 
     def plan(self) -> list[Change]:
+        """What apply would do. GeoServer is only read, and the same thing is read once."""
+        reading = getattr(self.gs, "reading", None)
+        if reading is None:
+            return self.work_out()
+        with reading():
+            return self.work_out()
+
+    def work_out(self) -> list[Change]:
         workspaces = {geoserver_name(w): w for w in self.files.of_kind("Workspace")}
         managed = sorted({self.ws} | set(workspaces) | {self.workspace_of(r) for r in [*self.layers.values(), *self.groups.values()]}
                          | {self.workspace_of(s) for s in self.files.named("Style").values() if not s.spec.get("global")})
