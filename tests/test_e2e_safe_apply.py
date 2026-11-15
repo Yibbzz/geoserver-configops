@@ -213,3 +213,28 @@ def test_a_layer_moved_to_another_schema_stays_in_its_group(project, gs, capsys)
     assert members(gs) == [f"{WS}:moving", f"{WS}:summary"]
     code, out = configops(capsys, "plan", "-C", str(project))
     assert code == 0 and to_do(out) == [], out
+
+
+def test_one_apply_at_a_time(project, gs, capsys):
+    """The apply lock is a file in GeoServer's data directory: a second apply is refused while it is held, and
+    apply leaves none behind."""
+    from configops.lock import PATH, Lock
+
+    other = Lock(gs)
+    other.acquire()
+    try:
+        answer = gs.request("GET", PATH)
+        assert "Last-Modified" in answer.headers and "Date" in answer.headers  # the lock's age is by GeoServer's clock
+        held, age = other.read()
+        assert held["token"] == other.token and age < 120
+        code, out = configops(capsys, "apply", "-C", str(project))
+        assert code == 1 and "another apply holds the lock" in out and "Applying:" not in out, out
+        assert other.read()[0]["token"] == other.token  # left alone
+        code, out = configops(capsys, "plan", "-C", str(project))  # plan only reads: no lock
+        assert code == 0, out
+    finally:
+        other.release()
+    assert gs.request("GET", PATH, ok=(200, 404)).status_code == 404
+    code, out = configops(capsys, "apply", "-C", str(project))
+    assert code == 0, out
+    assert gs.request("GET", PATH, ok=(200, 404)).status_code == 404

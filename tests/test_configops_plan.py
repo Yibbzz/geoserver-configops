@@ -2,6 +2,8 @@
 
 import textwrap
 
+import types
+
 import pytest
 
 from configops import assets
@@ -68,10 +70,14 @@ class FakeGeoServer:
         if path == "reset":
             self.resets += 1
         elif path.startswith("resource/"):
+            name = path.removeprefix("resource/")
             if method == "PUT":
-                self.resources[path.removeprefix("resource/")] = body
+                self.resources[name] = body
+            elif method == "GET":  # the apply lock is read back
+                return types.SimpleNamespace(status_code=200 if name in self.resources else 404, text=self.resources.get(name, ""),
+                                             headers={})
             else:
-                del self.resources[path.removeprefix("resource/")]
+                del self.resources[name]
         else:  # a template, PUT through its workspace or resource
             self.resources[self.template_file(path)] = body
 
@@ -493,3 +499,33 @@ def test_files_plan_cant_read_are_an_error_not_changes(tmp_path):
 
     (tmp_path / "project.yaml").write_text("kind: Nonsense\n")
     assert main(["plan", "-C", str(tmp_path)]) == 1
+
+
+def test_apply_takes_the_lock_and_gives_it_back_also_when_it_fails(project, tables, monkeypatch, capsys):
+    from configops import lock as lock_module
+    from configops.lock import PATH
+
+    monkeypatch.setattr(lock_module.time, "sleep", lambda seconds: None)
+    gs = converged()
+    connected(monkeypatch, gs)
+    name = PATH.removeprefix("resource/")
+    assert plan_module.run(project, apply=True) == 0
+    assert name not in gs.resources
+
+    gs.resources[name] = '{"token": "someone-else", "holder": "ci@runner (pid 7)", "ttl": 900, "written": 1e12}'
+    with pytest.raises(plan_module.PlanError, match=r"another apply holds the lock: ci@runner \(pid 7\)") as e:
+        plan_module.run(project, apply=True)
+    assert e.value.code == 1 and name in gs.resources  # theirs is left alone
+    assert plan_module.run(project) == 0  # plan only reads: no lock
+    assert plan_module.run(project, apply=True, lock=False) == 0
+    assert plan_module.run(project, apply=True, break_lock=True) == 0
+    assert name not in gs.resources
+
+    gs.layers[("uk", "road_links")]["layer"]["queryable"] = True
+
+    def refuse(self, *args, **kwargs):
+        raise plan_module.GeoServerError("PUT", "workspaces/uk/datastores/data_layers/featuretypes/road_links", 500, "no")
+
+    monkeypatch.setattr(type(gs), "upsert_featuretype", refuse, raising=False)
+    assert plan_module.run(project, apply=True) == 1
+    assert name not in gs.resources
