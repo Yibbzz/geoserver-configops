@@ -28,6 +28,8 @@ UP = "tests/e2e/up.sh"
 COMPOSE = "examples/compose.yaml"
 README = "README.md"
 FIELDS = "docs/geoserver-fields.yaml"
+# The markers on lines of their own: on GitHub a line that starts with <!-- is HTML, and the bold in the rest of it
+# would show as asterisks
 TESTED = re.compile(r"<!-- tested-on -->.*?<!-- /tested-on -->", re.S)
 SERIES_2 = "2.28"
 
@@ -93,9 +95,9 @@ def pinned() -> dict[str, str]:
 
 
 def tested_line(v: dict[str, str]) -> str:
-    return (f"<!-- tested-on -->Tested on **GeoServer Cloud {v['cloud']}**, **GeoServer {v['standard']}** and "
+    return (f"<!-- tested-on -->\nTested on **GeoServer Cloud {v['cloud']}**, **GeoServer {v['standard']}** and "
             f"**GeoServer {v['standard-2']}**: every pull request runs the e2e tests on all three, and a daily job "
-            f"(`.github/workflows/versions.yaml`) tries each new release.<!-- /tested-on -->")
+            f"(`.github/workflows/versions.yaml`) tries each new release.\n<!-- /tested-on -->")
 
 
 def sub(path: str, pattern: str, new: str) -> None:
