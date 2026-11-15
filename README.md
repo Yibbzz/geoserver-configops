@@ -8,7 +8,9 @@
 
 Of the 662 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (44 more it can't set), 662 on standard GeoServer and 653 on GeoServer 2.28 (9 more it can't set) ([field by field](docs/geoserver-fields.yaml)).
 
-<!-- tested-on -->Tested on **GeoServer Cloud 3.0.2.1**, **GeoServer 3.0.2** and **GeoServer 2.28.6**: every pull request runs the e2e tests on all three, and a daily job (`.github/workflows/versions.yaml`) tries each new release.<!-- /tested-on -->
+<!-- tested-on -->
+Tested on **GeoServer Cloud 3.0.2.1**, **GeoServer 3.0.2** and **GeoServer 2.28.6**: every pull request runs the e2e tests on all three, and a daily job (`.github/workflows/versions.yaml`) tries each new release.
+<!-- /tested-on -->
 
 `configops` keeps what GeoServer publishes, and how it is set up, in YAML files under version control:
 
