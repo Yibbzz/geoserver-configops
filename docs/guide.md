@@ -6,7 +6,7 @@ How to do each thing with configops. [spec.md](spec.md) describes every kind, fi
 
 **Publish a table:** a `Layer` with `table: roads` (in the Project's `database.schema`) or `table: { schema: field_data, name: sites }`. The Project names the database, as GeoServer reaches it (`jndi`) and as configops does (`connection`, to see whether a table exists yet). Until the table exists, `plan` shows the layer as `!` (can't be done yet) and `apply` leaves it, and its place in groups, for later.
 
-**After loading new data,** refresh GeoServer: `configops refresh -C my-project data_layers.roads` works the layer's bounds out again and clears its cached tiles, and those of the groups that hold it. `geodata sync --loaded loaded.txt` writes what it loaded, for `configops refresh --from loaded.txt`.
+**After loading new data,** refresh GeoServer: `configops refresh -C my-project data_layers.roads` works the layer's bounds out again and clears its cached tiles, and those of the groups that hold it. `dataops sync --loaded loaded.txt` writes what it loaded, for `configops refresh --from loaded.txt`.
 
 **Keep the logins out of the files.** A project names Secrets (`credentials: { secret: geoserver-admin }`); configops reads each from a git-ignored `secrets.yaml` in the project folder, from `CONFIGOPS_<SECRET>_<KEY>` environment variables, or from files `$CONFIGOPS_SECRETS_DIR/<secret>/<key>` (how Kubernetes mounts Secrets).
 
@@ -105,7 +105,7 @@ Some settings take effect only when GeoServer's services restart, and `apply` sa
 ```
  project files (YAML, SLD) ──► configops plan / apply / import / status ──► GeoServer or GeoServer Cloud (REST API)
                                                                                     │
- geodata-sync, or your own loads ──► PostGIS tables ──── GeoServer reads ───────────┤
+ GeoServer DataOps, or your own loads ──► PostGIS tables ──── GeoServer reads ───────────┤
                                  └─► configops refresh: bounds, cached tiles        ▼
                                                                      WMS / WFS / WCS / tiles
 ```

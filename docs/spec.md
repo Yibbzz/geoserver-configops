@@ -2,7 +2,7 @@
 
 A set of YAML files that says what a GeoServer or GeoServer Cloud publishes and how it is set up: workspaces, stores, layers, styles, groups, tile caching, settings, services and security. `configops` reads the files and makes GeoServer match them, the way OpenTofu makes infrastructure match its configuration.
 
-> **Status:** every command below is built. Loading data into PostGIS is a separate tool, [geodata-sync](https://github.com/Yibbzz/geodata-sync); configops publishes the tables, whoever loads them.
+> **Status:** every command below is built. Loading data into PostGIS is a separate tool, [GeoServer DataOps](https://github.com/Yibbzz/geoserver-dataops); configops publishes the tables, whoever loads them.
 
 ## Principles
 
@@ -18,7 +18,7 @@ A set of YAML files that says what a GeoServer or GeoServer Cloud publishes and 
 ```
  config files (git) ──► configops plan / apply ──► GeoServer catalog: workspaces, stores, layers, styles, tile cache,
                                                     settings, services, security
- new data loaded (geodata sync, or your own) ──► configops refresh ──► layers' bounds worked out again, cached tiles cleared
+ new data loaded (dataops sync, or your own) ──► configops refresh ──► layers' bounds worked out again, cached tiles cleared
 ```
 
 `apply` manages configuration only: a layer on a table that doesn't exist yet is shown as `!` and published once it does.
@@ -256,7 +256,7 @@ spec:
 | `oracle` | (none: `connection`) | A table | Standard GeoServer only, with its `oracle` extension (Oracle's JDBC driver is in it). As `postgis`; `database` is the SID, or `/<service name>` (`/FREEPDB1`) |
 | `appschema` | (none: `path`) | A complex feature type the mapping file defines | The mapping and its schema on the data volume; the layer names its feature type in `resource`. GeoServer Cloud ships the extension off: set `GEOSERVER_EXTENSION_APPSCHEMA_ENABLED=true` on its services. `apply` makes an `app-schema-cache` folder beside the mapping (when the data volume is mounted where it runs), where GeoServer keeps the schemas it downloads; the workspace's namespace URI must be the mapping's target namespace (`Workspace` `namespace`) |
 
-**Files** are read from GeoServer's `/data` folder: a volume mounted there in every GeoServer service. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you (geodata-sync makes raster files from downloads); `configops import` writes stores whose files are under `/data`.
+**Files** are read from GeoServer's `/data` folder: a volume mounted there in every GeoServer service. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you (GeoServer DataOps makes raster files from downloads); `configops import` writes stores whose files are under `/data`.
 
 | `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
 | `description`, `enabled` | none; `true` | |
@@ -775,10 +775,10 @@ Only fields the files set, or whose defaults this spec defines (`title`, `enable
 
 ## `refresh`
 
-After new data is loaded into a table or a file, GeoServer still has the old bounding boxes, and its tile cache the old tiles. `configops refresh` names what changed (`schema.table`, or a file store's `path`, with or without `/data/`), or reads it from a file, one per line, as `geodata sync --loaded FILE` writes it:
+After new data is loaded into a table or a file, GeoServer still has the old bounding boxes, and its tile cache the old tiles. `configops refresh` names what changed (`schema.table`, or a file store's `path`, with or without `/data/`), or reads it from a file, one per line, as `dataops sync --loaded FILE` writes it:
 
 ```
-$ geodata sync -C data --loaded loaded.txt && configops refresh -C publish --from loaded.txt
+$ dataops sync -C data --loaded loaded.txt && configops refresh -C publish --from loaded.txt
 Refreshed: bounds of 2 layer(s) worked out again, cached tiles of 3 layer(s) or group(s) cleared; seeding 1 again
 ```
 
@@ -856,9 +856,9 @@ Next: git diff, then configops plan -C examples/uk-basemap
 - **Scale limits** live in styles ([above](#scale-limits-live-in-styles)), 9 Nov 2026.
 - **Layer groups** are in this version as `LayerGroup`, 9 Nov 2026.
 
-- **Data loading** is its own tool, geodata-sync; configops publishes tables and refreshes GeoServer after loads (`refresh`), 13 Nov 2026.
+- **Data loading** is its own tool, GeoServer DataOps; configops publishes tables and refreshes GeoServer after loads (`refresh`), 13 Nov 2026.
 
 ## Open questions
 
-1. **Data versions on screen:** should a layer's abstract or keywords carry the loaded version, from geodata's ingest log?
+1. **Data versions on screen:** should a layer's abstract or keywords carry the loaded version, from DataOps's ingest log?
 2. **Several projects on one GeoServer:** fine if each owns its own workspaces; anything else needed?

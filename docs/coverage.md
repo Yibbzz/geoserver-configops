@@ -118,10 +118,10 @@ What the GeoServer Cloud 3.0 images include decides what's possible: the vector 
 
 | What | Status | Notes |
 | --- | --- | --- |
-| Loading open data into PostGIS (Ordnance Survey, CKAN portals, WFS, OGC API Features, links), and rasters | Separate tool | [geodata-sync](https://github.com/Yibbzz/geodata-sync): staged, checked, backed up, swapped in, on a schedule |
+| Loading open data into PostGIS (Ordnance Survey, CKAN portals, WFS, OGC API Features, links), and rasters | Separate tool | [GeoServer DataOps](https://github.com/Yibbzz/geoserver-dataops): staged, checked, backed up, swapped in, on a schedule |
 | Tables loaded any other way | Yes | A Layer with `table:`; it waits until the table exists |
 | After new data: bounds and cached tiles | Yes | `configops refresh` |
-| The importer extension | — | Loading data isn't configuration: geodata-sync, or your own loads |
+| The importer extension | — | Loading data isn't configuration: GeoServer DataOps, or your own loads |
 
 ## Services
 

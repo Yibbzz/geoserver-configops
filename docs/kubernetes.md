@@ -6,7 +6,7 @@ configops runs beside a GeoServer or GeoServer Cloud you already have, as a Job 
 - `configops-apply`: a Job that makes GeoServer match the files;
 - `configops-drift`: a CronJob that runs `configops plan` hourly. Its Job fails when GeoServer no longer matches the files (say a layer changed in the web UI), so drift shows in `kubectl get jobs` and in any alerts on failed Jobs.
 
-Loading data on a schedule is geodata-sync's: its own `docs/kubernetes.md` has a CronJob that loads, then runs `configops refresh` on what it loaded.
+Loading data on a schedule is GeoServer DataOps': its own `docs/kubernetes.md` has a CronJob that loads, then runs `configops refresh` on what it loaded.
 
 ## 1. An image with your project in it
 

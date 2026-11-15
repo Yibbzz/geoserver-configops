@@ -10,6 +10,6 @@ spec:
   database:
     jndi: java:comp/env/jdbc/mypostgis
     connection: { secret: database }
-    schema: data_layers                            # where the layers' tables are (geodata-sync loads them)
+    schema: data_layers                            # where the layers' tables are (GeoServer DataOps loads them)
   workspace: uk
   crs: EPSG:27700

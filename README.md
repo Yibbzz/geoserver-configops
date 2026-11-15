@@ -182,7 +182,7 @@ More in the [guide](docs/guide.md): SQL views, tile caching and gridsets, servic
 | [docs/geoserver-cloud-notes.md](docs/geoserver-cloud-notes.md) | What we learned about GeoServer Cloud's REST API and tile cache |
 | [docs/development.md](docs/development.md) | Tests, CI, new GeoServer versions, releasing |
 
-Loading data into PostGIS is a separate tool, [geodata-sync](https://github.com/Yibbzz/geodata-sync); configops publishes the tables, whoever loads them.
+Loading data into PostGIS is a separate tool, [GeoServer DataOps](https://github.com/Yibbzz/geoserver-dataops); configops publishes the tables, whoever loads them.
 
 ## Licence
 

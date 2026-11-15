@@ -161,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         description="For the layers on the named tables (schema.table) or files (a store's path under /data), or on all of "
         "them if none are named: reset raster stores, work out the bounds again, clear the cached tiles of the layers and "
         "the groups that hold them, and seed again what the files seed. Run it after loading new data "
-        "(geodata sync --loaded FILE, then configops refresh --from FILE).",
+        "(dataops sync --loaded FILE, then configops refresh --from FILE).",
     )
     r.add_argument("targets", nargs="*", metavar="TABLE_OR_PATH", help="schema.table, or a file store's path")
     r.add_argument("--from", dest="from_file", type=Path, metavar="FILE", help="read the tables and paths from FILE, one per line")
