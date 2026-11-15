@@ -129,7 +129,7 @@ on: { schedule: [{ cron: "0 * * * *" }] }
 jobs:
   drift:
     runs-on: ubuntu-latest
-    container: ghcr.io/yibbzz/geoserver-configops:<version>
+    container: ghcr.io/yibbzz/geoserver-configops:0.2.0
     steps:
       - uses: actions/checkout@v7
       - run: configops plan -C . --fail-on-unmanaged   # also fails on a user or rule added in the web UI

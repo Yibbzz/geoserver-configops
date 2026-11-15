@@ -5,7 +5,7 @@
 # .env): on a laptop they sit in the project folder, and they must not reach the registry in a layer. The
 # cluster gets them as Kubernetes Secrets (docs/kubernetes.md).
 # A version of configops, not `latest`: a new release reaches the cluster when this line (or --build-arg) says so
-ARG CONFIGOPS_VERSION=0.1.0
+ARG CONFIGOPS_VERSION=0.2.0
 ARG CONFIGOPS_IMAGE=ghcr.io/yibbzz/geoserver-configops
 
 FROM busybox:1.37 AS project
