@@ -3,6 +3,6 @@ kind: Layer
 metadata:
   name: conservation-areas
 spec:
-  table: conservation_areas                 # loaded by geodata-sync (examples/uk-basemap there)
+  table: conservation_areas                 # loaded by GeoServer DataOps (examples/uk-basemap there)
   title: Conservation areas (Surrey Heath)
   style: polygon

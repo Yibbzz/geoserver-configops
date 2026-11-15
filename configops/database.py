@@ -1,6 +1,6 @@
 """The Project's PostGIS database: where layers' tables are. configops only reads it, to know
 whether a layer's table exists yet and which columns it has; loading data is another tool's
-job (geodata-sync, or your own)."""
+job (GeoServer DataOps, or your own)."""
 
 from __future__ import annotations
 

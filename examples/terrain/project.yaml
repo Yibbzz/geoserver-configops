@@ -1,5 +1,5 @@
 # Rasters: OS Terrain 50 (heights of Great Britain on a 50 m grid), one Cloud-Optimised GeoTIFF
-# in GeoServer's /data folder, published with a colour ramp. geodata-sync's examples/terrain
+# in GeoServer's /data folder, published with a colour ramp. GeoServer DataOps' examples/terrain
 # makes the file from the OS download and keeps it up to date.
 apiVersion: configops/v1alpha1
 kind: Project
@@ -18,7 +18,7 @@ metadata:
   name: terrain-50
 spec:
   type: geotiff
-  path: rasters/os-terrain-50.tif              # under /data: geodata-sync's examples/terrain makes it
+  path: rasters/os-terrain-50.tif              # under /data: GeoServer DataOps' examples/terrain makes it
 ---
 apiVersion: configops/v1alpha1
 kind: Layer

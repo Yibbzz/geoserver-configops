@@ -4,7 +4,7 @@ For the layers on the named tables (`schema.table`) or files (a file store's `pa
 /data): work out their bounding boxes again (resetting a raster store first, so GeoServer
 reads the new file), clear their cached tiles and those of the groups that hold them,
 directly or through other groups, and seed again what the files seed. Whatever loaded the
-data runs it afterwards: `geodata sync --loaded FILE`, then `configops refresh --from FILE`.
+data runs it afterwards: `dataops sync --loaded FILE`, then `configops refresh --from FILE`.
 """
 
 from __future__ import annotations

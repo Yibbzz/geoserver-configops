@@ -129,7 +129,7 @@ def test_apply_from_nothing_then_nothing_to_do(project, gs, capsys):
 def test_refresh_after_new_data(project, gs, tmp_path, capsys):
     """New rows reach further: refresh works the bounds out again and clears (and seeds again) the cached tiles."""
     sql("INSERT INTO data_layers.e2e_areas (name, geom) VALUES ('far', ST_MakeEnvelope(100, 100, 200, 200, 27700))")
-    (tmp_path / "loaded.txt").write_text("data_layers.e2e_areas\n")  # as geodata sync --loaded writes it
+    (tmp_path / "loaded.txt").write_text("data_layers.e2e_areas\n")  # as dataops sync --loaded writes it
     code, out = configops(capsys, "refresh", "-C", str(project), "--from", str(tmp_path / "loaded.txt"))
     assert code == 0, out
     assert "bounds of 1 layer(s) worked out again, cached tiles of 1 layer(s) or group(s) cleared; seeding 1 again" in out
