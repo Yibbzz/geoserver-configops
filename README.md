@@ -1,331 +1,189 @@
-# GeoServer ConfigOps
+<p align="center"><img src="docs/logo.svg" alt="GeoServer ConfigOps" width="120"></p>
 
-![GeoServer Cloud coverage](https://img.shields.io/badge/GeoServer_Cloud-93%25-brightgreen) ![GeoServer coverage](https://img.shields.io/badge/GeoServer-100%25-brightgreen) ![GeoServer 2.28 coverage](https://img.shields.io/badge/GeoServer_2.28-98%25-brightgreen) Of the 662 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (44 more it can't set), 662 on standard GeoServer and 653 on GeoServer 2.28 (9 more it can't set) ([field by field](docs/geoserver-fields.yaml)).
+<h1 align="center">GeoServer ConfigOps</h1>
 
-GeoServer configuration as code, for [GeoServer Cloud](https://github.com/geoserver/geoserver-cloud) and standard GeoServer. `configops` keeps what GeoServer publishes and how it is set up in YAML files, with an OpenTofu-style `plan` and `apply`:
+<p align="center">GeoServer configuration as code, with <code>plan</code> and <code>apply</code>.<br>For <a href="https://github.com/geoserver/geoserver-cloud">GeoServer Cloud</a> and standard GeoServer.</p>
 
-- **publish** layers, styles and layer groups from PostGIS tables, SQL views and other stores (Cloud-Optimised GeoTIFFs, GeoPackages and other files, cascaded WMS, WMTS and WFS, other databases), with tile caching;
-- **set GeoServer up:** its settings and services (contact details, titles, limits), and its security (users, groups, roles, who may see and do what, the master password);
-- **catch drift and keep it:** `plan` on a schedule shows when GeoServer no longer matches the files, `apply` puts it back, and `import` brings a change made in the web UI back into the files instead. `import` is also how you start from a GeoServer you already have.
+![GeoServer Cloud 3.0.2.1 coverage](https://img.shields.io/badge/GeoServer_Cloud_3.0.2.1-93%25-brightgreen) ![GeoServer 3.0.2 coverage](https://img.shields.io/badge/GeoServer_3.0.2-100%25-brightgreen) ![GeoServer 2.28.6 coverage](https://img.shields.io/badge/GeoServer_2.28.6-98%25-brightgreen)
 
-Point it at a GeoServer you already run: `https://<host>/geoserver-cloud` for GeoServer Cloud, `https://<host>/geoserver` for standard GeoServer. Standard GeoServer can also take a few settings GeoServer Cloud can't (below); when the files set one, configops asks GeoServer which it is (by the version it reports), and on GeoServer Cloud `plan` shows it as `!` with the reason and leaves it out.
-
-Loading open data into PostGIS (Ordnance Survey, CKAN portals such as data.gov.uk, WFS, OGC API Features) and keeping it up to date is a separate tool, [geodata-sync](https://github.com/Yibbzz/geodata-sync); configops publishes the tables, whoever loads them.
+Of the 662 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (44 more it can't set), 662 on standard GeoServer and 653 on GeoServer 2.28 (9 more it can't set) ([field by field](docs/geoserver-fields.yaml)).
 
 <!-- tested-on -->Tested on **GeoServer Cloud 3.0.2.1**, **GeoServer 3.0.2** and **GeoServer 2.28.6**: every pull request runs the e2e tests on all three, and a daily job (`.github/workflows/versions.yaml`) tries each new release.<!-- /tested-on -->
 
-> **Status: early.** Expect breaking changes. [docs/coverage.md](docs/coverage.md) goes through the web UI page by page; the figures above count every field of GeoServer's configuration, read from its source (`tests/geoserver_coverage.py`), and what one of them can't set counts against it.
+`configops` keeps what GeoServer publishes, and how it is set up, in YAML files under version control:
+
+- **Publish** layers, styles and layer groups from PostGIS tables, SQL views, Cloud-Optimised GeoTIFFs, files, and cascaded WMS, WMTS and WFS, with tile caching.
+- **Configure** global and service settings, and security: users, groups, roles, access rules, authentication.
+- **Detect drift.** `plan` shows where GeoServer no longer matches the files; `apply` puts it back, and `import` brings a change made in the web UI into the files.
+
+It talks to GeoServer's REST API, so it works with a GeoServer you already run. Nothing is installed in GeoServer.
+
+> **Status: 0.x.** The file format may still change between releases.
 
 ## Install
 
 ```bash
-pip install geoserver-configops                          # the configops command: Python 3.10+, nothing else
-docker run --rm ghcr.io/yibbzz/geoserver-configops --help  # or its image
+pip install geoserver-configops                            # Python 3.10+
+docker run --rm ghcr.io/yibbzz/geoserver-configops --help  # or the image
 ```
 
-## Quick start
+## Example
 
-A whole GeoServer set up from one file, [`examples/quickstart/project.yaml`](examples/quickstart/project.yaml): a workspace, the contact details and WMS title, a Sentinel-2 image read in place on AWS (a Cloud-Optimised GeoTIFF) with its own style, EOX's cloudless mosaic cascaded from their WMS, both as one cached map, and an editor with what only editors may do. Nothing to load.
+[`examples/city-maps/project.yaml`](examples/city-maps/project.yaml): two PostGIS tables published as layers, one with only some of its columns and readable only by one role, both as a cached basemap.
 
 ```yaml
 apiVersion: configops/v1alpha1
 kind: Project
-metadata: { name: quickstart }
+metadata: { name: city-maps }
 spec:
   geoserver:
-    url: http://localhost:8080/geoserver           # or https://<host>/geoserver-cloud
-    credentials: { secret: geoserver-admin }       # keys username, password: secrets.yaml, env or a Kubernetes Secret
-  workspace: demo
+    url: https://maps.example.org/geoserver-cloud
+    credentials: { secret: geoserver-admin }        # never in the files: a Secret, an env var or secrets.yaml
+  database:
+    jndi: java:comp/env/jdbc/postgis                # how GeoServer reaches PostGIS
+    connection: { secret: postgis }                 # how configops checks a table exists
+  workspace: city
 ---
-# Who runs this GeoServer, as its capabilities documents say
 apiVersion: configops/v1alpha1
-kind: Settings
-metadata: { name: global }
+kind: Layer
+metadata: { name: roads }
+spec: { table: roads, title: Roads, style: roads }  # styles/roads.sld
+---
+apiVersion: configops/v1alpha1
+kind: Layer
+metadata: { name: parcels }
 spec:
-  contact: { contactPerson: Map Team, contactOrganization: Example Council, contactEmail: maps@example.org }
+  table: parcels
+  title: Land parcels
+  attributes: [parcel_id, area]                     # publish only these columns
 ---
 apiVersion: configops/v1alpha1
-kind: Service
-metadata: { name: wms }
-spec: { title: Example Council maps, maxRenderingTime: 60 }
+kind: LayerGroup
+metadata: { name: basemap }
+spec: { title: Basemap, layers: [parcels, roads], cache: true }
 ---
-# A Sentinel-2 image, a Cloud-Optimised GeoTIFF read in place on AWS
+apiVersion: configops/v1alpha1
+kind: Role
+metadata: { name: surveyor }
+spec: {}
+---
+apiVersion: configops/v1alpha1
+kind: AccessRule
+metadata: { name: parcels-for-surveyors }
+spec: { layer: { workspace: city, layer: parcels, access: read }, roles: [SURVEYOR] }
+```
+
+```console
+$ configops plan -C examples/city-maps
+  + workspace city
+  + role SURVEYOR
+  + rule layers city.parcels.r   (roles: SURVEYOR)
+  + store city:public   (PostGIS through java:comp/env/jdbc/postgis)
+  + style city:roads   (styles/roads.sld)
+  + layer city:roads   (public.roads)
+  + layer city:parcels   (public.parcels)
+  + group city:basemap   (2 members)
+
+Plan: 8 to add, 0 to change, 0 to delete, 0 unmanaged.
+
+$ configops apply -C examples/city-maps
+$ configops plan  -C examples/city-maps
+No changes: GeoServer matches the files.
+```
+
+To try it without a database, [`examples/quickstart`](examples/quickstart/) publishes a Sentinel-2 image and a cascaded WMS on a GeoServer started with `docker compose -f examples/compose.yaml up -d --wait`.
+
+## Common tasks
+
+**Publish data GeoServer reads where it is**, such as a Cloud-Optimised GeoTIFF or a remote WMS:
+
+```yaml
 apiVersion: configops/v1alpha1
 kind: Store
 metadata: { name: sentinel-2 }
-spec:
-  type: cog
-  url: https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/30/U/XC/2025/8/S2C_30UXC_20250825_0_L2A/TCI.tif
+spec: { type: cog, url: "https://example.org/imagery/TCI.tif" }
 ---
 apiVersion: configops/v1alpha1
 kind: Layer
 metadata: { name: imagery }
-spec: { store: sentinel-2, title: Sentinel-2 true colour, style: imagery }   # styles/imagery.sld
----
-# EOX's cloudless mosaic, cascaded from their WMS
-apiVersion: configops/v1alpha1
-kind: Store
-metadata: { name: eox }
-spec: { type: wms, url: "https://tiles.maps.eox.at/wms?service=WMS&request=GetCapabilities" }
----
-apiVersion: configops/v1alpha1
-kind: Layer
-metadata: { name: cloudless }
-spec: { store: eox, resource: s2cloudless-2024, title: Sentinel-2 cloudless (EOX) }
----
-# Both as one map, its tiles cached
-apiVersion: configops/v1alpha1
-kind: LayerGroup
-metadata: { name: basemap }
-spec:
-  title: Basemap
-  layers: [cloudless, imagery]                   # drawn bottom first
-  cache: true
----
-# An editor, and what only editors may do
-apiVersion: configops/v1alpha1
-kind: Role
-metadata: { name: editor }                       # GeoServer role EDITOR
-spec: {}
----
-apiVersion: configops/v1alpha1
-kind: User
-metadata: { name: alice }
-spec: { password: { secret: geoserver-users, key: alice }, roles: [EDITOR] }
----
-apiVersion: configops/v1alpha1
-kind: AccessRule
-metadata: { name: demo-write }
-spec: { layer: { workspace: demo, layer: "*", access: write }, roles: [EDITOR] }
+spec: { store: sentinel-2, title: Sentinel-2 true colour, cache: true }
 ```
 
-Start a GeoServer to try it on ([`examples/compose.yaml`](examples/compose.yaml)), give configops the logins the file names, and see what it would do:
-
-```bash
-docker compose -f examples/compose.yaml up -d --wait    # standard GeoServer on :8080; a minute or two
-
-cat > examples/quickstart/secrets.yaml <<'EOF'          # git-ignored
-geoserver-admin: { username: admin, password: geoserver }
-geoserver-users: { alice: change-me }
-EOF
-
-configops plan -C examples/quickstart
-```
-
-```
-  + workspace demo
-  ~ settings global
-      contact.contactPerson: None -> "Map Team"
-      contact.contactOrganization: None -> "Example Council"
-      contact.contactEmail: None -> "maps@example.org"
-  ~ service wms
-      title: None -> "Example Council maps"
-      maxRenderingTime: 0 -> 60
-  + role EDITOR
-  + user alice   (groups: none; roles: EDITOR)
-  + store demo:sentinel_2   (cog: https://sentinel-cogs.s3.us-west-2.amazonaws.com/...)
-  + store demo:eox   (wms: https://tiles.maps.eox.at/wms?service=WMS&request=GetCapabilities)
-  + style demo:imagery   (styles/imagery.sld)
-  + layer demo:imagery   (cog store sentinel-2)
-  + layer demo:cloudless   (wms store eox: s2cloudless-2024)
-  + group demo:basemap   (2 members)
-  + rule layers demo.*.w   (roles: EDITOR)
-
-Plan: 10 to add, 2 to change, 0 to delete, 0 unmanaged.
-```
-
-Make it so, and look: <http://localhost:8080/geoserver/demo/wms?service=WMS&version=1.3.0&request=GetMap&layers=demo:basemap&styles=&crs=EPSG:4326&bbox=50.4,-3.0,51.4,-1.4&width=768&height=480&format=image/png>
-
-```bash
-configops apply -C examples/quickstart     # ... Applied 12 change(s).
-configops plan  -C examples/quickstart     # No changes: GeoServer matches the files.
-```
-
-Now change something in the web UI, say the cloudless layer's title (Layers → cloudless). `plan` notices, with exit code 2, which is what a scheduled drift check looks for:
-
-```
-$ configops plan -C examples/quickstart
-  ~ layer demo:cloudless
-      title: "Cloudless, renamed in the web UI" -> "Sentinel-2 cloudless (EOX)"
-```
-
-Either `apply` puts it back, or `import` keeps it: it updates the file in place, only what changed, and leaves the rest of the file, its order and its comments as they were.
-
-```
-$ configops import demo -C examples/quickstart
-Updated the files: 1 changed: Layer cloudless (title)
-Next: git diff, then configops plan -C examples/quickstart
-
-$ configops status -C examples/quickstart
-LAYER                 PUBLISHED  DRIFTED  TILES CACHED
-demo:imagery          yes        no       no
-demo:cloudless        yes        no       no
-demo:basemap (group)  yes        no       yes
-```
-
-`docker compose -f examples/compose.yaml down -v` removes it all. [docs/spec.md](docs/spec.md) describes every kind and field.
-
-## Examples
-
-| Project | What it holds |
-| --- | --- |
-| [`examples/quickstart`](examples/quickstart/) | The quick start above: one file, no data to load |
-| [`examples/uk-basemap`](examples/uk-basemap/) | The worked example: OS Open Roads, OS Boundary-Line, the Environment Agency's flood zones and Surrey's conservation areas, from tables geodata-sync loads (its own `examples/uk-basemap`); 6 layers with their own styles, a basemap group drawn as one layer, tile caching on British National Grid, WMS and WFS service settings, and a layer on a table you load yourself |
-| [`examples/terrain`](examples/terrain/) | A raster in GeoServer's `/data` folder (OS Terrain 50, which geodata-sync's `examples/terrain` makes) drawn with a colour ramp |
-
-## How to
-
-**Publish a table:** a `Layer` with `table: roads` (in the Project's `database.schema`) or `table: { schema: field_data, name: sites }`. The Project names the database, as GeoServer reaches it (`jndi`) and as configops does (`connection`, to see whether a table exists yet). Until the table exists, `plan` shows the layer as `!` (can't be done yet) and `apply` leaves it, and its place in groups, for later.
-
-**After loading new data,** refresh GeoServer: `configops refresh -C my-project data_layers.roads` works the layer's bounds out again and clears its cached tiles, and those of the groups that hold it. `geodata sync --loaded loaded.txt` writes what it loaded, for `configops refresh --from loaded.txt`.
-
-**Keep the logins out of the files.** A project names Secrets (`credentials: { secret: geoserver-admin }`); configops reads each from a git-ignored `secrets.yaml` in the project folder, from `CONFIGOPS_<SECRET>_<KEY>` environment variables, or from files `$CONFIGOPS_SECRETS_DIR/<secret>/<key>` (how Kubernetes mounts Secrets).
-
-**See what would change, or what's loaded:**
-
-```bash
-configops plan   -C my-project    # exit code 2 when there are changes
-configops status -C my-project    # layers: published, drifted, tiles cached
-configops plan   -C my-project --geoserver https://test.example.org/geoserver   # the same files against another GeoServer
-```
-
-**Catch drift.** Run `configops plan` on a schedule: it exits 2 when GeoServer no longer matches the files, say a layer changed in the web UI. `configops apply` puts GeoServer back; or keep the change by running `configops import` (below) and committing it.
-
-**Run it in Kubernetes**, beside GeoServer: [docs/kubernetes.md](docs/kubernetes.md) has a Job that applies the project and an hourly drift check, from an image with your project in it.
-
-**Publish data GeoServer reads where it is:** a `Store` for a Cloud-Optimised GeoTIFF (over `https://` or `s3://`), a remote WMS, WMTS or WFS to cascade, or another PostGIS database, and a `Layer` with `store:`:
+**Keep logins out of the files.** A file names a Secret; its value comes from a Kubernetes Secret, an environment variable or a git-ignored `secrets.yaml`. `plan` never prints one.
 
 ```yaml
 apiVersion: configops/v1alpha1
 kind: Store
-metadata: { name: sentinel-2-surrey }
-spec: { type: cog, url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/30/U/XC/2025/8/S2C_30UXC_20250825_0_L2A/TCI.tif" }
----
-apiVersion: configops/v1alpha1
-kind: Layer
-metadata: { name: sentinel-2 }
-spec: { store: sentinel-2-surrey, title: Sentinel-2 true colour }
-```
-
-Files in GeoServer's `/data` folder (GeoTIFFs, GeoPackages, shapefiles, FlatGeobuf, PMTiles, GeoParquet, CSV, image mosaics and pyramids, app-schema mappings) are `Store`s with `path:`; SQL Server and Oracle are `Store`s too.
-
-**Publish a SQL view:** a Layer with `sql: { schema, query, key, geometry }` instead of a table.
-
-**Cache tiles:** `cache: true` on a layer or group, or `cache: { gridsets, formats, metaTiles, blobStore, ... }`; a `Gridset` adds your own (British National Grid in uk-basemap) and a `BlobStore` keeps tiles in a folder on the data volume or in S3.
-
-**Set contact details, service titles and limits:** a `Settings` resource for GeoServer's global settings (or a workspace's own), and a `Service` per OGC service, in GeoServer's own field names. Only the fields you set are managed:
-
-```yaml
-apiVersion: configops/v1alpha1
-kind: Service
-metadata: { name: wfs }          # wms, wfs, wcs or wmts
+metadata: { name: partner-wms }
 spec:
-  title: Example Council features
-  maxFeatures: 100000
+  type: wms
+  url: https://partner.example.org/wms
+  credentials: { secret: partner-login }          # keys: username, password
 ```
 
-**Control who sees and does what:** `Role`, `Group` and `User` resources, with passwords from a Secret, and an `AccessRule` per layer, service or REST rule:
+**Check for drift on a schedule.** `plan` exits 0 when GeoServer matches the files, 2 when it doesn't, and 1 on an error (3 when all that is left are layers waiting for their tables):
 
 ```yaml
-apiVersion: configops/v1alpha1
-kind: User
-metadata: { name: alice }
-spec: { password: { secret: geoserver-users, key: alice }, groups: [editors] }
----
-apiVersion: configops/v1alpha1
-kind: AccessRule
-metadata: { name: flood-zones-for-editors }
-spec: { layer: { workspace: uk, layer: flood_zones, access: read }, roles: [EDITOR] }
+# .github/workflows/drift.yaml
+on: { schedule: [{ cron: "0 * * * *" }] }
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    container: ghcr.io/yibbzz/geoserver-configops:<version>
+    steps:
+      - uses: actions/checkout@v7
+      - run: configops plan -C . --fail-on-unmanaged   # also fails on a user or rule added in the web UI
+        env:
+          CONFIGOPS_GEOSERVER_ADMIN_USERNAME: ${{ secrets.GEOSERVER_USER }}
+          CONFIGOPS_GEOSERVER_ADMIN_PASSWORD: ${{ secrets.GEOSERVER_PASSWORD }}
 ```
 
-`plan` spots a changed password by logging in with it, and a REST rule GeoServer would never reach. GeoServer's own `admin` user, roles and default rules are left alone unless a file names them.
-
-**Bring in an existing GeoServer:** `configops import <workspace> --settings --security -C my-project` writes the files that describe the workspace, GeoServer's settings and services, and its security, so `plan` on them has nothing to do. Passwords can't be read back: put each user's in Secret `geoserver-users`, as the import's note says.
-
-**Allow web pages on other sites to call GeoServer (CORS).** On standard GeoServer, `Settings` `global.cors`. GeoServer Cloud's gateway answers cross-origin requests itself, from any origin; to allow only yours, give the gateway the environment variable `SPRING_APPLICATION_JSON` = `{"spring": {"cloud": {"gateway": {"server": {"webmvc": {"globalcors": {"cors-configurations": {"[/**]": {"allowedOrigins": ["https://maps.example.org"]}}}}}}}}}` (`allowedMethods`, `allowedHeaders`, `allowCredentials` and `maxAge` go beside `allowedOrigins`).
-
-**Let GeoServer fetch remote styles and graphics.** GeoServer Cloud checks every external URL (a style given as `SLD=<url>` in a GetMap, a graphic a style points to) and refuses those no check allows, which at first is all of them. Allow yours with a `URLCheck`:
-
-```yaml
-apiVersion: configops/v1alpha1
-kind: URLCheck
-metadata: { name: council-styles }
-spec: { regex: '^https://styles\.example\.org/.*$', description: Our published styles }
-```
-
-`Settings` `global.urlChecks: false` turns the checks off. `global.requestLogging: { enabled: true, headers: true }` logs every request in the services' logs.
-
-**Keep a change made in the web UI:** run the same `import` in the project folder. It updates the files in place, only what changed, keeping your names, order and comments; review it with `git diff` and commit. `--prune` also takes out what GeoServer no longer has.
-
-## What can't be done as code
-
-All of GeoServer's configuration can be kept in the files on standard GeoServer: [docs/coverage.md](docs/coverage.md) goes page by page, and [docs/geoserver-fields.yaml](docs/geoserver-fields.yaml) field by field. GeoServer Cloud has no way to set these, so they work only on standard GeoServer:
-
-| What | In the files | Why GeoServer Cloud can't |
-| --- | --- | --- |
-| Group styles | `LayerGroup` `styles` | Its catalog database doesn't keep their layers: the group breaks after a restart |
-| Oracle stores | `Store` `type: oracle` | Its images don't ship Oracle's JDBC driver |
-| Tile cache disk quota | `Settings` `global.diskQuota` | It switches the disk quota off and has no REST endpoint for it |
-| Content Security Policy | `Settings` `global.contentSecurityPolicy` | Its services don't send GeoServer's policy header; the web UI sends its own |
-| CORS | `Settings` `global.cors` | Its gateway answers CORS: set the gateway's instead (above) |
-
-Some settings take effect only when GeoServer's services restart, and `apply` says so: the tile caching defaults, and on standard GeoServer CORS and the disk quota's store. A few belong to how GeoServer is deployed rather than its configuration: which GeoServer Cloud services run, logging, WPS and GeoServer ACL.
-
-## How it fits together
-
-```
- project files (YAML, SLD) ──► configops plan / apply / import / status ──► GeoServer or GeoServer Cloud (REST API)
-                                                                                    │
- geodata-sync, or your own loads ──► PostGIS tables ──── GeoServer reads ───────────┤
-                                 └─► configops refresh: bounds, cached tiles        ▼
-                                                                     WMS / WFS / WCS / tiles
-```
-
-## Repository layout
-
-| Path | What |
-| --- | --- |
-| `configops/`, `pyproject.toml`, `Dockerfile` | The `configops` command and its image |
-| `examples/` | Example projects, and `compose.yaml`: a GeoServer and a database to try them on |
-| `docs/spec.md` | The file format and every command |
-| `docs/kubernetes.md`, `docs/kubernetes/` | Running configops in Kubernetes |
-| `docs/coverage.md` | Every page of GeoServer's web UI, and what the tool covers |
-| `docs/geoserver-cloud-notes.md` | What we learned about GeoServer Cloud's REST API, GeoWebCache and services: quirks, shapes, timing |
-| `tests/` | Unit tests; `tests/e2e/` runs GeoServer Cloud, or standard GeoServer, in Docker for the e2e tests |
-
-## Testing
-
-CI runs on every pull request and push to `main`: shellcheck and a schema check of the Kubernetes example (lint), the unit tests (test), the image build (configops-image), and the e2e tests against GeoServer Cloud in Docker, with its gateway, REST, WMS, WFS, WCS and tile cache services (e2e-cloud), against standard GeoServer with the same extensions (e2e-standard), and against GeoServer 2.28, the older series still maintained (e2e-standard-2).
-
-Locally (with `docker`, `curl`, and GDAL's command-line tools, which some e2e tests use to make files):
+**Apply exactly the plan that was reviewed:**
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/pytest                      # e2e tests skip without their services
-
-tests/e2e/up.sh                       # GeoServer Cloud; about 3 GB of RAM
-E2E_GEOSERVER_URL=http://localhost:59090/geoserver-cloud/rest E2E_SERVICES_URL=http://localhost:59090/geoserver-cloud \
-  E2E_DB_PORT=55433 E2E_DATA_DIR=tests/e2e/data E2E_LDAP_URL=ldap://ldap:389 \
-  E2E_REST_CONTAINER=gscloud-e2e-rest-1 E2E_WMS_CONTAINER=gscloud-e2e-wms-1 .venv/bin/pytest -m e2e
-tests/e2e/up.sh down
-
-tests/e2e/up.sh standard              # standard GeoServer instead (downloads its extensions once)
-E2E_GEOSERVER_URL=http://localhost:59091/geoserver/rest E2E_SERVICES_URL=http://localhost:59091/geoserver \
-  E2E_GWC_URL=http://localhost:59091/geoserver/gwc/rest E2E_DB_PORT=55433 E2E_DB_HOST_IN_GEOSERVER=db \
-  E2E_DATA_DIR=tests/e2e/data E2E_LDAP_URL=ldap://ldap:389 E2E_REST_CONTAINER=gscloud-e2e-geoserver-1 .venv/bin/pytest -m e2e
-tests/e2e/up.sh down                  # tests/e2e/up.sh standard-2: GeoServer 2.28 instead, with the same env
+configops plan  -C my-project --digest            # ... Plan digest: 3f9c2a7be1d04c55
+configops apply -C my-project --expect 3f9c2a7be1d04c55
 ```
 
-## New GeoServer versions
+**Adopt an existing GeoServer.** `import` writes the files that describe it, so the next `plan` has nothing to do:
 
-`.github/workflows/versions.yaml` runs daily: when GeoServer Cloud or GeoServer (the newest, or the newest 2.28) has a new release (`python tests/versions.py` shows what's pinned and what's newest), it pins it (`tests/e2e/up.sh`, `examples/compose.yaml`, the README's "Tested on" line, and `docs/geoserver-fields.yaml`, read again from GeoServer's source when GeoServer Cloud moves to a new GeoServer), opens a pull request and runs CI on it. A green pull request can be merged; a red one says what changed, such as settings the new GeoServer added that `docs/geoserver-fields.yaml` hasn't sorted yet.
+```bash
+configops import city --settings --security -C my-project
+```
 
-## Releasing
+**Run it in Kubernetes** as a Job that applies and a CronJob that checks for drift: [docs/kubernetes.md](docs/kubernetes.md).
 
-Set the version in `pyproject.toml` and `configops/__init__.py`, merge, then push the tag `v<version>`: the Release workflow publishes the package to PyPI (`geoserver-configops`), the image to `ghcr.io/yibbzz/geoserver-configops`, and a GitHub release.
+More in the [guide](docs/guide.md): SQL views, tile caching and gridsets, service settings, users and rules, refreshing after a data load.
 
-## Licence and data attribution
+## Built to be safe to run
 
-MIT (see `LICENSE`); see `NOTICE.md` for credits.
+- **Nothing changes without a plan.** `plan` only reads. `apply` prints each change before making it and stops at the first failure.
+- **Secrets stay secret.** Passwords, keys and tokens come from Secrets and are never printed, also when they differ.
+- **Access rules come first.** A rule is made before the layer it protects and removed after it.
+- **One apply at a time.** `apply` takes a lock in GeoServer, so a pipeline and a person can't run through each other.
+- **Deleting is opt-in and limited.** Only `--prune` deletes, and it stops above `--max-deletes` (10 by default).
+- **Checked before it is sent.** `configops validate` reads the files without a network: the schema, names that would clash, styles GeoServer couldn't parse.
 
-Data you publish keeps its own licence: give a layer the attribution it asks for (`attribution:`). OS OpenData is released under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) and needs "Contains OS data © Crown copyright and database right &lt;year&gt;", as the examples' OS layers say.
+## What to know
+
+- `apply` is not a transaction. If it stops part-way, what it already changed stays; running it again finishes.
+- Only the fields a file sets are managed. Taking a field out of a file leaves GeoServer's value as it is.
+- GeoServer creates a layer enabled, whatever it is asked. A new layer with `enabled: false` or `attributes` is switched off in the next request; give it an `AccessRule` if that moment matters.
+- Some settings exist only on standard GeoServer (group styles, Oracle stores, the tile cache disk quota, the Content Security Policy, CORS). On GeoServer Cloud `plan` marks them `!` with the reason and leaves them out: [details](docs/guide.md#what-cant-be-done-as-code).
+
+## Documentation
+
+| | |
+| --- | --- |
+| [docs/guide.md](docs/guide.md) | How to do each thing, with examples |
+| [docs/spec.md](docs/spec.md) | The file format and every command |
+| [docs/kubernetes.md](docs/kubernetes.md) | Running it beside GeoServer in a cluster |
+| [docs/coverage.md](docs/coverage.md) | GeoServer's web UI page by page, and what is covered |
+| [docs/geoserver-cloud-notes.md](docs/geoserver-cloud-notes.md) | What we learned about GeoServer Cloud's REST API and tile cache |
+| [docs/development.md](docs/development.md) | Tests, CI, new GeoServer versions, releasing |
+
+Loading data into PostGIS is a separate tool, [geodata-sync](https://github.com/Yibbzz/geodata-sync); configops publishes the tables, whoever loads them.
+
+## Licence
+
+MIT (see `LICENSE`); see `NOTICE.md` for credits. Data you publish keeps its own licence: the examples' Ordnance Survey layers contain OS data © Crown copyright and database right, under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).

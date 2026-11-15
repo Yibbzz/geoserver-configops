@@ -112,13 +112,15 @@ def write(v: dict[str, str], old: dict[str, str]) -> None:
     sub(UP, r"^export STANDARD_2_GEOSERVER_VERSION=\S+", f"export STANDARD_2_GEOSERVER_VERSION={v['standard-2']}")
     sub(COMPOSE, r"image: docker\.osgeo\.org/geoserver:\S+", f"image: docker.osgeo.org/geoserver:{v['standard']}")
     sub(README, TESTED.pattern, tested_line(v))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import geoserver_coverage as coverage
+
+    coverage.UP, coverage.MANIFEST = ROOT / UP, ROOT / FIELDS  # the badges name the versions: written again
+    readme = ROOT / README
+    readme.write_text(coverage.BADGE.sub(lambda m: coverage.badge(coverage.load()), readme.read_text(), count=1))
     if (v["geoserver"], v["geowebcache"]) != (old["geoserver"], old["geowebcache"]):
         sub(FIELDS, r"^  geoserver: \S+", f"  geoserver: {v['geoserver']}")
         sub(FIELDS, r"^  geowebcache: \S+", f"  geowebcache: {v['geowebcache']}")
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        import geoserver_coverage as coverage
-
-        coverage.MANIFEST = ROOT / FIELDS
         coverage.refresh()  # fields GeoServer added come in as `unsorted`, and the tests say so until they're sorted
 
 

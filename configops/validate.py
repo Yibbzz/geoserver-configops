@@ -362,6 +362,17 @@ STORES_WITH_PATHS = {"geopackage", "shapefile", "shapefiles", "flatgeobuf", "geo
                      "imagepyramid", "geoparquet", "property", "csv", "appschema"}
 
 
+SECRET_IN_URL = re.compile(r"(?i)([?&](?:[\w.-]*(?:key|token|secret|password|passwd|signature|sig))=)[^&#\s]+")
+LOGIN_IN_URL = re.compile(r"(?i)^([a-z][a-z0-9+.-]*://[^/@:\s]*):[^/@\s]+@")
+
+
+def redact(value):
+    """An address as plan prints it: a password before the host and a key or token in the query are not shown."""
+    if not isinstance(value, str) or "://" not in value:
+        return value
+    return SECRET_IN_URL.sub(r"\1***", LOGIN_IN_URL.sub(r"\1:***@", value))
+
+
 def check_stores(project: Project) -> list[Problem]:
     """Each store has what its type needs; a layer on a store names one that exists, and nothing else to publish."""
     problems = []
@@ -370,6 +381,11 @@ def check_stores(project: Project) -> list[Problem]:
         kind = s.spec.get("type")
         if kind in STORES_WITH_ADDRESSES and not s.spec.get("url"):
             problems.append(Problem(s.file, s.line(("spec",)), f"spec.url: a {kind} store needs its address", s.label))
+        if isinstance(s.spec.get("url"), str) and redact(s.spec["url"]) != s.spec["url"]:
+            problems.append(Problem(s.file, s.line(("spec", "url")),
+                                    "spec.url: the address carries a password or key, which is then in the files and in git; "
+                                    "plan doesn't print it, but use credentials, header or authKey from a Secret where the server takes them",
+                                    s.label, "warning"))
         if kind in STORES_WITH_ADDRESSES and s.spec.get("path"):
             problems.append(Problem(s.file, s.line(("spec", "path")), f"spec.path: a {kind} store is read from spec.url", s.label))
         if kind in STORES_WITH_PATHS and not s.spec.get("path"):

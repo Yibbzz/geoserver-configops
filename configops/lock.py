@@ -6,9 +6,9 @@ the same GeoServer, from a laptop, a pipeline or the cluster, so the lock is kep
 the file `configops/apply.lock`, read and written through the REST API's /resource.
 
 It holds who took it, a token and how long it is good for. GeoServer has no "write only if
-it isn't there", so taking the lock is write, wait a moment, read back: of two applies that
-write in the same instant, the one whose token is still there has it. That leaves a window
-of well under a second in which both could believe they hold it; it is not a guarantee, it
+it isn't there", so taking the lock is write, then read back twice, a moment apart: of two applies
+that write in the same instant, the one whose token is still there has it. For both to believe
+they hold it, one must read "free", then take longer than that to write; it is not a guarantee, it
 is what makes a pipeline and a person, or two Jobs, not run through each other.
 
 A lock whose apply died is taken over once it has gone unrenewed for its time to live. Its
@@ -30,7 +30,7 @@ from .geoserver import GeoServerError
 
 PATH = "resource/configops/apply.lock"
 TTL = 900  # seconds a lock is good for without being renewed
-SETTLE = 0.5  # seconds between writing the lock and reading it back
+SETTLE = 0.4  # seconds between writing the lock and each of the two times it is read back
 
 
 class LockHeld(Exception):
@@ -96,9 +96,12 @@ class Lock:
             found = self.read()
             if steal or self.free(found):
                 self.write()
-                time.sleep(self.settle)
-                after = self.read()
-                if after is not None and after[0].get("token") == self.token:
+                for _ in range(2):  # read back twice, a moment apart: a write that crossed ours shows in one of them
+                    time.sleep(self.settle)
+                    after = self.read()
+                    if after is None or after[0].get("token") != self.token:
+                        break
+                else:
                     return
                 found = after  # someone wrote in the same moment, and theirs stayed
             if time.monotonic() >= deadline:
