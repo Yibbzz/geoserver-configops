@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         if name == "plan":
             c.add_argument("--fail-on-unmanaged", action="store_true",
                            help="exit 2 also when GeoServer has what the files don't mention (the ? lines): a user, role or rule "
-                                "added in the web UI, a default rule that was changed. For a drift check.")
+                                "added in the web UI, a default rule that was changed (when the files have security of their own). For a drift check.")
             c.add_argument("--digest", action="store_true", help="print a digest of the plan, for apply --expect")
         else:
             c.add_argument("--expect", metavar="DIGEST",
