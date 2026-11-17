@@ -54,7 +54,7 @@ kubectl get jobs -l batch.kubernetes.io/cronjob-name=configops-drift   # Failed 
 kubectl logs job/<the failed one>                                      # what differs
 ```
 
-`plan` exits 3 when only `!` lines are left (layers waiting for their tables, settings GeoServer Cloud can't take): the drift Job treats that as no drift. The Job runs `plan --fail-on-unmanaged`, so what GeoServer has that the files don't mention (the `?` lines: a user, role or access rule added in the web UI, one of GeoServer's own rules given other roles) fails it too; take the flag out if others manage things in the same workspaces or security.
+`plan` exits 3 when only `!` lines are left (layers waiting for their tables, settings GeoServer Cloud can't take): the drift Job treats that as no drift. The Job runs `plan --fail-on-unmanaged`, so what GeoServer has that the files don't mention (the `?` lines: a user, role or access rule added in the web UI, one of GeoServer's own rules given other roles) fails it too, when the project has security files of its own (a project without any `User`, `Group`, `Role` or `AccessRule` doesn't look at security); take the flag out if others manage things in the same workspaces or security.
 
 ## Files in GeoServer's /data
 
