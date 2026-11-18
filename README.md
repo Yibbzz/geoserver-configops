@@ -111,6 +111,22 @@ metadata: { name: imagery }
 spec: { store: sentinel-2, title: Sentinel-2 true colour, cache: true }
 ```
 
+**Publish files where your GeoServer keeps them.** A Store's `path` is under `/data` (the folder GeoServer Cloud and the container images mount) unless the Project says where your GeoServer's files are: another folder, or `data` for its own data directory. An absolute `path` is used as it is.
+
+```yaml
+apiVersion: configops/v1alpha1
+kind: Project
+metadata: { name: county-maps }
+spec:
+  geoserver: { url: "https://gis.example.org/geoserver", credentials: { secret: geoserver-admin }, files: /srv/gis }
+  workspace: county
+---
+apiVersion: configops/v1alpha1
+kind: Store
+metadata: { name: parcels }
+spec: { type: geopackage, path: parcels/2026.gpkg }      # /srv/gis/parcels/2026.gpkg
+```
+
 **Keep logins out of the files.** A file names a Secret; its value comes from a Kubernetes Secret, an environment variable or a git-ignored `secrets.yaml`. `plan` never prints one.
 
 ```yaml
