@@ -16,7 +16,7 @@ from .database import schema_of
 from .geoserver import GeoServer, GeoServerError, MissingCredentials, for_project
 from .loader import Project, Resource, load
 from .plan import PlanError, seed_cache, seed_of, wanted_cache
-from .stores import DATA, store_path
+from .stores import DATA, files_root, is_absolute, store_path
 from .validate import geoserver_name, members, validate
 
 
@@ -28,22 +28,28 @@ def layer_table(layer: Resource, schema: str) -> str | None:
     return f"{schema}.{table}" if isinstance(table, str) else None
 
 
-def normal_path(path: str) -> str:
-    return path.removeprefix(DATA).strip("/")
+def normal_path(path: str, root: str = DATA) -> str:
+    """A path as loaders name it (rasters/x.tif, /data/rasters/x.tif, or absolute), as a Store's path is written."""
+    path = path.replace("\\", "/")
+    for prefix in (root.rstrip("/"), DATA):
+        if path.startswith(f"{prefix}/"):
+            return path[len(prefix) + 1:].strip("/")
+    return path if is_absolute(path) else path.strip("/")
 
 
 def refresh(gs: GeoServer, files: Project, targets: list[str] | None) -> str:
     """Refresh the layers on `targets` (all layers on tables and file stores when None); returns what was done."""
     project = files.of_kind("Project")[0]
     default_ws, schema = project.spec["workspace"], schema_of(project)
-    wanted = {normal_path(t) if "/" in t else t for t in targets} if targets is not None else None
+    root = files_root(project)
+    wanted = {normal_path(t, root) if "/" in t else t for t in targets} if targets is not None else None
 
     def chosen(key: str | None) -> bool:
         return key is not None and (wanted is None or key in wanted)
 
     stores = files.named("Store")
     table_layers = [r for r in files.of_kind("Layer") if chosen(layer_table(r, schema))]
-    file_stores = {name: s for name, s in stores.items() if s.spec.get("path") and chosen(normal_path(s.spec["path"]))}
+    file_stores = {name: s for name, s in stores.items() if s.spec.get("path") and chosen(normal_path(s.spec["path"], root))}
     store_layers = [r for r in files.of_kind("Layer") if r.spec.get("store") in file_stores]
     names = {r.name for r in table_layers + store_layers}
     if not names:

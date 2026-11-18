@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -117,10 +118,36 @@ def with_fingerprint(body: dict, live: dict, user: str, password: str) -> dict:
     return {**body, "metadata": {"entry": list(entries.values())}}
 
 
-def location(spec: dict) -> str:
-    """Where a file store's data is: file:/data/<path>, or its url."""
+WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def is_absolute(path: str) -> bool:
+    return path.startswith("/") or bool(WINDOWS_DRIVE.match(path))
+
+
+def files_root(project) -> str:
+    """The folder a Store's relative `path` is under, as GeoServer sees it: the Project's `geoserver.files`,
+    else /data (the volume GeoServer Cloud's and the container images' services mount). A relative folder
+    (`data`) is relative to GeoServer's own data directory, as GeoServer writes `file:data/...`."""
+    spec = getattr(project, "spec", project) or {}
+    return str((spec.get("geoserver") or {}).get("files") or DATA).replace("\\", "/").rstrip("/") or "/"
+
+
+def file_path(path: str, root: str = DATA) -> str:
+    """A Store's `path` as GeoServer reads it: absolute as given, else under `root`."""
+    path = path.replace("\\", "/")
+    return path if is_absolute(path) else f"{root.rstrip('/')}/{path.strip('/')}"
+
+
+def file_url(path: str) -> str:
+    """GeoServer's address for a file: file:/srv/gis/x, file:///D:/GIS/x, or file:data/x (in its data directory)."""
+    return f"file:///{path}" if WINDOWS_DRIVE.match(path) else f"file:{path}"
+
+
+def location(spec: dict, root: str = DATA) -> str:
+    """Where a file store's data is: file:<root>/<path>, or its url."""
     if spec.get("path"):
-        return f"file:{DATA}/{spec['path'].strip('/')}"
+        return file_url(file_path(spec["path"], root))
     return spec["url"]
 
 
@@ -156,7 +183,7 @@ def secret_or_text(value, store: Resource, root) -> str:
     return found
 
 
-def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict, dict]:
+def wanted_store(store: Resource, root, spec: dict | None = None, files: str = DATA) -> tuple[dict, dict]:
     """(the body GeoServer takes, the fields compared: name -> value)."""
     spec = spec or store.spec
     kind = spec["type"]
@@ -169,7 +196,7 @@ def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict,
         body["disableOnConnFailure"] = compared["disableOnConnFailure"] = spec["disableOnConnectionFailure"]
     user, password = credentials(store, root)
     if fam == "coverage":
-        body["url"] = compared["url"] = location(spec)
+        body["url"] = compared["url"] = location(spec, files)
         if kind == "cog":
             reader = COG_READERS.get(urlparse(spec["url"]).scheme, "HTTP")
             body["metadata"] = {"entry": {"@key": "CogSettings.Key", "cogSettings": {"rangeReaderSettings": reader, "useCachingStream": False}}}
@@ -198,8 +225,13 @@ def wanted_store(store: Resource, root, spec: dict | None = None) -> tuple[dict,
         if kind in DBTYPES:
             params.setdefault("dbtype", DBTYPES[kind])
         if kind in FILE_PARAMS:
-            where = location(spec)
-            params[FILE_PARAMS[kind]] = where.removeprefix("file:") if kind == "geopackage" else where
+            where = location(spec, files)
+            if kind == "geopackage":
+                # A GeoPackage's parameter is a plain path when absolute (as GeoServer writes it); one in GeoServer's
+                # data directory keeps its file: (data/x.gpkg isn't found there, file:data/x.gpkg is)
+                plain = re.sub(r"^file:(///(?=[A-Za-z]:))?", "", where)
+                where = plain if is_absolute(plain) else where
+            params[FILE_PARAMS[kind]] = where
         compared.update({f"connection.{k}": v for k, v in params.items()})
         if user is not None:
             user_key, password_key = SECRET_PARAMS[kind]
@@ -243,7 +275,7 @@ def plan(planner) -> None:
         ws = planner.workspace_of(store)
         path, collection = store_path(ws, store)
         spec = dict(store.spec)
-        body, wanted = wanted_store(store, planner.root, spec)
+        body, wanted = wanted_store(store, planner.root, spec, files_root(planner.project))
         body["workspace"] = {"name": ws}  # coverage stores won't be made without it
         key = family(store)["key"]
         target = f"{ws}:{geoserver_name(store)}"
@@ -258,7 +290,7 @@ def plan(planner) -> None:
                 body = with_fingerprint(body, (gs.get(path) or {}).get(key) or {}, user, password)
             gs.upsert(path, collection, {key: body})
         if live is None:
-            where = spec.get("url") or (f"{DATA}/{spec['path'].strip('/')}" if spec.get("path") else "") \
+            where = spec.get("url") or (file_path(spec["path"], files_root(planner.project)) if spec.get("path") else "") \
                 or spec.get("connection", {}).get("host", "")
             add("+", "store", target, note=f"{store.spec['type']}: {redact(where)}", run=run)
             continue
