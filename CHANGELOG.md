@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0
+
+A release for GeoServer installed on a server, whose files aren't on a `/data` volume.
+
+**Upgrading from 0.2.0**
+
+- Nothing to change: a Project without `geoserver.files` keeps file stores under `/data`, as before.
+
+**Added**
+
+- Project `geoserver.files`: the folder a Store's relative `path` is under, as GeoServer sees it. `/data` (the default), any folder (`/srv/gis`, `D:/GIS`), or `data`, relative to GeoServer's own data directory, as its web UI writes it (`file:data/...`). File blob stores follow it too.
+- A Store's `path` can be absolute (`/mnt/share/roads.gpkg`, `D:/GIS Data/dem.tif`), and may have spaces.
+- `import` writes file stores outside `/data` back: relative to `geoserver.files` when under it, else absolute. It used to leave them out.
+
+**Fixed**
+
+- A GeoPackage in GeoServer's data directory is given as `file:data/x.gpkg`: GeoServer doesn't find `data/x.gpkg` there.
+
+**Testing**
+
+- The standard GeoServer e2e jobs fall back to the last good run's copies of the extensions when a download server is down (build.geoserver.org was down for a day), and a half-downloaded extension zip is fetched again rather than resumed.
+
 ## 0.2.0
 
 A release about running `apply` safely in production.
