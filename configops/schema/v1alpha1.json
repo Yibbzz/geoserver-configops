@@ -738,6 +738,11 @@
             },
             "credentials": {
               "$ref": "#/$defs/secretRef"
+            },
+            "files": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The folder a Store's relative path is under, as GeoServer sees it: /data (the default: the volume GeoServer Cloud and the container images mount), another folder (/srv/gis, D:/GIS), or one relative to GeoServer's data directory (data)"
             }
           }
         },
@@ -3921,8 +3926,8 @@
         },
         "path": {
           "type": "string",
-          "pattern": "^(?!/)(?!.*\\.\\.)\\S+$",
-          "description": "a path under the shared data volume (/data), like rasters/surrey.tif"
+          "pattern": "^(?!.*\\.\\.)(?!\\s)[^\\n]+$",
+          "description": "a file or folder: under the Project's geoserver.files (/data unless set), like rasters/surrey.tif, or absolute (/srv/gis/roads.gpkg, D:/GIS/roads.shp)"
         },
         "disableOnConnectionFailure": {
           "type": "boolean",
@@ -4141,8 +4146,8 @@
         },
         "path": {
           "type": "string",
-          "pattern": "^(?!/)(?!.*\\.\\.)\\S+$",
-          "description": "file: a folder under the data volume"
+          "pattern": "^(?!.*\\.\\.)(?!\\s)[^\\n]+$",
+          "description": "file: a folder under the Project's geoserver.files (/data unless set), or absolute"
         },
         "blockSize": {
           "type": "integer",

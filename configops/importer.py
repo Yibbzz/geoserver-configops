@@ -20,7 +20,7 @@ from .database import DEFAULT_SCHEMA, database, schema_of
 from .loader import load
 from .plan import CACHE_OPTIONS, DEFAULT_FORMATS, DEFAULT_GRIDSETS, PlanError, as_list, names_of
 from .keywords import to_entries
-from .stores import DATA
+from .stores import DATA, files_root, is_absolute
 from .validate import BUILT_IN_STYLES
 
 API = "configops/v1alpha1"
@@ -42,10 +42,15 @@ FILE_COVERAGES = {"GeoTIFF": "geotiff", "WorldImage": "worldimage", "ArcGrid": "
 CSV_PARAMS = ("strategy", "latField", "lngField", "wktField", "quoteAllFields", "writeprj")
 
 
-def data_path(where: str) -> str | None:
-    """A file store's path under the shared data volume, or None if it isn't there."""
-    path = where.removeprefix("file:").removeprefix("//")
-    return path[len(DATA) + 1:].strip("/") or None if path.startswith(f"{DATA}/") else None
+def data_path(where: str, root: str = DATA) -> str | None:
+    """A file store's address as a Store's `path`: relative when it is under `root` (the Project's geoserver.files),
+    else absolute. None for one relative to GeoServer's data directory when `root` isn't (it can't be written)."""
+    path = re.sub(r"^file:(//(?=/))?", "", where.strip())  # file:/x and file:///x -> /x; file:data/x -> data/x
+    path = re.sub(r"^/(?=[A-Za-z]:/)", "", path)  # /C:/GIS -> C:/GIS
+    root = root.rstrip("/")
+    if path.startswith(f"{root}/"):
+        return path[len(root) + 1:].strip("/") or None
+    return path if is_absolute(path) else None
 
 
 def resource_name(gs_name: str) -> tuple[str, str | None]:
@@ -138,11 +143,12 @@ def resource(kind: str, name: str, spec: dict) -> dict:
 
 class Importer:
     def __init__(self, gs: GeoServer, ws: str, project_ws: str | None, schema: str,
-                 project_crs: str | None = None, full: bool = False, columns=None):
+                 project_crs: str | None = None, full: bool = False, columns=None, files: str = DATA):
         self.gs, self.ws, self.project_ws, self.schema = gs, ws, project_ws, schema  # schema: the Project's database schema
         self.project_crs = project_crs  # a declared CRS that's the project's is left out when the native one is unknown
         self.full = full  # write a layer's style even when it's the default for its geometry (updating files that name it)
         self.columns = columns  # (schema, table) -> the table's columns, less its key; None without the database
+        self.files = files  # the Project's geoserver.files: store paths under it are written relative
         self.notes: list[str] = []
         self.names: dict[str, str] = {}  # GeoServer name -> resource name, for group members
         self.styles: dict[str, tuple[str, str]] = {}  # style name -> (suffix, text)
@@ -221,7 +227,7 @@ class Importer:
             elif store.get("type") in FILE_DATASTORES:
                 kind, param = FILE_DATASTORES[store["type"]]
                 where = entries.get(param) or ""
-                path = data_path(where)
+                path = data_path(where, self.files)
                 if path:
                     spec = {"type": kind, "path": path}
                     if kind == "csv":
@@ -230,13 +236,14 @@ class Importer:
                 elif kind == "pmtiles" and where and not where.startswith("file:"):
                     self.store_resource(store, name, {"type": kind, "url": where})
                 else:
-                    self.notes.append(f"store {name}: {where} isn't on the shared data volume ({DATA}); left out, with its layers")
+                    self.notes.append(f"store {name}: {where} is relative to GeoServer's data directory; set geoserver.files: data "
+                                      "in project.yaml (store paths are then relative to it) and import again; left out, with its layers")
             else:
                 self.notes.append(f"store {name} ({store.get('type')}) isn't a kind the files have yet; left out, with its layers")
         for name in self.gs.names(f"workspaces/{self.ws}/coveragestores", "coverageStore"):
             store = self.gs.get(f"workspaces/{self.ws}/coveragestores/{name}")["coverageStore"]
             cog = any(isinstance(e, dict) and e.get("@key") == "CogSettings.Key" for e in as_list((store.get("metadata") or {}).get("entry")))
-            path = data_path(store.get("url") or "")
+            path = data_path(store.get("url") or "", self.files)
             if cog:
                 self.store_resource(store, name, {"type": "cog", "url": store.get("url")})
             elif store.get("type") in FILE_COVERAGES and path:
@@ -579,9 +586,10 @@ class Importer:
             meta = resource_name(name)[0]
             spec: dict = {"name": name} if meta != name else {}  # blob stores are named as written
             if "path" in live:
-                path = data_path(live["path"])
+                path = data_path(live["path"], self.files)
                 if not path:
-                    self.notes.append(f"blob store {name}: {live['path']} isn't on the shared data volume; left out")
+                    self.notes.append(f"blob store {name}: {live['path']} is relative to GeoServer's data directory; "
+                                        "set geoserver.files: data and import again; left out")
                     continue
                 spec.update({"type": "file", "path": path})
                 if live.get("layout") == "tms":
@@ -725,7 +733,8 @@ def run(target: Path, ws: str | None, geoserver_url: str | None = None, force: b
                 raise PlanError(f"GeoServer has no workspace {ws}", code=1)
             imp = Importer(gs, ws, project_ws, schema,
                            project_crs=project.spec.get("crs") if project else None, full=project is not None and not force,
-                           columns=table_columns(project, target) if project else None)
+                           columns=table_columns(project, target) if project else None,
+                           files=files_root(project) if project else DATA)
             stores = imp.stores()
             layers = imp.layers(stores)
             groups = imp.groups()

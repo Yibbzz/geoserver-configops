@@ -82,6 +82,7 @@ spec:
 | Field | Required | Default | Meaning |
 | --- | --- | --- | --- |
 | `geoserver.url` | yes | | Base URL of GeoServer (gateway) |
+| `geoserver.files` | no | `/data` | The folder a Store's relative `path` is under, as GeoServer sees it: `/data` (the volume GeoServer Cloud and the container images mount), a folder on the server (`/srv/gis`, `D:/GIS`), or `data`, relative to GeoServer's own data directory (where its web UI puts uploads: `file:data/...`) |
 | `geoserver.credentials.secret` | yes | | Secret with `username` and `password` |
 | `database` | for layers on tables or SQL views | | The PostGIS database GeoServer reaches through a JNDI datasource |
 | `database.jndi` | with `database` | | JNDI name GeoServer uses for the data store |
@@ -256,7 +257,7 @@ spec:
 | `oracle` | (none: `connection`) | A table | Standard GeoServer only, with its `oracle` extension (Oracle's JDBC driver is in it). As `postgis`; `database` is the SID, or `/<service name>` (`/FREEPDB1`) |
 | `appschema` | (none: `path`) | A complex feature type the mapping file defines | The mapping and its schema on the data volume; the layer names its feature type in `resource`. GeoServer Cloud ships the extension off: set `GEOSERVER_EXTENSION_APPSCHEMA_ENABLED=true` on its services. `apply` makes an `app-schema-cache` folder beside the mapping (when the data volume is mounted where it runs), where GeoServer keeps the schemas it downloads; the workspace's namespace URI must be the mapping's target namespace (`Workspace` `namespace`) |
 
-**Files** are read from GeoServer's `/data` folder: a volume mounted there in every GeoServer service. `path` is under it: `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. How files get there is up to you (GeoServer DataOps makes raster files from downloads); `configops import` writes stores whose files are under `/data`.
+**Files** are where GeoServer reads them. A relative `path` is under the Project's `geoserver.files`: `/data` unless set, the folder mounted in every GeoServer Cloud service and container, so `path: rasters/surrey.tif` is `/data/rasters/surrey.tif`. A GeoServer installed on a server keeps them elsewhere: set `geoserver.files` to that folder (`/srv/gis`, `D:/GIS`), or to `data` for GeoServer's own data directory (`file:data/...`, where its web UI puts uploads). An absolute `path` (`/mnt/share/roads.gpkg`, `D:/GIS Data/dem.tif`) is used as it is, whatever the folder. How files get there is up to you (GeoServer DataOps makes raster files from downloads). `configops import` writes a store's path relative to `geoserver.files` when it is under it, else absolute.
 
 | `name`, `workspace` | `metadata.name` with dashes as underscores; the project's workspace | |
 | `description`, `enabled` | none; `true` | |

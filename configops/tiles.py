@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
 from . import secrets
+from .stores import file_path, files_root
 from .geoserver import GeoServerError, MissingCredentials
 
 
@@ -95,14 +96,14 @@ def xml_value(value) -> str:
     return escape(str(value).lower() if isinstance(value, bool) else str(value))
 
 
-def wanted_blob_store(r, root) -> tuple[str, dict]:
+def wanted_blob_store(r, root, files: str = DATA) -> tuple[str, dict]:
     """(GeoWebCache's XML, the fields compared) for a BlobStore resource."""
     spec, name, kind = r.spec, r.spec.get("name") or r.name, r.spec["type"]
     head = f'default="{str(spec.get("default", False)).lower()}"'
     fields = {"enabled": spec.get("enabled", True), "default": spec.get("default", False)}
     body = f"<id>{escape(name)}</id><enabled>{str(fields['enabled']).lower()}</enabled>"
     if kind == "file":
-        fields["path"] = f"{DATA}/{spec['path'].strip('/')}"
+        fields["path"] = file_path(spec["path"], files)  # under the Project's geoserver.files, or absolute
         body += f"<baseDirectory>{escape(fields['path'])}</baseDirectory><fileSystemBlockSize>{spec.get('blockSize', 4096)}</fileSystemBlockSize>"
         if "blockSize" in spec:  # compared when the files set it: a change used to go unseen
             fields["blockSize"] = int(spec["blockSize"])
@@ -171,7 +172,7 @@ def plan_blob_stores(planner) -> None:
     gs = planner.gs
     for r in planner.files.of_kind("BlobStore"):
         name = r.spec.get("name") or r.name
-        xml, want = wanted_blob_store(r, planner.root)
+        xml, want = wanted_blob_store(r, planner.root, files_root(planner.project))
 
         def run(name=name, xml=xml):
             response = gs.gwc_request("PUT", f"blobstores/{name}", xml)
