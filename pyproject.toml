@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geoserver-configops"
-version = "0.2.0"
+version = "0.3.0"
 description = "GeoServer ConfigOps: GeoServer and GeoServer Cloud configuration as code, with plan, apply, import and drift detection"
 readme = "README.md"
 license = "MIT"
