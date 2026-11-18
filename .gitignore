@@ -25,6 +25,7 @@ datadir/
 tests/e2e/data/
 tests/e2e/gcs/
 tests/e2e/standard-libs/
+tests/e2e/standard-libs-fallback/
 
 # Python packaging
 *.egg-info/

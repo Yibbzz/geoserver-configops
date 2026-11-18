@@ -99,6 +99,16 @@ jobs:
         run: tests/ci/install-gdal.sh
       - name: Install Python dependencies
         run: pip install -e '.[dev]'
+      - name: The extensions' fallback copies, from the last good run (GeoServer 3)
+        id: libs
+        run: |
+          v=$(sed -n 's/^export STANDARD_GEOSERVER_VERSION=\([^ ]*\).*/\1/p' tests/e2e/up.sh)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: tests/e2e/standard-libs-fallback/${{ steps.libs.outputs.version }}
+          key: standard-libs-${{ steps.libs.outputs.version }}-none
+          restore-keys: standard-libs-${{ steps.libs.outputs.version }}-
       - name: Start standard GeoServer and PostGIS
         run: tests/e2e/up.sh standard
       - name: e2e tests
@@ -112,6 +122,12 @@ jobs:
           E2E_LDAP_URL: ldap://ldap:389
           E2E_REST_CONTAINER: gscloud-e2e-geoserver-1  # restarted by the caching defaults test; its log has the requests
         run: pytest -m e2e -v
+      - name: Keep this run's extensions as the fallback copies
+        run: tests/ci/keep-extensions.sh "${{ steps.libs.outputs.version }}"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: tests/e2e/standard-libs-fallback/${{ steps.libs.outputs.version }}
+          key: standard-libs-${{ steps.libs.outputs.version }}-${{ hashFiles(format('tests/e2e/standard-libs-fallback/{0}/**', steps.libs.outputs.version)) }}
       - name: Logs on failure
         if: failure()
         run: docker logs gscloud-e2e-geoserver-1 2>&1 | tail -300
@@ -128,6 +144,16 @@ jobs:
         run: tests/ci/install-gdal.sh
       - name: Install Python dependencies
         run: pip install -e '.[dev]'
+      - name: The extensions' fallback copies, from the last good run (GeoServer 2.28)
+        id: libs
+        run: |
+          v=$(sed -n 's/^export STANDARD_2_GEOSERVER_VERSION=\([^ ]*\).*/\1/p' tests/e2e/up.sh)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: tests/e2e/standard-libs-fallback/${{ steps.libs.outputs.version }}
+          key: standard-libs-${{ steps.libs.outputs.version }}-none
+          restore-keys: standard-libs-${{ steps.libs.outputs.version }}-
       - name: Start GeoServer 2.28 and PostGIS
         run: tests/e2e/up.sh standard-2
       - name: e2e tests
@@ -141,6 +167,12 @@ jobs:
           E2E_LDAP_URL: ldap://ldap:389
           E2E_REST_CONTAINER: gscloud-e2e-geoserver-1  # restarted by the caching defaults test; its log has the requests
         run: pytest -m e2e -v
+      - name: Keep this run's extensions as the fallback copies
+        run: tests/ci/keep-extensions.sh "${{ steps.libs.outputs.version }}"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: tests/e2e/standard-libs-fallback/${{ steps.libs.outputs.version }}
+          key: standard-libs-${{ steps.libs.outputs.version }}-${{ hashFiles(format('tests/e2e/standard-libs-fallback/{0}/**', steps.libs.outputs.version)) }}
       - name: Logs on failure
         if: failure()
         run: docker logs gscloud-e2e-geoserver-1 2>&1 | tail -300
