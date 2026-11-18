@@ -22,7 +22,7 @@ if [ "${1:-}" = "standard-2" ]; then
   PROFILE=standard SERVICE=geoserver STANDARD_GEOSERVER_VERSION=$STANDARD_2_GEOSERVER_VERSION
 fi
 echo "$PROFILE: GeoServer Cloud $GEOSERVER_TAG / GeoServer $STANDARD_GEOSERVER_VERSION, $POSTGIS_IMAGE"
-mkdir -p data "standard-libs/$STANDARD_GEOSERVER_VERSION"  # made by Docker they would be root's, and the tests couldn't write to them
+mkdir -p data "standard-libs/$STANDARD_GEOSERVER_VERSION" "standard-libs-fallback/$STANDARD_GEOSERVER_VERSION"  # made by Docker they would be root's
 mkdir -p gcs/e2e-tiles  # the fake Google Cloud Storage starts with this bucket
 docker compose --profile "$PROFILE" up -d --wait --wait-timeout 900 || { docker compose --profile "$PROFILE" logs "$SERVICE" | tail -50; exit 1; }
 docker compose exec -T ldap ldapadd -x -c -H ldap://localhost -D cn=admin,dc=example,dc=org -w admin -f /e2e/users.ldif >/dev/null || true  # -c: already there is fine
