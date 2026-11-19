@@ -109,8 +109,32 @@ jobs:
           path: tests/e2e/standard-libs-fallback/${{ steps.libs.outputs.version }}
           key: standard-libs-${{ steps.libs.outputs.version }}-none
           restore-keys: standard-libs-${{ steps.libs.outputs.version }}-
+      # docker.osgeo.org is slow from GitHub's runners (minutes for the GeoServer image): it comes from the cache
+      - name: The GeoServer image's name
+        id: image
+        run: |
+          v=$(sed -n 's/^export STANDARD_GEOSERVER_VERSION=\([^ ]*\).*/\1/p' tests/e2e/up.sh)
+          echo "name=docker.osgeo.org/geoserver:$v" >> "$GITHUB_OUTPUT"
+      - name: The GeoServer image, from the cache
+        id: image-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/geoserver-image.tar
+          key: image-${{ steps.image.outputs.name }}
+      - name: Load the GeoServer image
+        if: steps.image-cache.outputs.cache-hit == 'true'
+        run: docker load -i ~/geoserver-image.tar
       - name: Start standard GeoServer and PostGIS
         run: tests/e2e/up.sh standard
+      - name: Keep the GeoServer image for the next run
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: docker save "${{ steps.image.outputs.name }}" -o ~/geoserver-image.tar
+      - name: Save it in the cache
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/geoserver-image.tar
+          key: image-${{ steps.image.outputs.name }}
       - name: e2e tests
         env:
           E2E_GEOSERVER_URL: http://localhost:59091/geoserver/rest
@@ -154,8 +178,32 @@ jobs:
           path: tests/e2e/standard-libs-fallback/${{ steps.libs.outputs.version }}
           key: standard-libs-${{ steps.libs.outputs.version }}-none
           restore-keys: standard-libs-${{ steps.libs.outputs.version }}-
+      # docker.osgeo.org is slow from GitHub's runners (minutes for the GeoServer image): it comes from the cache
+      - name: The GeoServer image's name
+        id: image
+        run: |
+          v=$(sed -n 's/^export STANDARD_2_GEOSERVER_VERSION=\([^ ]*\).*/\1/p' tests/e2e/up.sh)
+          echo "name=docker.osgeo.org/geoserver:$v" >> "$GITHUB_OUTPUT"
+      - name: The GeoServer image, from the cache
+        id: image-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/geoserver-image.tar
+          key: image-${{ steps.image.outputs.name }}
+      - name: Load the GeoServer image
+        if: steps.image-cache.outputs.cache-hit == 'true'
+        run: docker load -i ~/geoserver-image.tar
       - name: Start GeoServer 2.28 and PostGIS
         run: tests/e2e/up.sh standard-2
+      - name: Keep the GeoServer image for the next run
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: docker save "${{ steps.image.outputs.name }}" -o ~/geoserver-image.tar
+      - name: Save it in the cache
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/geoserver-image.tar
+          key: image-${{ steps.image.outputs.name }}
       - name: e2e tests
         env:
           E2E_GEOSERVER_URL: http://localhost:59091/geoserver/rest
