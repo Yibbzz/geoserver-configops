@@ -264,3 +264,18 @@ def test_a_refusal_right_after_a_security_reload_is_asked_again(monkeypatch):
     gs.security_reloaded = time.monotonic()
     assert gs.request("POST", "security/usergroup/group/staff").status_code == 201
     assert answers == []
+
+
+def test_an_sld_is_sent_as_the_version_it_declares():
+    from configops.geoserver import sld_version, style_content_type
+    qgis = ('<?xml version="1.0" encoding="UTF-8"?>\n<StyledLayerDescriptor xmlns="http://www.opengis.net/sld" '
+            'xmlns:se="http://www.opengis.net/se" version="1.1.0" xsi:schemaLocation="...">')
+    assert sld_version(qgis) == "1.1.0"
+    assert style_content_type(".sld", qgis) == "application/vnd.ogc.se+xml"
+    plain = '<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld">'
+    assert style_content_type(".sld", plain) == "application/vnd.ogc.sld+xml"
+    prefixed = "<sld:StyledLayerDescriptor xmlns:sld='http://www.opengis.net/sld' version='1.1.0'>"
+    assert sld_version(prefixed) == "1.1.0"
+    # the XML declaration's version is not the SLD's
+    assert sld_version('<?xml version="1.0"?><StyledLayerDescriptor xmlns="http://www.opengis.net/sld">') is None
+    assert style_content_type(".mbstyle", '{"version": 8}') == "application/vnd.geoserver.mbstyle+json"
