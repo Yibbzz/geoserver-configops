@@ -39,6 +39,22 @@ STYLE_TYPES = {  # a style file's suffix -> the content type GeoServer reads it 
     ".mbstyle": "application/vnd.geoserver.mbstyle+json",
     ".css": "application/vnd.geoserver.geocss+css",
 }
+SLD_11_TYPE = "application/vnd.ogc.se+xml"  # SLD 1.1 (Symbology Encoding), as QGIS writes it
+
+
+def sld_version(body: str) -> str | None:
+    """The `version` an SLD's root element declares (1.0.0, 1.1.0), or None if it says none."""
+    m = re.search(r"<(?:\w+:)?StyledLayerDescriptor\b[^>]*?\sversion\s*=\s*[\"']([^\"']+)[\"']", body)
+    return m.group(1) if m else None
+
+
+def style_content_type(suffix: str, body: str) -> str:
+    """The content type to send a style file as. GeoServer reads an SLD sent as SLD 1.0 with the 1.0 parser
+    whatever version it declares, so an SLD 1.1 file sent that way loses its Symbology Encoding (`se:`) rules
+    and draws in GeoServer's grey; it has to be sent as SLD 1.1."""
+    if suffix == ".sld" and sld_version(body) == "1.1.0":
+        return SLD_11_TYPE
+    return STYLE_TYPES[suffix]
 
 
 def http_session() -> requests.Session:
@@ -177,14 +193,14 @@ class GeoServer:
             self._seen = None
 
     def request(self, method: str, path: str, body=None, content_type: str = "application/json",
-                params: dict | None = None, ok=(200, 201)) -> requests.Response:
+                params: dict | None = None, ok=(200, 201), accept: str = "application/json") -> requests.Response:
         url = f"{self.rest}/{path}"
-        kwargs: dict = {"params": params, "timeout": timeout(), "headers": {"Accept": "application/json"}}
+        kwargs: dict = {"params": params, "timeout": timeout(), "headers": {"Accept": accept}}
         if body is not None:
             kwargs["headers"]["Content-Type"] = content_type
             kwargs["json" if isinstance(body, (dict, list)) else "data"] = body
         seen = getattr(self, "_seen", None)
-        key = ("rest", path, repr(sorted((params or {}).items())))
+        key = ("rest", path, repr(sorted((params or {}).items())), accept)
         if seen is not None and method != "GET":
             seen.clear()
         try:
@@ -402,11 +418,14 @@ class GeoServer:
             return None
         path = self.style_path(name, ws)[0]
         suffix = {"sld": "sld", "mbstyle": "mbstyle", "css": "css"}.get(info["style"].get("format", "sld"), "sld")
+        if suffix == "sld" and (info["style"].get("languageVersion") or {}).get("version") == "1.1.0":
+            # `.sld` gives an SLD 1.1 style converted to SLD 1.0; asked for as SLD 1.1, it is the file as sent
+            return self.request("GET", path, accept=SLD_11_TYPE).text
         return self.request("GET", f"{path}.{suffix}").text
 
     def upsert_style(self, name: str, body: str, suffix: str, ws: str | None = None) -> str:
         """Create or replace a style from its file's text; `suffix` (.sld, .mbstyle, .css) says which language."""
-        content_type = STYLE_TYPES[suffix]
+        content_type = style_content_type(suffix, body)
         path, collection = self.style_path(name, ws)
         data = body.encode("utf-8")
         if self.exists(path):

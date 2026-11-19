@@ -240,3 +240,46 @@ def test_import_writes_the_images_and_templates(gs, project, tmp_path_factory, c
     # again, into the files it wrote: nothing to write
     code, out = configops(capsys, "import", WS, "-C", str(target))
     assert code == 0 and "No changes: the files already match GeoServer." in out, out
+
+
+SLD_11 = """<?xml version="1.0" encoding="UTF-8"?>
+<StyledLayerDescriptor xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc" xmlns:se="http://www.opengis.net/se"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.1.0"
+    xsi:schemaLocation="http://www.opengis.net/sld http://schemas.opengis.net/sld/1.1.0/StyledLayerDescriptor.xsd">
+  <NamedLayer><se:Name>zones</se:Name><UserStyle><se:Name>zones</se:Name><se:FeatureTypeStyle><se:Rule><se:Name>Single symbol</se:Name>
+    <se:PolygonSymbolizer><se:Fill><se:SvgParameter name="fill">#0000ff</se:SvgParameter></se:Fill></se:PolygonSymbolizer>
+  </se:Rule></se:FeatureTypeStyle></UserStyle></NamedLayer>
+</StyledLayerDescriptor>
+"""
+
+
+def test_an_sld_1_1_style_as_qgis_writes_it_is_drawn(gs, project, capsys, monkeypatch):
+    """QGIS writes SLD 1.1 (Symbology Encoding). Sent as SLD 1.0, GeoServer reads it with the 1.0 parser and draws in
+    its default grey; configops sends it as SLD 1.1, and puts right a copy sent the old way."""
+    (project / "project.yaml").write_text(PROJECT.replace("style: tiled", "style: qgis-zones"))
+    (project / "styles" / "qgis-zones.sld").write_text(SLD_11)
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    path = gs.style_path("qgis-zones", WS)[0]  # workspaces/<ws>/styles/qgis-zones
+    assert gs.style("qgis-zones", WS)["style"]["languageVersion"]["version"] == "1.1.0"
+    assert eventually(lambda: colour(project), lambda c: c == BLUE) == BLUE
+
+    # as configops 0.3 and earlier made it: the same text, read as SLD 1.0, drawn grey
+    gs.delete_style("qgis-zones", WS)
+    gs.request("POST", path.rsplit("/", 1)[0], SLD_11.encode(), "application/vnd.ogc.sld+xml", params={"name": "qgis-zones", "raw": "true"})
+    assert gs.style("qgis-zones", WS)["style"]["languageVersion"]["version"] == "1.0.0"
+    assert eventually(lambda: colour(project), lambda c: c != BLUE) != BLUE
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert code == 2 and f"~ style {WS}:qgis-zones" in out and "SLD version" in out, out
+    assert configops(capsys, "apply", "-C", str(project))[0] == 0
+    assert gs.style("qgis-zones", WS)["style"]["languageVersion"]["version"] == "1.1.0"
+    assert eventually(lambda: colour(project), lambda c: c == BLUE) == BLUE
+    code, out = configops(capsys, "plan", "-C", str(project))
+    assert code == 0, out
+
+    # import writes the file as it was sent, not the SLD 1.0 GeoServer would convert it to
+    out_dir = project.parent / "imported-sld-1-1"
+    monkeypatch.setenv("CONFIGOPS_GEOSERVER_ADMIN_USERNAME", "admin")
+    monkeypatch.setenv("CONFIGOPS_GEOSERVER_ADMIN_PASSWORD", PASSWORD)
+    code, out = configops(capsys, "import", WS, "-C", str(out_dir), "--geoserver", URL.removesuffix("/rest"))
+    assert code == 0, out
+    assert (out_dir / "styles" / "qgis-zones.sld").read_text().strip() == SLD_11.strip()

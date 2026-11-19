@@ -19,6 +19,7 @@ What we learned about GeoServer Cloud 3.0's REST API, GeoWebCache and the servic
 ## Styles, layers and groups
 
 - Create a style by POSTing the style file itself with `?name=`; JSON style bodies are refused.
+- **SLD 1.1 (QGIS's SLD) must be sent as `application/vnd.ogc.se+xml`.** Sent as `application/vnd.ogc.sld+xml`, GeoServer accepts it (201), files it as `languageVersion` 1.0.0 and parses it with the SLD 1.0 parser, so the `se:` rules are lost and the layer draws in the default grey. A PUT as SLD 1.0 keeps the version a style has; a PUT as SLD 1.1 makes it 1.1. `GET .../styles/<name>.sld` of an SLD 1.1 style answers a converted SLD 1.0 copy; `GET .../styles/<name>` with `Accept: application/vnd.ogc.se+xml` (or `/rest/resource/.../<name>.sld`) answers the file as sent.
 - A layer group saved with a member that doesn't exist silently drops it, and then never matches what you asked for.
 - A `container` group is a folder in WMS: GetMap on it answers `LayerNotDefined`, which is right. EO groups need a root layer style.
 - A layer inside a group is listed under the group in WMS capabilities, not under its own path.

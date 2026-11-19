@@ -291,7 +291,7 @@ spec:
 
 A Style resource can also give a legend graphic of its own, which GetLegendGraphic serves and capabilities point to: `legend: { url, width, height, format }`.
 
-Formats: SLD (`.sld`) and MBStyle (`.mbstyle`); CSS (`.css`) if the GeoServer images include it and the client gains support. Files are uploaded exactly as written, never re-encoded by GeoServer.
+Formats: SLD (`.sld`) and MBStyle (`.mbstyle`); CSS (`.css`) if the GeoServer images include it and the client gains support. Files are uploaded exactly as written, never re-encoded by GeoServer. SLD 1.0 and SLD 1.1 both work: a file whose root says `version="1.1.0"` (as QGIS writes them, with `se:` Symbology Encoding) is sent to GeoServer as SLD 1.1. `plan` also shows such a style sent before as SLD 1.0 (by configops 0.3 or earlier, or by hand), which GeoServer draws without its rules, as `SLD version: 1.0.0 -> 1.1.0`.
 
 #### Images and fonts
 

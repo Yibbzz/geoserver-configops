@@ -25,7 +25,7 @@ import psycopg2
 
 from . import assets, auth, keywords, details, security, server, standard, stores, tiles, urlchecks
 from .database import Database, DatabaseError, database, tables_exist
-from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, q, sends_login_in_the_clear
+from .geoserver import GROUP_MODES, GeoServer, GeoServerError, MissingCredentials, for_project, q, sends_login_in_the_clear, sld_version
 from .loader import Project, Resource, load
 from .lock import Lock, LockHeld
 from .validate import BUILT_IN_STYLES, STYLE_SUFFIXES, geoserver_name, members, validate
@@ -438,6 +438,11 @@ class Planner:
                 self.add("+", "style", target, note=str(path.relative_to(self.root)), run=run)
             elif live.replace("\r\n", "\n").strip() != text.replace("\r\n", "\n").strip():
                 self.add("~", "style", target, note=f"{path.relative_to(self.root)} differs from GeoServer's copy", run=run)
+            elif path.suffix == ".sld" and sld_version(text) == "1.1.0":
+                # the same file, but sent before as SLD 1.0, which GeoServer then draws without its se: rules
+                have = (((self.gs.style(name, ws) or {}).get("style") or {}).get("languageVersion") or {}).get("version")
+                if have != "1.1.0":
+                    self.add("~", "style", target, [("SLD version", have, "1.1.0")], run=run)
 
     def layer_settings(self, layer: Resource, resource: tuple[str, str] | None = None) -> tuple[list[tuple[str, object]], Callable[[], None]]:
         """
