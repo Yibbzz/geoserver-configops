@@ -4,12 +4,12 @@
 
 <p align="center">GeoServer configuration as code, with <code>plan</code> and <code>apply</code>.<br>For <a href="https://github.com/geoserver/geoserver-cloud">GeoServer Cloud</a> and standard GeoServer.</p>
 
-![GeoServer Cloud 3.0.2.1 coverage](https://img.shields.io/badge/GeoServer_Cloud_3.0.2.1-93%25-brightgreen) ![GeoServer 3.0.2 coverage](https://img.shields.io/badge/GeoServer_3.0.2-100%25-brightgreen) ![GeoServer 2.28.6 coverage](https://img.shields.io/badge/GeoServer_2.28.6-98%25-brightgreen)
+![GeoServer Cloud 3.0.2.2 coverage](https://img.shields.io/badge/GeoServer_Cloud_3.0.2.2-93%25-brightgreen) ![GeoServer 3.0.2 coverage](https://img.shields.io/badge/GeoServer_3.0.2-100%25-brightgreen) ![GeoServer 2.28.6 coverage](https://img.shields.io/badge/GeoServer_2.28.6-98%25-brightgreen)
 
 Of the 662 settings GeoServer can configure, the e2e tests prove configops sets 618 on GeoServer Cloud (44 more it can't set), 662 on standard GeoServer and 653 on GeoServer 2.28 (9 more it can't set) ([field by field](docs/geoserver-fields.yaml)).
 
 <!-- tested-on -->
-Tested on **GeoServer Cloud 3.0.2.1**, **GeoServer 3.0.2** and **GeoServer 2.28.6**: every pull request runs the e2e tests on all three, and a daily job (`.github/workflows/versions.yaml`) tries each new release.
+Tested on **GeoServer Cloud 3.0.2.2**, **GeoServer 3.0.2** and **GeoServer 2.28.6**: every pull request runs the e2e tests on all three, and a daily job (`.github/workflows/versions.yaml`) tries each new release.
 <!-- /tested-on -->
 
 `configops` keeps what GeoServer publishes, and how it is set up, in YAML files under version control:
